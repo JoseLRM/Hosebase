@@ -1,2 +1,10 @@
 # Hosebase
-The base of my projects. It contains a multiplatform initialization, graphics API, data structures, memory management and debugging, string utils, primitive types declaration, linear algebra libarary,  etc
+The base of my projects. 
+<h1>Features<h1>
+  - Multiplatform initialization
+  - Graphics API
+  - Data structures
+  - Memory management and debugging
+  - String utils
+  - Primitive types declaration
+  - Linear algebra libarary
