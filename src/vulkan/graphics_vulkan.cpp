@@ -1479,8 +1479,8 @@ namespace sv {
 		auto& card = g_API->card;
 
 		u64 hWnd = window_handle();
-		u32 width = window_size().x;
-		u32 height = window_size().y;
+		u32 width = SV_MAX(window_size().x, 1);
+		u32 height = SV_MAX(window_size().y, 1);
 
 		bool recreating = swapChain.swapChain != VK_NULL_HANDLE;
 
@@ -1557,6 +1557,9 @@ namespace sv {
 				if (extent.height < min.height) extent.height = min.height;
 				else if (extent.height > max.height) extent.height = max.height;
 			}
+
+			extent.width = SV_MAX(extent.width, 1);
+			extent.height = SV_MAX(extent.height, 1);
 
 			VkSwapchainCreateInfoKHR create_info{};
 

@@ -115,6 +115,7 @@ void _input_update()
 	input->mouse_last_position = input->mouse_position;
 	input->text[0] = '\0';
 	array_reset(input->text_commands);
+	input->mouse_wheel = 0.f;
 }
 
 void _input_key_set_pressed(Key key)

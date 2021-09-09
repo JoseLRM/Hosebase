@@ -11,6 +11,8 @@
 #include "Hosebase/os.h"
 #include "Hosebase/input.h"
 
+#include "graphics_internal.h"
+
 typedef struct {
 
 	char origin_path[FILE_PATH_SIZE];
@@ -25,6 +27,7 @@ typedef struct {
 
 	v2     mouse_position;
 	b8     close_request;
+	b8     resize;
 	
 } PlatformData;
 
@@ -287,6 +290,7 @@ LRESULT CALLBACK window_proc (
 		switch (wParam)
 		{
 		case 0x08:
+		case 127:
 			_input_text_command_add(TextCommand_DeleteLeft);
 			break;
 
@@ -311,8 +315,14 @@ LRESULT CALLBACK window_proc (
 			break;
 
 		default:
-			_input_text_add((const char*)(&wParam));
-			break;
+		{
+			char c = (char)wParam;
+
+			if (c >= 32 && c <= 126)
+				_input_text_add(&c);
+		}
+		break;
+
 		}
 
 		break;
@@ -333,7 +343,7 @@ LRESULT CALLBACK window_proc (
 			break;
 			}*/
 
-		//platform->resize = TRUE;
+		platform->resize = TRUE;
 
 		break;
 	}
@@ -388,9 +398,9 @@ b8 _os_initialize()
 	platform->handle = CreateWindowExA(0u,
 									   "SilverWindow",
 									   "SilverEngine",
-									   WS_POPUP | WS_VISIBLE,
-									   //WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_OVERLAPPED | WS_BORDER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX,
-									   0, 0, 1920, 1080,
+									   //WS_POPUP | WS_VISIBLE,
+									   WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_OVERLAPPED | WS_BORDER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX,
+									   0, 0, 1080, 720,
 									   0, 0, 0, 0
 		);
 
@@ -419,11 +429,11 @@ b8 _os_recive_input()
 
 	_input_mouse_position_set(platform->mouse_position);
 
-	/*if (platform->resize) {
+	if (platform->resize) {
 		platform->resize = FALSE;
-
+		
 		graphics_swapchain_resize();
-		}*/
+	}
 
 	return !platform->close_request;
 }

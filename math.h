@@ -39,6 +39,13 @@ inline f64 math_sqrt_f64(f64 n)
 	return n * y;
 }
 
+inline f32 math_round(f32 n)
+{
+	i32 i = (i32)n;
+	if (n - i >= 0.5f) return i + 1;
+	else return i;
+}
+
 inline f32 math_clamp(f32 min, f32 n, f32 max)
 {
 	if (n < min) n = min;
