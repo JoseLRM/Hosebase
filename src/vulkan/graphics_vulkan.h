@@ -75,7 +75,7 @@ namespace sv {
 #pragma warning(pop)
 
 #if SV_SLOW
-#define vkAssert(x) if((x) != VK_SUCCESS) SV_ASSERT(!#x)
+#define vkAssert(x) if((x) != VK_SUCCESS) assert(!#x)
 #else
 #define vkAssert(x) x
 #endif

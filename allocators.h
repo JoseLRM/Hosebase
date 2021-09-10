@@ -18,7 +18,7 @@ typedef struct {
 
 inline void* __impl__array_init(u32 stride, u32 initial_capacity, f32 scale_factor, u32 line, const char* file)
 {
-	DynamicArrayHeader* array = (DynamicArrayHeader*)__impl__memory_allocate(sizeof(DynamicArrayHeader) + (stride * initial_capacity), line, file);
+	DynamicArrayHeader* array = (DynamicArrayHeader*)memory_allocate_ex(sizeof(DynamicArrayHeader) + (stride * initial_capacity), line, file);
 	array->size = 0u;
 	array->capacity = initial_capacity;
 	array->scale_factor = scale_factor;
@@ -59,7 +59,7 @@ inline void* __impl__array_add(void** ptr, u32 stride, u32 line, const char* fil
 		u32 new_capacity = (u32)((f32)(array->capacity + 1) * array->scale_factor);
 		u32 bytes = sizeof(DynamicArrayHeader) + (new_capacity * stride);
 		
-		DynamicArrayHeader* new_array = (DynamicArrayHeader*)__impl__memory_allocate(bytes, line, file);
+		DynamicArrayHeader* new_array = (DynamicArrayHeader*)memory_allocate_ex(bytes, line, file);
 
 		memory_copy(new_array, array, sizeof(DynamicArrayHeader) + (array->size * stride));
 		memory_free(array);
@@ -113,15 +113,15 @@ inline b8 __impl__array_empty(void** ptr)
 }
 
 #define array_init(T, initial_capacity, scale_factor) (T*)__impl__array_init(sizeof(T), initial_capacity, scale_factor, __LINE__, __FILE__)
-#define array_close(ptr) __impl__array_close((void**)&(ptr))
-#define array_reset(ptr) __impl__array_reset((void**)&(ptr))
+#define array_close(ptr) __impl__array_close((void**)(ptr))
+#define array_reset(ptr) __impl__array_reset((void**)(ptr))
 
-#define array_add(ptr) __impl__array_add((void**)&(ptr), sizeof(*ptr), __LINE__, __FILE__)	
-#define array_push(ptr, obj) __impl__array_push((void**)&(ptr), sizeof(*ptr), &obj, __LINE__, __FILE__)
-#define array_pop(ptr) __impl__array_pop((void**)&(ptr))
+#define array_add(ptr) __impl__array_add((void**)(ptr), sizeof(**(ptr)), __LINE__, __FILE__)	
+#define array_push(ptr, obj) __impl__array_push((void**)(ptr), sizeof(**(ptr)), &obj, __LINE__, __FILE__)
+#define array_pop(ptr) __impl__array_pop((void**)(ptr))
 
-#define array_size(ptr) __impl__array_size((void**)&(ptr))
-#define array_empty(ptr) __impl__array_empty((void**)&(ptr))
+#define array_size(ptr) __impl__array_size((void**)(ptr))
+#define array_empty(ptr) __impl__array_empty((void**)(ptr))
 
 typedef struct {
 	u8* data;
@@ -146,7 +146,7 @@ inline void __impl__buffer_resize(Buffer* buffer, u32 size, u32 line, const char
 
 		if (size > buffer->capacity) {
 
-			u8* new_data = (u8*)__impl__memory_allocate(size, line, filepath);
+			u8* new_data = (u8*)memory_allocate_ex(size, line, filepath);
 			buffer->capacity = size;
 
 			if (buffer->size) {
@@ -162,6 +162,22 @@ inline void __impl__buffer_resize(Buffer* buffer, u32 size, u32 line, const char
 	}
 
 	buffer->size = size;
+}
+
+inline void __impl__buffer_prepare(Buffer* buffer, u32 capacity, u32 line, const char* filepath)
+{
+	if (buffer->capacity < capacity) {
+
+		u8* new_data = (u8*)memory_allocate_ex(capacity, line, filepath);
+		buffer->capacity = capacity;
+
+		if (buffer->size) {
+			memory_copy(new_data, buffer->data, buffer->size);
+			memory_free(buffer->data);
+		}
+
+		buffer->data = new_data;
+	}
 }
 
 inline void buffer_close(Buffer* buffer)
@@ -187,7 +203,7 @@ inline void __impl__buffer_write_back(Buffer* buffer, const void* data, u32 size
 	if (buffer->capacity < required) {
 
 		u32 new_capacity = (u32)((f32)required * buffer->scale_factor);
-		u8* new_data = (u8*)__impl__memory_allocate(new_capacity, line, file);
+		u8* new_data = (u8*)memory_allocate_ex(new_capacity, line, file);
 
 		if (buffer->size) {
 			memory_copy(new_data, buffer->data, buffer->size);
@@ -203,6 +219,7 @@ inline void __impl__buffer_write_back(Buffer* buffer, const void* data, u32 size
 }
 
 #define buffer_resize(buffer, size) __impl__buffer_resize(buffer, size, __LINE__, __FILE__)
+#define buffer_prepare(buffer, capacity) __impl__buffer_capacity(buffer, capacity, __LINE__, __FILE__)
 #define buffer_write_back(buffer, data, size) __impl__buffer_write_back(buffer, data, size, __LINE__, __FILE__)
 
 typedef struct {
@@ -271,7 +288,7 @@ inline void* __impl__instance_allocator_create(InstanceAllocator* alloc, u32 lin
 	if (pool == NULL) {
 
 		u32 new_pool_count = alloc->pool_count + 4;
-		InstanceAllocatorPool* new_pools = (InstanceAllocatorPool*)__impl__memory_allocate(new_pool_count * sizeof(InstanceAllocatorPool), line, file);
+		InstanceAllocatorPool* new_pools = (InstanceAllocatorPool*)memory_allocate_ex(new_pool_count * sizeof(InstanceAllocatorPool), line, file);
 		memory_copy(new_pools, alloc->pools, alloc->pool_count * sizeof(InstanceAllocatorPool));
 		alloc->pools = new_pools;
 
@@ -288,7 +305,7 @@ inline void* __impl__instance_allocator_create(InstanceAllocator* alloc, u32 lin
 	}
 
 	if (pool->instances == NULL)
-		pool->instances = (u8*)__impl__memory_allocate(alloc->pool_size * alloc->instance_size, line, file);
+		pool->instances = (u8*)memory_allocate_ex(alloc->pool_size * alloc->instance_size, line, file);
 
 	void* ptr;
 
@@ -500,7 +517,7 @@ inline DynamicString __impl__dynamic_string_init(const char* init_string, f32 sc
 		
 		str.capacity = (u32)((f32)size * str.scale_factor);
 		str.size = size;
-		str.data = (char*)__impl__memory_allocate(str.capacity + 1, line, file);
+		str.data = (char*)memory_allocate_ex(str.capacity + 1, line, file);
 
 		memory_copy(str.data, init_string, str.size + 1);
 	}
@@ -510,9 +527,31 @@ inline DynamicString __impl__dynamic_string_init(const char* init_string, f32 sc
 
 inline void dynamic_string_close(DynamicString* str)
 {
-	if (str->data) {
+	if (str->size) {
 		memory_free(str->data);
 	}
+}
+
+inline void __impl__dynamic_string_append(DynamicString* str, const char* src, u32 line, const char* file)
+{
+	u32 size = string_size(src);
+
+	if (str->size + size > str->capacity) {
+
+		u32 new_capacity = (u32)((f32)(str->size + size) * str->scale_factor);
+		char* new_data = (char*)memory_allocate_ex(new_capacity + 1, line, file);
+
+		if (str->size) {
+			memory_copy(new_data, str->data, str->size);
+			memory_free(str->data);
+		}
+
+		str->data = new_data;
+		str->capacity = new_capacity;
+	}
+
+	memory_copy(str->data + str->size, src, size);
+	str->size += size;
 }
 
 inline void __impl__dynamic_string_resize(DynamicString* str, u32 size, u32 line, const char* file)
@@ -521,11 +560,11 @@ inline void __impl__dynamic_string_resize(DynamicString* str, u32 size, u32 line
 
 		if (size > str->capacity) {
 
-			u8* new_data = (u8*)__impl__memory_allocate(size + 1, line, file);
+			u8* new_data = (u8*)memory_allocate_ex(size + 1, line, file);
 			str->capacity = size;
 
 			if (str->size) {
-				memory_copy(new_data, str->data, str->size + 1);
+				memory_copy(new_data, str->data, str->size);
 				memory_free(str->data);
 			}
 
@@ -535,12 +574,13 @@ inline void __impl__dynamic_string_resize(DynamicString* str, u32 size, u32 line
 		str->size = size;
 	}
 	else if (str->size > size) {
-		memory_zero(str->data + size, str->size - size);
+		memory_zero(str->data + size, str->size - size + 1);
 		str->size = size;
 	}
 }
 
 #define dynamic_string_init(init_string, scale_factor) __impl__dynamic_string_init(init_string, scale_factor, __LINE__, __FILE__)
+#define dynamic_string_append(str, src) __impl__dynamic_string_append(str, src, __LINE__, __FILE__)
 #define dynamic_string_resize(str, size) __impl__dynamic_string_resize(str, size, __LINE__, __FILE__)
 
 typedef struct {

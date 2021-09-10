@@ -10,13 +10,18 @@
 
 #include "Hosebase/imrend.h"
 
-inline b8 hosebase_initialize()
+typedef struct {
+	OSInitializeDesc os;
+	GraphicsInitializeDesc graphics;
+} HosebaseInitializeDesc;
+
+inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 {
 	core.frame_count = 0u;
 	core.delta_time = 0.f;
 	core.time_step = 1.f;
 	
-	if (!_os_initialize()) {
+	if (!_os_initialize(&desc->os)) {
 		print("Can't initialize os layer\n");
 		return FALSE;
 	}
@@ -26,7 +31,7 @@ inline b8 hosebase_initialize()
 		return FALSE;
 	}
 
-	if (!_graphics_initialize(TRUE)) {
+	if (!_graphics_initialize(&desc->graphics)) {
 		print("Can't initialize graphics API\n");
 		return FALSE;
 	}

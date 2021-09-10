@@ -24,7 +24,7 @@ typedef struct {
  
 static GraphicsData* gfx = NULL;
 
-b8 _graphics_initialize(b8 validation)
+b8 _graphics_initialize(const GraphicsInitializeDesc* desc)
 {
 	b8 res;
 
@@ -33,7 +33,7 @@ b8 _graphics_initialize(b8 validation)
 	// Initialize API
 	SV_LOG_INFO("Trying to initialize vulkan device\n");
 	graphics_vulkan_device_prepare(&gfx->device);
-	res = gfx->device.initialize(validation);
+	res = gfx->device.initialize(desc->validation);
 	
 	if (!res) {
 		SV_LOG_ERROR("Can't initialize vulkan device\n");
@@ -304,7 +304,7 @@ void _graphics_close()
 
 	mutex_destroy(gfx->primitives_to_destroy_mutex);
 
-	array_close(gfx->primitives_to_destroy);
+	array_close(&gfx->primitives_to_destroy);
 
 	memory_free(gfx);
 }
@@ -391,11 +391,11 @@ static void destroy_primitives()
 {
 	mutex_lock(gfx->primitives_to_destroy_mutex);
 	
-	foreach(i, array_size(gfx->primitives_to_destroy)) {
+	foreach(i, array_size(&gfx->primitives_to_destroy)) {
 
 		destroy_graphics_primitive(gfx->primitives_to_destroy[i]);
 	}
-	array_reset(gfx->primitives_to_destroy);
+	array_reset(&gfx->primitives_to_destroy);
 
 	mutex_unlock(gfx->primitives_to_destroy_mutex);
 }
@@ -755,7 +755,7 @@ b8 graphics_renderpass_create(RenderPass** renderPass, const RenderPassDesc* des
 	
 	for (u32 i = 0; i < desc->attachment_count; ++i) {
 
-		array_push(p->info.attachments, desc->attachments[i]);
+		array_push(&p->info.attachments, desc->attachments[i]);
 	}
 
 	return TRUE;
@@ -785,10 +785,10 @@ b8 graphics_inputlayoutstate_create(InputLayoutState** inputLayoutState, const I
 	p->info.elements = array_init(InputElementDesc, desc->element_count, 1.f);
 
 	foreach(i, desc->slot_count) {
-		array_push(p->info.slots, desc->slots[i]);
+		array_push(&p->info.slots, desc->slots[i]);
 	}
 	foreach(i, desc->element_count) {
-		array_push(p->info.elements, desc->elements[i]);
+		array_push(&p->info.elements, desc->elements[i]);
 	}
 
 	return TRUE;
@@ -818,7 +818,7 @@ b8 graphics_blendstate_create(BlendState** blendState, const BlendStateDesc* des
 	p->info.attachments = array_init(BlendAttachmentDesc, desc->attachment_count, 1.f);
 
 	foreach(i, desc->attachment_count) {
-		array_push(p->info.attachments, desc->attachments[i]);
+		array_push(&p->info.attachments, desc->attachments[i]);
 	}
 
 	return TRUE;
@@ -876,7 +876,7 @@ void graphics_destroy(void* primitive)
 	if (primitive == NULL) return;
 	mutex_lock(gfx->primitives_to_destroy_mutex);
 	GraphicsPrimitive* p = primitive;
-	array_push(gfx->primitives_to_destroy, p);
+	array_push(&gfx->primitives_to_destroy, p);
 	mutex_unlock(gfx->primitives_to_destroy_mutex);
 }
 
@@ -1835,16 +1835,16 @@ void graphics_renderpass_begin(RenderPass* rp, GPUImage** attachments, const Col
 
 	state->render_pass = rp;
 
-	u32 att_count = array_size(rp->info.attachments);
+	u32 att_count = array_size(&rp->info.attachments);
 	memory_copy(state->attachments, attachments, sizeof(GPUImage*) * att_count);
 	gfx->pipeline_state.graphics[cmd].flags |= GraphicsPipelineState_RenderPass;
 
 	if (colors != NULL) {
-		foreach(i, array_size(rp->info.attachments))
+		foreach(i, array_size(&rp->info.attachments))
 			gfx->pipeline_state.graphics[cmd].clear_colors[i] = color_to_v4(colors[i]);
 	}
 	else {
-		foreach(i, array_size(rp->info.attachments))
+		foreach(i, array_size(&rp->info.attachments))
 			gfx->pipeline_state.graphics[cmd].clear_colors[i] = color_to_v4(color_black());
 	}
 	gfx->pipeline_state.graphics[cmd].clear_depth = depth;

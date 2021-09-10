@@ -481,6 +481,8 @@ namespace sv {
 			create_info.pUserData = nullptr;
 			
 			vkCheck(vkCreateDebugUtilsMessengerEXT(g_API->instance, &create_info, nullptr, &g_API->debug));
+
+			SV_LOG_INFO("Vulkan validation enabled\n");
 		}
 
 		// Create adapter
@@ -972,7 +974,7 @@ namespace sv {
 		RenderPass_vk& renderPass = *reinterpret_cast<RenderPass_vk*>(state.render_pass);
 		VkCommandBuffer cmd = g_API->frames[g_API->currentFrame].commandBuffers[cmd_];
 
-		u32 att_count = array_size(renderPass.info.attachments);
+		u32 att_count = array_size(&renderPass.info.attachments);
 
 		// FrameBuffer
 		VkFramebuffer fb = VK_NULL_HANDLE;

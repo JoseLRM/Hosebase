@@ -329,7 +329,7 @@ inline void update_current_matrix(ImRendState* state)
 {
 	Mat4 matrix = mat4_identity();
 
-	foreach(i, array_size(state->matrix_stack)) {
+	foreach(i, array_size(&state->matrix_stack)) {
 
 		Mat4 m = state->matrix_stack[i];
 		
@@ -372,9 +372,9 @@ inline void update_current_scissor(ImRendState* state, CommandList cmd)
 
 	u32 begin_index = 0u;
 
-	if (array_size(state->scissor_stack)) {
+	if (array_size(&state->scissor_stack)) {
 	    
-		for (i32 i = (i32)array_size(state->scissor_stack) - 1; i >= 0; --i) {
+		for (i32 i = (i32)array_size(&state->scissor_stack) - 1; i >= 0; --i) {
 
 			if (!state->scissor_stack[i].additive) {
 				begin_index = i;
@@ -382,7 +382,7 @@ inline void update_current_scissor(ImRendState* state, CommandList cmd)
 			}
 		}
 
-		for (u32 i = begin_index; i < (u32)array_size(state->scissor_stack); ++i) {
+		for (u32 i = begin_index; i < (u32)array_size(&state->scissor_stack); ++i) {
 
 			v4 s1 = state->scissor_stack[i].bounds;
 
@@ -457,8 +457,8 @@ void imrend_flush(CommandList cmd)
 	graphics_renderpass_begin(gfx->render_pass, att, NULL, 1.f, 0u, cmd);
 
 	state->current_matrix = mat4_identity();
-	array_reset(state->matrix_stack);
-	array_reset(state->scissor_stack);
+	array_reset(&state->matrix_stack);
+	array_reset(&state->scissor_stack);
 	state->camera.current = ImRendCamera_Clip;
 	state->camera.is_custom = FALSE;
 
@@ -474,14 +474,14 @@ void imrend_flush(CommandList cmd)
 		case ImRendHeader_PushMatrix:
 		{
 			Mat4 m = imrend_read(Mat4, it);
-			array_push(state->matrix_stack, m);
+			array_push(&state->matrix_stack, m);
 			update_current_matrix(state);
 		}
 		break;
 		
 		case ImRendHeader_PopMatrix:
 		{
-			array_pop(state->matrix_stack);
+			array_pop(&state->matrix_stack);
 			update_current_matrix(state);
 		}
 		break;
@@ -492,14 +492,14 @@ void imrend_flush(CommandList cmd)
 			s.bounds = imrend_read(v4, it);
 			s.additive = imrend_read(b8, it);
 		
-			array_push(state->scissor_stack, s);
+			array_push(&state->scissor_stack, s);
 			update_current_scissor(state, cmd);
 		}
 		break;
 	    
 		case ImRendHeader_PopScissor:
 		{
-			array_pop(state->scissor_stack);
+			array_pop(&state->scissor_stack);
 			update_current_scissor(state, cmd);
 		}
 		break;
@@ -739,8 +739,8 @@ void imrend_flush(CommandList cmd)
 		}
 	}
 
-	assert(array_empty(state->matrix_stack));
-	assert(array_empty(state->scissor_stack));
+	assert(array_empty(&state->matrix_stack));
+	assert(array_empty(&state->scissor_stack));
 
 	graphics_renderpass_end(cmd);
 

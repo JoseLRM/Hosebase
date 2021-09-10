@@ -59,7 +59,7 @@ const char* input_text()
 
 u32 input_text_command_count()
 {
-	return array_size(input->text_commands);
+	return array_size(&input->text_commands);
 }
 
 TextCommand input_text_command(u32 index)
@@ -80,7 +80,7 @@ void _input_close()
 {
 	if (input) {
 
-		array_close(input->text_commands);
+		array_close(&input->text_commands);
 		
 		memory_free(input);
 	}
@@ -114,7 +114,7 @@ void _input_update()
 
 	input->mouse_last_position = input->mouse_position;
 	input->text[0] = '\0';
-	array_reset(input->text_commands);
+	array_reset(&input->text_commands);
 	input->mouse_wheel = 0.f;
 }
 
@@ -140,7 +140,7 @@ void _input_mouse_button_set_released(MouseButton mouse_button)
 
 void _input_text_command_add(TextCommand text_command)
 {
-	array_push(input->text_commands, text_command);
+	array_push(&input->text_commands, text_command);
 }
 
 void _input_text_add(const char* text)

@@ -516,7 +516,11 @@ u32 graphics_format_size(Format format);
 
 typedef u32 CommandList;
 
-b8   _graphics_initialize(b8 validation);
+typedef struct {
+	b8 validation;
+} GraphicsInitializeDesc;
+
+b8   _graphics_initialize(const GraphicsInitializeDesc* desc);
 void _graphics_close();
 void graphics_begin();
 void graphics_end();

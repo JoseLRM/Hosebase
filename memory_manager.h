@@ -2,61 +2,25 @@
 
 #include "Hosebase/defines.h"
 
-inline void* __impl__memory_allocate(size_t size, u32 line, const char* file)
-{
-	void* ptr = NULL;
-	while (ptr == NULL) ptr = calloc(1, size);
-	return ptr;
-}
-inline void memory_free(void* ptr)
-{
-	free(ptr);
-}
+#if SV_SLOW
 
-inline void memory_copy(void* dst, const void* src, size_t size)
-{
-	// TODO: Optimize?
-	
-	u8* dst_it = (u8*)dst;
-	const u8* src_it = (const u8*)src;
-
-	foreach(i, size) {
-		dst_it[i] = src_it[i];
-	}
-}
-
-inline void memory_zero(void* dst, size_t size)
-{
-	// TODO: Optimize?
-	
-	u8* it = (u8*)dst;
-	u8* end = it + size;
-	while (it != end) {
-		*it = 0;
-		++it;
-	}
-}
-
-inline void memory_swap(void* p0, void* p1, size_t size)
-{
-	// TODO: Optimize?
-	
-	u8* it0 = (u8*)p0;
-	u8* it1 = (u8*)p1;
-	u8* end = it0 + size;
-
-	while (it0 != end) {
-
-		u8 aux = *it0;
-		*it0 = *it1;
-		*it1 = aux;
-		
-		++it0;
-		++it1;
-	}
-}
+void* __impl__memory_allocate(size_t size, u32 line, const char* file);
 
 #define memory_allocate(size) __impl__memory_allocate(size, __LINE__, __FILE__)
+#define memory_allocate_ex(size, line, file) __impl__memory_allocate(size, line, file)
+
+#else
+
+void* memory_allocate(size_t size);
+
+#define memory_allocate_ex(size, line, file) memory_allocate(size)
+
+#endif
+
+void memory_free(void* ptr);
+void memory_copy(void* dst, const void* src, size_t size);
+void memory_zero(void* dst, size_t size);
+void memory_swap(void* p0, void* p1, size_t size);
 
 inline const char* string_validate(const char* str)
 {

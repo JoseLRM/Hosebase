@@ -304,12 +304,6 @@ LRESULT CALLBACK window_proc (
 			_input_text_command_add(TextCommand_Escape);
 			break;
 
-		case 0x09:
-
-			// TODO: Tabulations input
-			_input_text_add("    ");
-			break;
-
 		case 0x0D:
 			_input_text_command_add(TextCommand_Enter);
 			break;
@@ -318,7 +312,7 @@ LRESULT CALLBACK window_proc (
 		{
 			char c = (char)wParam;
 
-			if (c >= 32 && c <= 126)
+			if (c == 9 || (c >= 32 && c <= 126))
 				_input_text_add(&c);
 		}
 		break;
@@ -371,7 +365,7 @@ LRESULT CALLBACK window_proc (
 	return result;
 }
 
-b8 _os_initialize()
+b8 _os_initialize(const OSInitializeDesc* desc)
 {
 	platform = memory_allocate(sizeof(PlatformData));
 
@@ -400,7 +394,7 @@ b8 _os_initialize()
 									   "SilverEngine",
 									   //WS_POPUP | WS_VISIBLE,
 									   WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_OVERLAPPED | WS_BORDER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX,
-									   0, 0, 1080, 720,
+									   desc->window_pos.x, desc->window_pos.y, desc->window_size.x, desc->window_size.y,
 									   0, 0, 0, 0
 		);
 

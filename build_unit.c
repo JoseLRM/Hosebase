@@ -2,6 +2,7 @@
 #include "src/win64.c"
 #endif
 
+#include "src/memory_manager.c"
 #include "src/serialize.c"
 #include "src/input.c"
 #include "src/graphics.c"

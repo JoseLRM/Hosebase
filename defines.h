@@ -63,11 +63,27 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 
 // TODO
 
-#define assert(x) do { if (!(x)) { *((int*)(0)) = 69; } } while(0)
+#if SV_SLOW
+
+void throw_assertion(const char* title, u32 line, const char* file);
+	
+#define assert(x) do { if (!(x)) { throw_assertion(#x, __LINE__, __FILE__); } } while(0)
+#define assert_title(x, title) do { if (!(x)) { throw_assertion(title, __LINE__, __FILE__); } } while(0)
 
 #define SV_LOG_INFO(x, ...) print("[INFO]" x, __VA_ARGS__)
 #define SV_LOG_WARNING(x, ...) print("[WARNING]" x, __VA_ARGS__)
 #define SV_LOG_ERROR(x, ...) print("[ERROR]" x, __VA_ARGS__)
+
+#else
+
+#define assert(x) {}
+#define assert_title(x, title) {}
+
+#define SV_LOG_INFO(x, ...) {}
+#define SV_LOG_WARNING(x, ...) {}
+#define SV_LOG_ERROR(x, ...) {}
+
+#endif
 
 typedef struct {
 	f32 delta_time;
