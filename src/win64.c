@@ -287,6 +287,8 @@ LRESULT CALLBACK window_proc (
 	}
 	case WM_CHAR:
 	{
+		SV_LOG_INFO("%u\n", wParam);
+		
 		switch (wParam)
 		{
 		case 0x08:
@@ -306,6 +308,18 @@ LRESULT CALLBACK window_proc (
 
 		case 0x0D:
 			_input_text_command_add(TextCommand_Enter);
+			break;
+
+		case 3:
+			_input_text_command_add(TextCommand_Copy);
+			break;
+
+		case 22:
+			_input_text_command_add(TextCommand_Paste);
+			break;
+
+		case 24:
+			_input_text_command_add(TextCommand_Cut);
 			break;
 
 		default:
@@ -893,6 +907,38 @@ void folder_iterator_close(FolderIterator* iterator)
 {
 	HANDLE find = (HANDLE)iterator->_handle;
 	FindClose(find);
+}
+
+//////////////////////////////// CLIPBOARD ////////////////////////////
+
+b8 clipboard_write_ansi(const char* text)
+{
+	SV_CHECK(OpenClipboard(platform->handle));
+
+	EmptyClipboard();
+
+	u32 size = string_size(text);
+	
+	HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, size + 1);
+	memory_copy(GlobalLock(mem), text, size + 1);
+	GlobalUnlock(mem);
+	
+	HANDLE res = SetClipboardData(CF_TEXT, mem);
+	CloseClipboard();
+
+	return res != NULL;
+}
+
+const char* clipboard_read_ansi()
+{
+	if (!OpenClipboard(platform->handle))
+		return NULL;
+	
+	const char* txt = (const char*)GetClipboardData(CF_TEXT);
+
+	CloseClipboard();
+
+	return txt;
 }
 
 //////////////////////////////// MULTITHREADING ////////////////////////////

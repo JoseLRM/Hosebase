@@ -114,6 +114,9 @@ typedef enum {
 	TextCommand_Escape,
 	TextCommand_Begin,
 	TextCommand_End,
+	TextCommand_Copy,
+	TextCommand_Cut,
+	TextCommand_Paste,
 } TextCommand;
 
 b8 input_key(Key key, InputState input_state);

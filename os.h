@@ -87,6 +87,11 @@ b8   folder_iterator_begin(const char* folderpath, FolderIterator* iterator, Fol
 b8   folder_iterator_next(FolderIterator* iterator, FolderElement* element);
 void folder_iterator_close(FolderIterator* iterator);
 
+// CLIPBOARD
+
+b8          clipboard_write_ansi(const char* text);
+const char* clipboard_read_ansi();
+
 // MULTITHREADING STUFF
 
 typedef struct { u64 _handle; } Mutex;
