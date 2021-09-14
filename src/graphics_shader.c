@@ -14,8 +14,10 @@ b8 graphics_shader_close()
 
 inline void compute_random_path(char* str)
 {
-	u32 seed = (u32)(timer_now() * 1000000000.0);
+	// TODO: Thread safe
+	static u32 seed = 0x734FC7A7832;
 	u32 random = math_random_u32(seed);
+	seed += 0x434F32A;
 
 	char random_str[20];
 	string_from_u32(random_str, random);

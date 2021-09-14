@@ -534,7 +534,24 @@ namespace sv {
 				bool valid = true;
 				suitability++;
 
-				if (props.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) valid = false;
+				switch (props.deviceType)
+				{
+				case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+					suitability += 0;
+					break;
+				case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+					suitability += 5;
+					break;
+				case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+					suitability += 20;
+					break;
+				case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+					suitability += 2;
+					break;
+				case VK_PHYSICAL_DEVICE_TYPE_CPU:
+					suitability += 2;
+					break;
+				}
 
 				if (!valid) suitability = 0u;
 				
@@ -591,10 +608,6 @@ namespace sv {
 
 				if (available_extension_count == 0u) {
 					SV_LOG_ERROR("There's no available device extensions\n");
-					return false;
-				}
-				if (available_layer_count == 0u) {
-					SV_LOG_ERROR("There's no available device validation layers\n");
 					return false;
 				}
 
