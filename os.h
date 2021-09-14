@@ -132,8 +132,14 @@ void*   library_address(Library library, const char* name);
 // INTERNAL
 
 typedef struct {
-	v2_u32 window_pos;
-	v2_u32 window_size;
+
+	struct {
+		b8 open;
+		v2_u32 pos;
+		v2_u32 size;
+		const char* title;
+	} window;
+
 } OSInitializeDesc;
 	
 b8   _os_initialize(const OSInitializeDesc* desc);

@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef SV_GRAPHICS
+#define SV_GRAPHICS 0
+#endif
+
 #include "stdlib.h"
 #include "stdio.h"
 #include "stdint.h"

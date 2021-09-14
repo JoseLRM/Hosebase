@@ -1,3 +1,6 @@
+#include "Hosebase/defines.h"
+
+#if SV_GRAPHICS
 
 #define STB_TRUETYPE_IMPLEMENTATION
 
@@ -250,3 +253,5 @@ void font_destroy(Font* font)
 	memory_free(font->glyphs);
 	graphics_destroy(font->image);
 }
+
+#endif

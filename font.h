@@ -1,5 +1,9 @@
 #pragma once
 
+#include "Hosebase/defines.h"
+
+#if SV_GRAPHICS
+
 #include "Hosebase/graphics.h"
 
 typedef struct {
@@ -41,3 +45,5 @@ typedef enum {
 
 b8   font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags flags);
 void font_destroy(Font* font);
+
+#endif

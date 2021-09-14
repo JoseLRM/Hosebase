@@ -1,5 +1,7 @@
 #include "Hosebase/defines.h"
 
+#if SV_GRAPHICS
+
 #define SV_VULKAN_IMPLEMENTATION
 #include "graphics_vulkan.h"
 
@@ -320,3 +322,5 @@ namespace sv {
     }
 
 }
+
+#endif

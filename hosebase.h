@@ -12,7 +12,11 @@
 
 typedef struct {
 	OSInitializeDesc os;
+
+#if SV_GRAPHICS
 	GraphicsInitializeDesc graphics;
+#endif
+
 } HosebaseInitializeDesc;
 
 inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)

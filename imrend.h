@@ -1,5 +1,9 @@
 #pragma once
 
+#include "Hosebase/defines.h"
+
+#if SV_GRAPHICS
+
 b8 imrend_initialize();
 void imrend_close();
 
@@ -48,3 +52,5 @@ void imrend_draw_cube_wireframe(Color color, CommandList cmd);
 void imrend_draw_sphere_wireframe(u32 vertical_segments, u32 horizontal_segments, Color color, CommandList cmd);
 
 void imrend_draw_orthographic_grip(v2 position, v2 offset, v2 size, v2 gridSize, Color color, CommandList cmd);
+
+#endif

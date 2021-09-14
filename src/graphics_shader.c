@@ -1,4 +1,6 @@
-#include "defines.h"
+#include "Hosebase/defines.h"
+
+#if SV_GRAPHICS
 
 #include "graphics_internal.h"
 
@@ -305,3 +307,5 @@ b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shader
 	desc.bin_data = data.data;
 	return graphics_shader_create(shader, &desc);
 }
+
+#endif

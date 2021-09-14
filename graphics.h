@@ -1,5 +1,9 @@
 #pragma once
 
+#include "Hosebase/defines.h"
+
+#if SV_GRAPHICS
+
 #include "Hosebase/allocators.h"
 
 #ifdef __cplusplus
@@ -720,4 +724,6 @@ void graphics_name_set(Primitive* primitive, const char* name);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

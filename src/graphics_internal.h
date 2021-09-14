@@ -1,5 +1,7 @@
 #pragma once
 
+#if SV_GRAPHICS
+
 #include "Hosebase/graphics.h"
 #include "Hosebase/os.h"
 
@@ -292,4 +294,6 @@ b8 graphics_shader_close();
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

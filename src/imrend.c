@@ -1,3 +1,7 @@
+#include "Hosebase/defines.h"
+
+#if SV_GRAPHICS
+
 #include "Hosebase/imrend.h"
 
 #define SV_STRING(x) #x
@@ -1018,3 +1022,5 @@ void imrend_draw_orthographic_grip(v2 position, v2 offset, v2 size, v2 gridSize,
 		imrend_draw_line((v3){ x + offset.x, begin.y + offset.y, 0.f }, (v3){ x + offset.x, end.y + offset.y, 0.f }, color, cmd);
 	}
 }
+
+#endif

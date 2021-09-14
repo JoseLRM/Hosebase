@@ -1,5 +1,7 @@
 #include "Hosebase/graphics.h"
 
+#if SV_GRAPHICS
+
 #include "graphics_internal.h"
 
 #include "vulkan/graphics_vulkan.h"
@@ -1963,5 +1965,7 @@ void graphics_name_set(Primitive* primitive_, const char* name)
 	Primitive_internal& primitive = *reinterpret_cast<Primitive_internal*>(primitive_);
 	primitive.name = name;
 }
+
+#endif
 
 #endif
