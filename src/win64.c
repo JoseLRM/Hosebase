@@ -287,7 +287,7 @@ LRESULT CALLBACK window_proc (
 	}
 	case WM_CHAR:
 	{
-		SV_LOG_INFO("%u\n", wParam);
+		// SV_LOG_INFO("%u\n", wParam);
 		
 		switch (wParam)
 		{
@@ -945,28 +945,57 @@ const char* clipboard_read_ansi()
 
 Mutex mutex_create()
 {
-	Mutex mutex;
-	mutex._handle = (u64)CreateMutexA(NULL, FALSE, NULL);
-	return mutex;
+	HANDLE handle = (u64)CreateMutexA(NULL, FALSE, NULL);
+	return (Mutex)handle;
 }
     
 void mutex_destroy(Mutex mutex)
 {
-	if (mutex._handle != NULL) {
-		CloseHandle((HANDLE)mutex._handle);
+	if (mutex) {
+		CloseHandle((HANDLE)mutex);
 	}
 }
 
 void mutex_lock(Mutex mutex)
 {
-	assert(mutex._handle != 0u);
-	WaitForSingleObject((HANDLE)mutex._handle, INFINITE);
+	if (mutex) {
+		WaitForSingleObject((HANDLE)mutex, INFINITE);
+	}
+
+	assert_title(mutex, "The mutex must be valid");
 }
     
 void mutex_unlock(Mutex mutex)
 {
-	assert(mutex._handle != 0u);
-	ReleaseMutex((HANDLE)mutex._handle);
+	if (mutex) {
+		ReleaseMutex((HANDLE)mutex);
+	}
+
+	assert_title(mutex, "The mutex must be valid");
+}
+
+Thread thread_create(ThreadMainFn main, void* data)
+{
+	HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)main, data, 0, NULL);
+	return (Thread)handle;
+}
+
+void thread_destroy(Thread thread)
+{
+	if (thread) {
+
+		TerminateThread((HANDLE)thread, 0);
+	}
+}
+
+void thread_wait(Thread thread)
+{
+	if (thread) {
+
+		WaitForSingleObject((HANDLE)thread, INFINITE);
+	}
+
+	assert_title(thread, "The thread must be valid");
 }
 
 // DYNAMIC LIBRARIES

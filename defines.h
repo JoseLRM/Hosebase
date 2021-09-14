@@ -60,6 +60,7 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 #define SV_MAX(a, b) ((a > b) ? a : b)
 #define SV_ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 #define SV_CHECK(x) if (!(x)) return FALSE
+#define SV_ZERO(x) memory_zero(&(x), sizeof(x))
 
 // TODO
 

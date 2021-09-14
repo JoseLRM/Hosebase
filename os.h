@@ -94,15 +94,16 @@ const char* clipboard_read_ansi();
 
 // MULTITHREADING STUFF
 
-typedef struct { u64 _handle; } Mutex;
+typedef u64 Mutex;
+typedef u64 Thread;
+
+typedef u32(*ThreadMainFn)(void*);
     
 Mutex mutex_create();
 void  mutex_destroy(Mutex mutex);
 
 void mutex_lock(Mutex mutex);
 void mutex_unlock(Mutex mutex);
-
-inline b8 mutex_valid(Mutex mutex) { return mutex._handle != 0u; }
 
 #ifdef __cplusplus
 
@@ -115,6 +116,10 @@ struct _LockGuard {
 #define SV_LOCK_GUARD(mutex, name) _LockGuard name(&mutex);
 
 #endif
+
+Thread thread_create(ThreadMainFn main, void* data);
+void   thread_destroy(Thread thread);
+void   thread_wait(Thread thread);
 
 // DYNAMIC LIBRARIES
 
