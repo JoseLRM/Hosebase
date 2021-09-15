@@ -450,8 +450,10 @@ b8 _os_recive_input()
 
 	if (platform->resize) {
 		platform->resize = FALSE;
-		
+
+#if SV_GRAPHICS
 		graphics_swapchain_resize();
+#endif
 	}
 
 	return !platform->close_request;

@@ -35,6 +35,8 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		return FALSE;
 	}
 
+#if SV_GRAPHICS
+
 	if (!_graphics_initialize(&desc->graphics)) {
 		print("Can't initialize graphics API\n");
 		return FALSE;
@@ -45,13 +47,18 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		return FALSE;
 	}
 
+#endif
+
 	return TRUE;
 }
 
 inline void hosebase_close()
 {
+#if SV_GRAPHICS
 	imrend_close();
 	_graphics_close();
+#endif
+	
 	_input_close();
 	_os_close();
 }
@@ -70,14 +77,18 @@ inline b8 hosebase_frame_begin()
 	_input_update();
 	if (!_os_recive_input()) return FALSE; // Close request
 
+#if SV_GRAPHICS
 	_graphics_begin();
+#endif
 
 	return TRUE;
 }
 
 inline void hosebase_frame_end()
 {
+#if SV_GRAPHICS
 	_graphics_end();
+#endif
 
 	++core.frame_count;
 }
