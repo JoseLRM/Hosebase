@@ -404,27 +404,31 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 
 	platform->handle = 0;
 
+	const char* title = string_validate(desc->window.title);
+	v2_u32 size = desc->window.size;
+	v2_u32 pos = desc->window.pos;
+
+	if (title[0] == '\0')
+		title = "Untitled";
+
+	u32 flags = 0u;
+
 	if (desc->window.open) {
 
-		const char* title = string_validate(desc->window.title);
-		v2_u32 size = desc->window.size;
-		v2_u32 pos = desc->window.pos;
+		flags = WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_OVERLAPPED | WS_BORDER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
+		// TOOD: FULLSCREEN flags = WS_POPUP | WS_VISIBLE;
+	}
 
-		if (title[0] == '\0')
-			title = "Untitled";
-
-		platform->handle = CreateWindowExA(0u,
-			"SilverWindow",
-			title,
-			//WS_POPUP | WS_VISIBLE,
-			WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_OVERLAPPED | WS_BORDER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX,
-			pos.x, pos.y, size.x, size.y,
-			0, 0, 0, 0
+	platform->handle = CreateWindowExA(0u,
+									   "SilverWindow",
+									   title,
+									   flags,
+									   pos.x, pos.y, size.x, size.y,
+									   0, 0, 0, 0
 		);
 
-		if (platform->handle == 0) {
-			return FALSE;
-		}
+	if (platform->handle == 0) {
+		return FALSE;
 	}
 	
 	return TRUE;

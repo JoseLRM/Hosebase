@@ -233,6 +233,69 @@ inline void string_from_u32(char* dst, u32 value)
 	dst[end + 1] = '\0';
 }
 
+inline b8 string_to_u32(u32* dst, char* str)
+{
+	u32 digits = string_size(str);
+	*dst = 0u;
+
+	if (digits == 0) return FALSE;
+
+	u32 mul = 10;
+	foreach(i, digits - 1)
+			mul *= 10;
+
+	foreach(i, digits) {
+
+		mul /= 10;
+		
+		char c = str[i];
+		u32 v;
+
+		switch (c) {
+			
+		case '0':
+			v = 0;
+			break;
+		case '1':
+			v = 1;
+			break;
+		case '2':
+			v = 2;
+			break;
+		case '3':
+			v = 3;
+			break;
+		case '4':
+			v = 4;
+			break;
+		case '5':
+			v = 5;
+			break;
+		case '6':
+			v = 6;
+			break;
+		case '7':
+			v = 7;
+			break;
+		case '8':
+			v = 8;
+			break;
+		case '9':
+			v = 9;
+			break;
+
+		default:
+			return FALSE;
+			
+		}
+
+		v *= mul;
+		*dst += v;
+	}
+
+	return TRUE;
+}
+
 inline b8 string_to_u32_hexadecimal(u32* dst, char* str)
 {
 	u32 digits = string_size(str);
@@ -278,21 +341,27 @@ inline b8 string_to_u32_hexadecimal(u32* dst, char* str)
 			v = 9;
 			break;
 		case 'A':
+		case 'a':
 			v = 10;
 			break;
 		case 'B':
+		case 'b':
 			v = 11;
 			break;
 		case 'C':
+		case 'c':
 			v = 12;
 			break;
 		case 'D':
+		case 'd':
 			v = 13;
 			break;
 		case 'E':
+		case 'e':
 			v = 14;
 			break;
 		case 'F':
+		case 'f':
 			v = 15;
 			break;
 
