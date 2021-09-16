@@ -700,7 +700,7 @@ b8 web_client_send(const void* data, u32 size)
 	return res;
 }
 
-b8 net_initialize()
+b8 _net_initialize()
 {
 	net = memory_allocate(sizeof(NetData));
 	
@@ -715,9 +715,16 @@ b8 net_initialize()
 	return TRUE;
 }
 
-void net_close()
+void _net_close()
 {
 	if (net) {
+
+		if (net->server) {
+			SV_LOG_ERROR("Server not closed\n");
+		}
+		if (net->client) {
+			SV_LOG_ERROR("Client not closed\n");
+		}
 		
 		WSACleanup();
 

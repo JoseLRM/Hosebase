@@ -27,24 +27,33 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 	core.time_step = 1.f;
 	
 	if (!_os_initialize(&desc->os)) {
-		print("Can't initialize os layer\n");
+		SV_LOG_ERROR("Can't initialize os layer\n");
 		return FALSE;
 	}
 
 	if (!_input_initialize()) {
-		print("Can't initialize input system\n");
+		SV_LOG_ERROR("Can't initialize input system\n");
 		return FALSE;
 	}
+
+#if SV_NETWORKING
+
+	if (!_net_initialize()) {
+		SV_LOG_ERROR("Can't initialize networking\n");
+		return FALSE;
+	}
+	
+#endif
 
 #if SV_GRAPHICS
 
 	if (!_graphics_initialize(&desc->graphics)) {
-		print("Can't initialize graphics API\n");
+		SV_LOG_ERROR("Can't initialize graphics API\n");
 		return FALSE;
 	}
 
 	if (!imrend_initialize()) {
-		print("Can't initialize imrend\n");
+		SV_LOG_ERROR("Can't initialize imrend\n");
 		return FALSE;
 	}
 
@@ -58,6 +67,10 @@ inline void hosebase_close()
 #if SV_GRAPHICS
 	imrend_close();
 	_graphics_close();
+#endif
+
+#if SV_NETWORKING
+	_net_close();
 #endif
 	
 	_input_close();
