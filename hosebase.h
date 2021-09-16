@@ -5,6 +5,7 @@
 #include "Hosebase/input.h"
 #include "Hosebase/serialize.h"
 #include "Hosebase/font.h"
+#include "Hosebase/networking.h"
 
 // TODO: Optional
 

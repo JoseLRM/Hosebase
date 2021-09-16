@@ -1,3 +1,5 @@
+#include "src/networking.c"
+
 #if SV_PLATFORM_WINDOWS
 #include "src/win64.c"
 #endif
