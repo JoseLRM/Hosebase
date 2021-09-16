@@ -4,6 +4,7 @@ The base of my projects.
 <p>- Multiplatform initialization</p>
 <p>- Graphics API</p>
 <p>- Immediate Mode Rendering</p>
+<p>- Web Network</p>
 <p>- Data structures</p>
 <p>- Memory management and debugging</p>
 <p>- String utils</p>
@@ -21,5 +22,4 @@ The base of my projects.
 <p>- Profiler</p>
 <p>- Job System</p>
 <p>- Noise Function 2D and 3D</p>
-<p>- Web Network</p>
 <p>- Peer to peer Network</p>
