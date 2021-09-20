@@ -575,6 +575,167 @@ inline Mat4 mat4_zero()
 	return m;
 }
 
+inline Mat4 mat4_transpose(Mat4 s)
+{
+	Mat4 m;
+	m.v[0][0] = s.v[0][0];
+	m.v[0][1] = s.v[1][0];
+	m.v[0][2] = s.v[2][0];
+	m.v[0][3] = s.v[3][0];
+
+	m.v[1][0] = s.v[0][1];
+	m.v[1][1] = s.v[1][1];
+	m.v[1][2] = s.v[2][1];
+	m.v[1][3] = s.v[3][1];
+
+	m.v[2][0] = s.v[0][2];
+	m.v[2][1] = s.v[1][2];
+	m.v[2][2] = s.v[2][2];
+	m.v[2][3] = s.v[3][2];
+
+	m.v[3][0] = s.v[0][3];
+	m.v[3][1] = s.v[1][3];
+	m.v[3][2] = s.v[2][3];
+	m.v[3][3] = s.v[3][3];
+	
+	return m;
+}
+
+inline Mat4 mat4_inverse(Mat4 m)
+{
+	// From: https://stackoverflow.com/a/1148405
+	
+	Mat4 inv;
+	f32 det;
+    i32 i;
+
+    inv.a[0] = m.a[5]  * m.a[10] * m.a[15] - 
+             m.a[5]  * m.a[11] * m.a[14] - 
+             m.a[9]  * m.a[6]  * m.a[15] + 
+             m.a[9]  * m.a[7]  * m.a[14] +
+             m.a[13] * m.a[6]  * m.a[11] - 
+             m.a[13] * m.a[7]  * m.a[10];
+
+    inv.a[4] = -m.a[4]  * m.a[10] * m.a[15] + 
+              m.a[4]  * m.a[11] * m.a[14] + 
+              m.a[8]  * m.a[6]  * m.a[15] - 
+              m.a[8]  * m.a[7]  * m.a[14] - 
+              m.a[12] * m.a[6]  * m.a[11] + 
+              m.a[12] * m.a[7]  * m.a[10];
+
+    inv.a[8] = m.a[4]  * m.a[9] * m.a[15] - 
+             m.a[4]  * m.a[11] * m.a[13] - 
+             m.a[8]  * m.a[5] * m.a[15] + 
+             m.a[8]  * m.a[7] * m.a[13] + 
+             m.a[12] * m.a[5] * m.a[11] - 
+             m.a[12] * m.a[7] * m.a[9];
+
+    inv.a[12] = -m.a[4]  * m.a[9] * m.a[14] + 
+               m.a[4]  * m.a[10] * m.a[13] +
+               m.a[8]  * m.a[5] * m.a[14] - 
+               m.a[8]  * m.a[6] * m.a[13] - 
+               m.a[12] * m.a[5] * m.a[10] + 
+               m.a[12] * m.a[6] * m.a[9];
+
+    inv.a[1] = -m.a[1]  * m.a[10] * m.a[15] + 
+              m.a[1]  * m.a[11] * m.a[14] + 
+              m.a[9]  * m.a[2] * m.a[15] - 
+              m.a[9]  * m.a[3] * m.a[14] - 
+              m.a[13] * m.a[2] * m.a[11] + 
+              m.a[13] * m.a[3] * m.a[10];
+
+    inv.a[5] = m.a[0]  * m.a[10] * m.a[15] - 
+             m.a[0]  * m.a[11] * m.a[14] - 
+             m.a[8]  * m.a[2] * m.a[15] + 
+             m.a[8]  * m.a[3] * m.a[14] + 
+             m.a[12] * m.a[2] * m.a[11] - 
+             m.a[12] * m.a[3] * m.a[10];
+
+    inv.a[9] = -m.a[0]  * m.a[9] * m.a[15] + 
+              m.a[0]  * m.a[11] * m.a[13] + 
+              m.a[8]  * m.a[1] * m.a[15] - 
+              m.a[8]  * m.a[3] * m.a[13] - 
+              m.a[12] * m.a[1] * m.a[11] + 
+              m.a[12] * m.a[3] * m.a[9];
+
+    inv.a[13] = m.a[0]  * m.a[9] * m.a[14] - 
+              m.a[0]  * m.a[10] * m.a[13] - 
+              m.a[8]  * m.a[1] * m.a[14] + 
+              m.a[8]  * m.a[2] * m.a[13] + 
+              m.a[12] * m.a[1] * m.a[10] - 
+              m.a[12] * m.a[2] * m.a[9];
+
+    inv.a[2] = m.a[1]  * m.a[6] * m.a[15] - 
+             m.a[1]  * m.a[7] * m.a[14] - 
+             m.a[5]  * m.a[2] * m.a[15] + 
+             m.a[5]  * m.a[3] * m.a[14] + 
+             m.a[13] * m.a[2] * m.a[7] - 
+             m.a[13] * m.a[3] * m.a[6];
+
+    inv.a[6] = -m.a[0]  * m.a[6] * m.a[15] + 
+              m.a[0]  * m.a[7] * m.a[14] + 
+              m.a[4]  * m.a[2] * m.a[15] - 
+              m.a[4]  * m.a[3] * m.a[14] - 
+              m.a[12] * m.a[2] * m.a[7] + 
+              m.a[12] * m.a[3] * m.a[6];
+
+    inv.a[10] = m.a[0]  * m.a[5] * m.a[15] - 
+              m.a[0]  * m.a[7] * m.a[13] - 
+              m.a[4]  * m.a[1] * m.a[15] + 
+              m.a[4]  * m.a[3] * m.a[13] + 
+              m.a[12] * m.a[1] * m.a[7] - 
+              m.a[12] * m.a[3] * m.a[5];
+
+    inv.a[14] = -m.a[0]  * m.a[5] * m.a[14] + 
+               m.a[0]  * m.a[6] * m.a[13] + 
+               m.a[4]  * m.a[1] * m.a[14] - 
+               m.a[4]  * m.a[2] * m.a[13] - 
+               m.a[12] * m.a[1] * m.a[6] + 
+               m.a[12] * m.a[2] * m.a[5];
+
+    inv.a[3] = -m.a[1] * m.a[6] * m.a[11] + 
+              m.a[1] * m.a[7] * m.a[10] + 
+              m.a[5] * m.a[2] * m.a[11] - 
+              m.a[5] * m.a[3] * m.a[10] - 
+              m.a[9] * m.a[2] * m.a[7] + 
+              m.a[9] * m.a[3] * m.a[6];
+
+    inv.a[7] = m.a[0] * m.a[6] * m.a[11] - 
+             m.a[0] * m.a[7] * m.a[10] - 
+             m.a[4] * m.a[2] * m.a[11] + 
+             m.a[4] * m.a[3] * m.a[10] + 
+             m.a[8] * m.a[2] * m.a[7] - 
+             m.a[8] * m.a[3] * m.a[6];
+
+    inv.a[11] = -m.a[0] * m.a[5] * m.a[11] + 
+               m.a[0] * m.a[7] * m.a[9] + 
+               m.a[4] * m.a[1] * m.a[11] - 
+               m.a[4] * m.a[3] * m.a[9] - 
+               m.a[8] * m.a[1] * m.a[7] + 
+               m.a[8] * m.a[3] * m.a[5];
+
+    inv.a[15] = m.a[0] * m.a[5] * m.a[10] - 
+              m.a[0] * m.a[6] * m.a[9] - 
+              m.a[4] * m.a[1] * m.a[10] + 
+              m.a[4] * m.a[2] * m.a[9] + 
+              m.a[8] * m.a[1] * m.a[6] - 
+              m.a[8] * m.a[2] * m.a[5];
+
+    det = m.a[0] * inv.a[0] + m.a[1] * inv.a[4] + m.a[2] * inv.a[8] + m.a[3] * inv.a[12];
+
+    if (det == 0.f)
+        return mat4_zero();
+
+    det = 1.0 / det;
+
+	Mat4 r;
+
+    for (i = 0; i < 16; i++)
+        r.a[i] = inv.a[i] * det;
+
+	return r;
+}
+
 inline Mat4 mat4_multiply(Mat4 m0, Mat4 m1)
 {
 	Mat4 r;
@@ -620,24 +781,10 @@ inline Mat4 mat4_scale(f32 x, f32 y, f32 z)
 	return m;
 }
 
-inline Mat4 mat4_rotate_x(f32 x)
+inline Mat4 mat4_rotate_roll(f32 roll)
 {
-	Mat4 m = mat4_zero();
-	// TODO
-	return m;
-}
-
-inline Mat4 mat4_rotate_y(f32 y)
-{
-	Mat4 m = mat4_zero();
-	// TODO
-	return m;
-}
-
-inline Mat4 mat4_rotate_z(f32 z)
-{
-	f32 s = sin(z);
-	f32 c = cos(z);
+	f32 s = sin(roll);
+	f32 c = cos(roll);
 	
 	Mat4 m = mat4_identity();
 	m.v[0][0] = c;
@@ -647,18 +794,61 @@ inline Mat4 mat4_rotate_z(f32 z)
 	return m;
 }
 
-inline Mat4 mat4_rotate_xyz(f32 x, f32 y, f32 z)
+inline Mat4 mat4_rotate_pitch(f32 pitch)
 {
-	Mat4 m = mat4_zero();
-	// TODO
+	f32 s = sin(pitch);
+	f32 c = cos(pitch);
+	
+	Mat4 m = mat4_identity();
+	m.v[1][1] = c;
+	m.v[1][2] = -s;
+	m.v[2][1] = s;
+	m.v[2][2] = c;
+	
+	return m;
+}
+
+inline Mat4 mat4_rotate_yaw(f32 yaw)
+{
+	f32 s = sin(yaw);
+	f32 c = cos(yaw);
+	
+	Mat4 m = mat4_identity();
+	m.v[0][0] = c;
+	m.v[0][2] = s;
+	m.v[2][0] = -s;
+	m.v[2][2] = c;
+	
 	return m;
 }
 
 inline Mat4 mat4_rotate_euler(f32 roll, f32 pitch, f32 yaw)
 {
-	Mat4 m = mat4_zero();
-	// TODO
-	return m;
+	Mat4 roll_matrix = mat4_rotate_roll(roll);
+	Mat4 pitch_matrix = mat4_rotate_pitch(pitch);
+	Mat4 yaw_matrix = mat4_rotate_yaw(yaw);
+	
+	return mat4_multiply(mat4_multiply(yaw_matrix, pitch_matrix), roll_matrix);
+}
+
+inline Mat4 mat4_rotate_x(f32 x)
+{
+	return mat4_rotate_pitch(x);
+}
+
+inline Mat4 mat4_rotate_y(f32 y)
+{
+	return mat4_rotate_yaw(y);
+}
+
+inline Mat4 mat4_rotate_z(f32 z)
+{
+	return mat4_rotate_roll(z);
+}
+
+inline Mat4 mat4_rotate_xyz(f32 x, f32 y, f32 z)
+{
+	return mat4_rotate_euler(z, x, y);
 }
 
 inline Mat4 mat4_projection_orthographic(f32 right, f32 left, f32 top, f32 bottom, f32 near, f32 far)
@@ -673,6 +863,39 @@ inline Mat4 mat4_projection_orthographic(f32 right, f32 left, f32 top, f32 botto
 	m.v[3][3] = 1.f;
 	return m;
 }
+
+inline Mat4 mat4_projection_perspective(f32 aspect, f32 fov, f32 near, f32 far)
+{
+	Mat4 m = mat4_zero();
+	m.v[0][0] = 1.f / (aspect * tan(fov * 0.5f));
+	m.v[1][1] = 1.f / tan(fov * 0.5f);
+	m.v[2][2] = - (far + near) / (far - near);
+	m.v[2][3] = - (2.f * far * near) / (far - near);
+	m.v[3][2] = -1.f;
+	return m;
+}
+
+// Ray
+
+inline Ray ray_mouse_picking_perspective(v2 mouse_position, v3 camera_position, Mat4 inverse_view_matrix, Mat4 inverse_projection_matrix)
+{
+	Ray ray;
+	
+	// Screen to clip space
+	v2 position = v2_mul_scalar(mouse_position, 2.f);
+
+	v4 mouse_world = v4_set(position.x, position.y, 1.f, 1.f);
+	mouse_world = v4_transform(mouse_world, inverse_projection_matrix);
+	mouse_world.z = 1.f;
+	mouse_world = v4_transform(mouse_world, inverse_view_matrix);
+			
+	ray.origin = camera_position;
+	ray.direction = v3_normalize(v4_to_v3(mouse_world));
+
+	return ray;
+}
+
+
 
 // Color
 

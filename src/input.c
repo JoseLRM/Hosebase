@@ -52,6 +52,11 @@ v2 input_mouse_position()
 	return input->mouse_position;
 }
 
+v2 input_mouse_dragging()
+{
+	return input->mouse_dragged;
+}
+
 const char* input_text()
 {
 	return input->text;
@@ -112,6 +117,7 @@ void _input_update()
 		}
 	}
 
+	input->mouse_dragged = v2_sub(input->mouse_position, input->mouse_last_position);
 	input->mouse_last_position = input->mouse_position;
 	input->text[0] = '\0';
 	array_reset(&input->text_commands);

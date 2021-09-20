@@ -180,6 +180,11 @@ typedef struct {
 typedef struct {
 	u8 r, g, b, a;
 } Color;
+
+typedef struct {
+	v3 origin;
+	v3 direction;
+} Ray;
 	
 #ifdef __cplusplus
 }

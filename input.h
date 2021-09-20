@@ -124,6 +124,7 @@ b8 input_mouse_button(MouseButton mouse_button, InputState input_state);
 
 f32 input_mouse_wheel();
 v2  input_mouse_position();
+v2  input_mouse_dragging();
 
 const char* input_text();
 u32 input_text_command_count();
