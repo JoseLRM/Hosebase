@@ -13,6 +13,43 @@
 
 #include "graphics_internal.h"
 
+#define TASK_QUEUE_SIZE 6000
+#define TASK_THREAD_MAX 64
+
+static b8 _task_initialize();
+static void _task_close();
+
+typedef struct {
+
+	HANDLE thread;
+	u32 id;
+
+} TaskThreadData;
+
+typedef struct {
+
+	TaskContext* context;
+	TaskFn fn;
+	b8 user_data[TASK_DATA_SIZE];
+
+} TaskData;
+
+typedef struct {
+
+	TaskData tasks[TASK_QUEUE_SIZE];
+	volatile u32 task_count;
+	volatile u32 task_completed;
+	volatile u32 task_next;
+
+	HANDLE semaphore;
+
+	TaskThreadData thread_data[TASK_THREAD_MAX];
+	u32 thread_count;
+
+	b8 running;
+
+} TaskSystemData;
+
 typedef struct {
 
 	char origin_path[FILE_PATH_SIZE];
@@ -28,6 +65,8 @@ typedef struct {
 	v2     mouse_position;
 	b8     close_request;
 	b8     resize;
+
+	TaskSystemData task_system;
 	
 } PlatformData;
 
@@ -430,6 +469,8 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	if (platform->handle == 0) {
 		return FALSE;
 	}
+
+	SV_CHECK(_task_initialize());
 	
 	return TRUE;
 }
@@ -466,6 +507,8 @@ b8 _os_recive_input()
 void _os_close()
 {
 	if (platform) {
+
+		_task_close();
 		
 		if (platform->handle)
 			DestroyWindow(platform->handle);
@@ -1015,23 +1058,159 @@ void thread_wait(Thread thread)
 	assert_title(thread, "The thread must be valid");
 }
 
-void task_add(TaskFn* tasks, u32 task_count, TaskContext* context)
+#define WRITE_BARRIER _WriteBarrier(); _mm_sfence()
+#define READ_BARRIER _ReadBarrier()
+
+static DWORD WINAPI task_thread(void* arg);
+
+static b8 _task_initialize()
 {
-	// TODO
+	TaskSystemData* data = &platform->task_system;
+	data->running = TRUE;
+
+	u32 thread_count = 4;
+
+	// Compute preferred thread count
+	{
+		SYSTEM_INFO sysinfo;
+		GetSystemInfo(&sysinfo);
+
+		thread_count = sysinfo.dwNumberOfProcessors;
+	}
+	
+	thread_count = SV_MAX(thread_count, 2);
+	thread_count = SV_MIN(thread_count, TASK_THREAD_MAX);
+
+	// Take in acount the main thread
+	--thread_count;
+
+	data->semaphore = CreateSemaphoreExA(NULL, 0, thread_count, NULL, 0, SEMAPHORE_ALL_ACCESS);
+
+	if (data->semaphore == NULL)
+		return FALSE;
+
+	foreach(t, thread_count) {
+
+		TaskThreadData* thread_data = data->thread_data + t;
+		thread_data->id = t;
+		
+		thread_data->thread = CreateThread(NULL, 0, task_thread, thread_data, 0, NULL);
+
+		if (thread_data->thread == NULL) {
+			SV_LOG_ERROR("Can't create task thread\n");
+			data->running = FALSE;
+			return FALSE;
+		}
+	}
+
+	data->thread_count = thread_count;
+
+	return TRUE;
+}
+
+static void _task_close()
+{
+	TaskSystemData* data = &platform->task_system;
+	data->running = FALSE;
+
+	HANDLE threads[TASK_THREAD_MAX];
+	foreach(i, data->thread_count)
+		threads[i] = data->thread_data[i].thread;
+
+	ReleaseSemaphore(data->semaphore, data->thread_count, 0);
+
+	if (WaitForMultipleObjectsEx(data->thread_count, threads, TRUE, 1000, FALSE) >= data->thread_count) {
+		SV_LOG_ERROR("Can't close task threads properly\n");
+	}
+
+	CloseHandle(data->semaphore);
+}
+
+inline b8 _task_thread_do_work()
+{
+	TaskSystemData* data = &platform->task_system;
+	b8 done = FALSE;
+
+	if (data->task_next < data->task_count) {
+
+		u32 task_index = InterlockedIncrement((volatile LONG*)& data->task_next) - 1;
+
+		READ_BARRIER;
+		TaskData task = data->tasks[task_index % TASK_QUEUE_SIZE];
+
+		task.fn(task.user_data);
+
+		InterlockedIncrement((volatile LONG*)& data->task_completed);
+		if (task.context) InterlockedIncrement((volatile LONG*)& task.context->completed);
+		done = TRUE;
+	}
+
+	return done;
+}
+
+static DWORD WINAPI task_thread(void* arg)
+{
+	TaskThreadData* thread = arg;
+	TaskSystemData* data = &platform->task_system;
+
+	while (data->running) {
+
+		if (!_task_thread_do_work(thread)) {
+			WaitForSingleObjectEx(data->semaphore, INFINITE, FALSE);
+		}
+	}
+
+	return 0;
+}
+
+static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
+{
+	TaskSystemData* data = &platform->task_system;
+
+	TaskData* task = data->tasks + data->task_count % TASK_QUEUE_SIZE;
+	task->fn = desc.fn;
+	task->context = ctx;
+	if (desc.data) memory_copy(task->user_data, desc.data, TASK_DATA_SIZE);
+
+	WRITE_BARRIER;
+
+	++data->task_count;
+
+	ReleaseSemaphore(data->semaphore, 1, 0);
+}
+
+void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context)
+{
+	TaskSystemData* data = &platform->task_system;
+	
+	if (context) {
+		context->completed = 0;
+		context->dispatched = task_count;
+	}
+
 	foreach(i, task_count) {
-		TaskFn fn = tasks[i];
-		fn(NULL);
+		_task_add_queue(tasks[i], context);
 	}
 }
 
 void task_wait(TaskContext* context)
 {
+	TaskSystemData* data = &platform->task_system;
 
+	while (task_running(context)) _task_thread_do_work();
 }
 
 b8 task_running(TaskContext* context)
 {
-	return FALSE;
+	if (context) {
+
+		return context->completed < context->dispatched;
+	}
+	else {
+
+		TaskSystemData* data = &platform->task_system;
+		return data->task_completed < data->task_count;
+	}
 }
 
 // DYNAMIC LIBRARIES

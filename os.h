@@ -99,10 +99,13 @@ typedef u64 Thread;
 
 typedef i32(*ThreadMainFn)(void*);
 
-typedef void(*TaskFn)(void*);
+#define TASK_DATA_SIZE 64
+
+typedef void(*TaskFn)(void* user_data);
 
 typedef struct {
-	u32 tasks;
+	volatile i32 completed;
+	u32 dispatched;
 } TaskContext;
     
 Mutex mutex_create();
@@ -127,7 +130,12 @@ Thread thread_create(ThreadMainFn main, void* data);
 void   thread_destroy(Thread thread);
 void   thread_wait(Thread thread);
 
-void task_add(TaskFn* tasks, u32 task_count, TaskContext* context);
+typedef struct {
+	TaskFn fn;
+	const void* data;
+} TaskDesc;
+
+void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context);
 void task_wait(TaskContext* context);
 b8 task_running(TaskContext* context);
 
