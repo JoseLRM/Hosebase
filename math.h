@@ -887,9 +887,9 @@ inline Ray ray_mouse_picking_perspective(v2 mouse_position, v3 camera_position, 
 	// Screen to clip space
 	v2 position = v2_mul_scalar(mouse_position, 2.f);
 
-	v4 mouse_world = v4_set(position.x, position.y, -1.f, 1.f);
+	v4 mouse_world = v4_set(position.x, position.y, 1.f, 1.f);
 	mouse_world = v4_transform(mouse_world, inverse_projection_matrix);
-	mouse_world.z = -1.f;
+	mouse_world.z = 1.f;
 	mouse_world.w = 0.f;
 	mouse_world = v4_transform(mouse_world, inverse_view_matrix);
 			
