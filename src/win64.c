@@ -1015,6 +1015,25 @@ void thread_wait(Thread thread)
 	assert_title(thread, "The thread must be valid");
 }
 
+void task_add(TaskFn* tasks, u32 task_count, TaskContext* context)
+{
+	// TODO
+	foreach(i, task_count) {
+		TaskFn fn = tasks[i];
+		fn(NULL);
+	}
+}
+
+void task_wait(TaskContext* context)
+{
+
+}
+
+b8 task_running(TaskContext* context)
+{
+	return FALSE;
+}
+
 // DYNAMIC LIBRARIES
 
 Library library_load(const char* filepath_)

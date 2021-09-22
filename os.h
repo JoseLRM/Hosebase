@@ -97,7 +97,13 @@ const char* clipboard_read_ansi();
 typedef u64 Mutex;
 typedef u64 Thread;
 
-typedef u32(*ThreadMainFn)(void*);
+typedef i32(*ThreadMainFn)(void*);
+
+typedef void(*TaskFn)(void*);
+
+typedef struct {
+	u32 tasks;
+} TaskContext;
     
 Mutex mutex_create();
 void  mutex_destroy(Mutex mutex);
@@ -120,6 +126,10 @@ struct _LockGuard {
 Thread thread_create(ThreadMainFn main, void* data);
 void   thread_destroy(Thread thread);
 void   thread_wait(Thread thread);
+
+void task_add(TaskFn* tasks, u32 task_count, TaskContext* context);
+void task_wait(TaskContext* context);
+b8 task_running(TaskContext* context);
 
 // DYNAMIC LIBRARIES
 
