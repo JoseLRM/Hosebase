@@ -864,14 +864,17 @@ inline Mat4 mat4_projection_orthographic(f32 right, f32 left, f32 top, f32 botto
 	return m;
 }
 
-inline Mat4 mat4_projection_perspective(f32 aspect, f32 fov, f32 near, f32 far)
+// Left handed perspective matrix
+inline Mat4 mat4_projection_perspective_lh(f32 aspect, f32 fov, f32 near, f32 far)
 {
 	Mat4 m = mat4_zero();
+
 	m.v[0][0] = 1.f / (aspect * tan(fov * 0.5f));
 	m.v[1][1] = 1.f / tan(fov * 0.5f);
-	m.v[2][2] = - (far + near) / (far - near);
+	m.v[2][2] = (far + near) / (far - near);
 	m.v[2][3] = - (2.f * far * near) / (far - near);
-	m.v[3][2] = -1.f;
+	m.v[3][2] = 1.f;
+	
 	return m;
 }
 
