@@ -54,7 +54,8 @@ typedef struct {
 
 	char origin_path[FILE_PATH_SIZE];
 
-	clock_t begin_time;
+	LARGE_INTEGER clock_frequency;
+	LARGE_INTEGER begin_time;
 	
 	HINSTANCE   hinstance;
 	HINSTANCE   user_lib;
@@ -422,7 +423,12 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 {
 	platform = memory_allocate(sizeof(PlatformData));
 
-	platform->begin_time = clock();
+	if (!QueryPerformanceFrequency(&platform->clock_frequency)) {
+		SV_LOG_ERROR("Can't get the clock frequency\n");
+		return FALSE;
+	}
+
+	QueryPerformanceCounter(&platform->begin_time);
 	
 	platform->hinstance = GetModuleHandle(NULL);
 	
@@ -791,8 +797,14 @@ inline Date filetime_to_date(FILETIME file)
 
 f64 timer_now()
 {
-	clock_t time = clock();
-	return (time - platform->begin_time) * 0.001;
+	LARGE_INTEGER now, elapsed;
+	QueryPerformanceCounter(&now);
+	
+	elapsed.QuadPart = now.QuadPart - platform->begin_time.QuadPart;
+	elapsed.QuadPart *= 1000000000;
+	elapsed.QuadPart /= platform->clock_frequency.QuadPart;
+
+	return (f64)(elapsed.QuadPart) / 1000000000.0;
 }
 
 b8 file_date(const char* filepath_, Date* create, Date* last_write, Date* last_access)

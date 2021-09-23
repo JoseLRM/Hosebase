@@ -6,6 +6,7 @@
 #include "Hosebase/serialize.h"
 #include "Hosebase/font.h"
 #include "Hosebase/networking.h"
+#include "Hosebase/profiler.h"
 
 // TODO: Optional
 
