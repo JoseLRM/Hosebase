@@ -1150,6 +1150,7 @@ inline b8 _task_thread_do_work()
 		READ_BARRIER;
 		TaskData task = data->tasks[task_index % TASK_QUEUE_SIZE];
 
+		assert(task.fn != NULL);
 		task.fn(task.user_data);
 
 		InterlockedIncrement((volatile LONG*)& data->task_completed);
@@ -1177,6 +1178,8 @@ static DWORD WINAPI task_thread(void* arg)
 
 static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
 {
+	assert_title(desc.fn != NULL, "Null task function");
+
 	TaskSystemData* data = &platform->task_system;
 
 	TaskData* task = data->tasks + data->task_count % TASK_QUEUE_SIZE;

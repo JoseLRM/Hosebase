@@ -715,6 +715,8 @@ namespace sv {
 				cmdPool_info.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 				vkCheck(vkCreateCommandPool(g_API->device, &cmdPool_info, nullptr, &frame.transientCommandPool));
 
+				frame.transient_command_pool_mutex = mutex_create();
+
 				// AllocateCommandBuffers
 				VkCommandBufferAllocateInfo alloc_info{};
 				alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -754,6 +756,7 @@ namespace sv {
 			Frame& frame = g_API->frames[i];
 			vkDestroyCommandPool(g_API->device, frame.commandPool, nullptr);
 			vkDestroyCommandPool(g_API->device, frame.transientCommandPool, nullptr);
+			mutex_destroy(frame.transient_command_pool_mutex);
 			vkDestroyFence(g_API->device, frame.fence, nullptr);
 
 			foreach (i, GraphicsLimit_CommandList) {
@@ -2148,16 +2151,21 @@ namespace sv {
 	
     VkResult graphics_vulkan_singletimecmb_begin(VkCommandBuffer* pCmd)
     {
+		Frame& frame = g_API->frames[g_API->currentFrame];
+
 		// Allocate CommandBuffer
 		{
+			
 			VkCommandBufferAllocateInfo alloc_info{};
 			alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			alloc_info.commandPool = g_API->frames[g_API->currentFrame].transientCommandPool;
+			alloc_info.commandPool = frame.transientCommandPool;
 			alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 			alloc_info.commandBufferCount = 1u;
 
 			VkResult res = vkAllocateCommandBuffers(g_API->device, &alloc_info, pCmd);
+
 			if (res != VK_SUCCESS) {
+				
 				SV_LOG_ERROR("Can't allocate SingleTime CommandBuffer\n");
 				return res;
 			}
@@ -2183,7 +2191,8 @@ namespace sv {
 
     VkResult graphics_vulkan_singletimecmb_end(VkCommandBuffer cmd)
     {
-		// End CommandBuffer
+		Frame& frame = g_API->frames[g_API->currentFrame];
+
 		VkResult res = vkEndCommandBuffer(cmd);
 
 		VkSubmitInfo submit_info{};
@@ -2197,7 +2206,10 @@ namespace sv {
 		vkQueueWaitIdle(g_API->queueGraphics);
 
 		// Free CommandBuffer
-		if (res == VK_SUCCESS) vkFreeCommandBuffers(g_API->device, g_API->frames[g_API->currentFrame].transientCommandPool, 1u, &cmd);
+		if (res == VK_SUCCESS) {
+
+			vkFreeCommandBuffers(g_API->device, frame.transientCommandPool, 1u, &cmd);
+		}
 
 		return res;
     }
@@ -2408,6 +2420,8 @@ namespace sv {
 		// Set data
 		if (desc.data) {
 			
+			SV_LOCK_GUARD(g_API->frames[g_API->currentFrame].transient_command_pool_mutex, lock);
+
 			VkCommandBuffer cmd;
 			vkCheck(graphics_vulkan_singletimecmb_begin(&cmd));
 

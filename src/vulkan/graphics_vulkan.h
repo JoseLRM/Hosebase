@@ -268,6 +268,7 @@ namespace sv {
 		VkCommandPool		commandPool;
 		VkCommandBuffer		commandBuffers[GraphicsLimit_CommandList];
 		VkCommandPool		transientCommandPool;
+		Mutex               transient_command_pool_mutex;
 		VkFence				fence;
 		DescriptorPool		descPool[GraphicsLimit_CommandList];
 		VulkanGPUAllocator	allocator[GraphicsLimit_CommandList];
