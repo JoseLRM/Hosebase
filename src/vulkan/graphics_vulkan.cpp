@@ -992,7 +992,7 @@ namespace sv {
 		RenderPass_vk& renderPass = *reinterpret_cast<RenderPass_vk*>(state.render_pass);
 		VkCommandBuffer cmd = g_API->frames[g_API->currentFrame].commandBuffers[cmd_];
 
-		u32 att_count = array_size(&renderPass.info.attachments);
+		u32 att_count = renderPass.info.attachment_count;
 
 		// FrameBuffer
 		VkFramebuffer fb = VK_NULL_HANDLE;

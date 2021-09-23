@@ -433,8 +433,9 @@ typedef struct {
 } RenderPassDesc;
 
 typedef struct {
-	u32          depthstencil_attachment_index;
-	AttachmentDesc* attachments;
+	u32            depthstencil_attachment_index;
+	AttachmentDesc attachments[GraphicsLimit_Attachment];
+	u32            attachment_count;
 } RenderPassInfo;
 
 typedef struct {
@@ -459,8 +460,10 @@ typedef struct {
 } InputLayoutStateDesc;
 
 typedef struct {
-	InputSlotDesc* slots;
-	InputElementDesc* elements;
+	InputSlotDesc    slots[GraphicsLimit_InputSlot];
+	u32              slot_count;
+	InputElementDesc elements[GraphicsLimit_InputElement];
+	u32              element_count;
 } InputLayoutStateInfo;
 
 typedef struct {
@@ -481,8 +484,9 @@ typedef struct {
 } BlendStateDesc;
 
 typedef struct {
-	BlendAttachmentDesc* attachments;
-	v4			         blend_constants;
+	BlendAttachmentDesc attachments[GraphicsLimit_AttachmentRT];
+	u32                 attachment_count;
+	v4			        blend_constants;
 } BlendStateInfo;
 
 typedef struct {

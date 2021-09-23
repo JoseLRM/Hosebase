@@ -88,8 +88,8 @@ typedef struct {
 	Buffer buffer;
 	GPUImage* render_target;
 	
-	Mat4* matrix_stack;
-	ImRendScissor* scissor_stack;
+	DynamicArray(Mat4) matrix_stack;
+	DynamicArray(ImRendScissor) scissor_stack;
 	
 	Mat4 current_matrix;
 	
@@ -263,8 +263,8 @@ b8 imrend_initialize()
 		ImRendState* s = &imrend->state[i];
 
 		s->buffer = buffer_init(2.f);
-		s->matrix_stack = array_init(Mat4, 5, 1.2f);
-		s->scissor_stack = array_init(ImRendScissor, 5, 1.2f);
+		s->matrix_stack = array_init(Mat4, 1.2f);
+		s->scissor_stack = array_init(ImRendScissor, 1.2f);
 
 		// Buffers
 		{
@@ -333,9 +333,9 @@ inline void update_current_matrix(ImRendState* state)
 {
 	Mat4 matrix = mat4_identity();
 
-	foreach(i, array_size(&state->matrix_stack)) {
+	foreach(i, state->matrix_stack.size) {
 
-		Mat4 m = state->matrix_stack[i];
+		Mat4 m = *(Mat4*)array_get(&state->matrix_stack, i);
 		
 		matrix = mat4_multiply(matrix, m);
 	}
@@ -376,19 +376,22 @@ inline void update_current_scissor(ImRendState* state, CommandList cmd)
 
 	u32 begin_index = 0u;
 
-	if (array_size(&state->scissor_stack)) {
+	if (state->scissor_stack.size) {
 	    
-		for (i32 i = (i32)array_size(&state->scissor_stack) - 1; i >= 0; --i) {
+		for (i32 i = state->scissor_stack.size - 1; i >= 0; --i) {
 
-			if (!state->scissor_stack[i].additive) {
+			ImRendScissor* scissor = (ImRendScissor*)array_get(&state->scissor_stack, i);
+
+			if (!scissor->additive) {
 				begin_index = i;
 				break;
 			}
 		}
 
-		for (u32 i = begin_index; i < (u32)array_size(&state->scissor_stack); ++i) {
+		for (u32 i = begin_index; i < state->scissor_stack.size; ++i) {
 
-			v4 s1 = state->scissor_stack[i].bounds;
+			ImRendScissor* scissor = (ImRendScissor*)array_get(&state->scissor_stack, i);
+			v4 s1 = scissor->bounds;
 
 			f32 min0 = s0.x - s0.z * 0.5f;
 			f32 max0 = s0.x + s0.z * 0.5f;
@@ -743,8 +746,8 @@ void imrend_flush(CommandList cmd)
 		}
 	}
 
-	assert(array_empty(&state->matrix_stack));
-	assert(array_empty(&state->scissor_stack));
+	assert(state->matrix_stack.size == 0);
+	assert(state->scissor_stack.size == 0);
 
 	graphics_renderpass_end(cmd);
 

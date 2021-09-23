@@ -8,7 +8,8 @@ typedef struct {
 	InputState mouse_buttons[MouseButton_MaxEnum];
 
 	char text[INPUT_TEXT_SIZE];
-	TextCommand* text_commands;
+	// TODO: static buffer
+	DynamicArray(TextCommand) text_commands;
 
 	v2	mouse_position;
 	v2	mouse_last_position;
@@ -64,19 +65,19 @@ const char* input_text()
 
 u32 input_text_command_count()
 {
-	return array_size(&input->text_commands);
+	return input->text_commands.size;
 }
 
 TextCommand input_text_command(u32 index)
 {
-	return input->text_commands[index];
+	return *(TextCommand*)array_get(&input->text_commands, index);
 }
 
 b8 _input_initialize()
 {
 	input = memory_allocate(sizeof(InputData));
 
-	input->text_commands = array_init(TextCommand, 5, 1.1f);
+	input->text_commands = array_init(TextCommand, 1.1f);
 
 	return TRUE;
 }

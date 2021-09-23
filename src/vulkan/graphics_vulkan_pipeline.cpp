@@ -150,21 +150,21 @@ namespace sv {
 			VkVertexInputAttributeDescription attributes[GraphicsLimit_InputElement];
 			{
 				const InputLayoutStateInfo& il = state.input_layout_state->info;
-				for (u32 i = 0; i < array_size(&il.slots); ++i) {
+				for (u32 i = 0; i < il.slot_count; ++i) {
 					bindings[i].binding = il.slots[i].slot;
 					bindings[i].inputRate = il.slots[i].instanced ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
 					bindings[i].stride = il.slots[i].stride;
 				}
-				for (u32 i = 0; i < array_size(&il.elements); ++i) {
+				for (u32 i = 0; i < il.element_count; ++i) {
 					attributes[i].binding = il.elements[i].input_slot;
 					attributes[i].format = graphics_vulkan_parse_format(il.elements[i].format);
 					attributes[i].location = vertex_shader->semanticNames[il.elements[i].name] + il.elements[i].index;
 					attributes[i].offset = il.elements[i].offset;
 				}
-				vertexInput.vertexBindingDescriptionCount = array_size(&il.slots);
+				vertexInput.vertexBindingDescriptionCount = il.slot_count;
 				vertexInput.pVertexBindingDescriptions = bindings;
 				vertexInput.pVertexAttributeDescriptions = attributes;
-				vertexInput.vertexAttributeDescriptionCount = array_size(&il.elements);
+				vertexInput.vertexAttributeDescriptionCount = il.element_count;
 			}
 
 			// Rasterizer State
@@ -193,7 +193,7 @@ namespace sv {
 			{
 				const BlendStateInfo& bDesc = state.blend_state->info;
 
-				u32 blend_att_count = SV_MIN(array_size(&bDesc.attachments), array_size(&renderPass.info.attachments));
+				u32 blend_att_count = SV_MIN(bDesc.attachment_count, renderPass.info.attachment_count);
 		
 				for (u32 i = 0; i < blend_att_count; ++i)
 				{

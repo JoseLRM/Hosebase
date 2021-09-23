@@ -19,7 +19,7 @@ typedef struct {
 	DepthStencilState*	def_depth_stencil_state;
 	RasterizerState*	def_rasterizer_state;
 
-	GraphicsPrimitive** primitives_to_destroy;
+	DynamicArray(GraphicsPrimitive*) primitives_to_destroy;
 	Mutex      primitives_to_destroy_mutex;
 	
 } GraphicsData;
@@ -55,7 +55,7 @@ b8 _graphics_initialize(const GraphicsInitializeDesc* desc)
 
 	gfx->primitives_to_destroy_mutex = mutex_create();
 
-	gfx->primitives_to_destroy = array_init(GraphicsPrimitive*, 10, 2.f);
+	gfx->primitives_to_destroy = array_init(GraphicsPrimitive*, 2.f);
 
 	// Create default states
 	{
@@ -393,9 +393,10 @@ static void destroy_primitives()
 {
 	mutex_lock(gfx->primitives_to_destroy_mutex);
 	
-	foreach(i, array_size(&gfx->primitives_to_destroy)) {
+	foreach(i, gfx->primitives_to_destroy.size) {
 
-		destroy_graphics_primitive(gfx->primitives_to_destroy[i]);
+		GraphicsPrimitive** primitive = array_get(&gfx->primitives_to_destroy, i);
+		destroy_graphics_primitive(*primitive);
 	}
 	array_reset(&gfx->primitives_to_destroy);
 
@@ -753,11 +754,11 @@ b8 graphics_renderpass_create(RenderPass** renderPass, const RenderPassDesc* des
 		}
 	}
 
-	p->info.attachments = array_init(AttachmentDesc, desc->attachment_count, 1.f);
+	p->info.attachment_count = desc->attachment_count;
 	
-	for (u32 i = 0; i < desc->attachment_count; ++i) {
+	foreach(i, desc->attachment_count) {
 
-		array_push(&p->info.attachments, desc->attachments[i]);
+		p->info.attachments[i] = desc->attachments[i];
 	}
 
 	return TRUE;
@@ -783,14 +784,14 @@ b8 graphics_inputlayoutstate_create(InputLayoutState** inputLayoutState, const I
 	InputLayoutState* p = *inputLayoutState;
 	p->primitive.type = GraphicsPrimitiveType_InputLayoutState;
 		
-	p->info.slots = array_init(InputSlotDesc, desc->slot_count, 1.f);
-	p->info.elements = array_init(InputElementDesc, desc->element_count, 1.f);
+	p->info.slot_count = desc->slot_count;
+	p->info.element_count = desc->element_count;
 
 	foreach(i, desc->slot_count) {
-		array_push(&p->info.slots, desc->slots[i]);
+		p->info.slots[i] = desc->slots[i];
 	}
 	foreach(i, desc->element_count) {
-		array_push(&p->info.elements, desc->elements[i]);
+		p->info.elements[i] = desc->elements[i];
 	}
 
 	return TRUE;
@@ -817,10 +818,10 @@ b8 graphics_blendstate_create(BlendState** blendState, const BlendStateDesc* des
 	p->primitive.type = GraphicsPrimitiveType_BlendState;
 		
 	p->info.blend_constants = desc->blend_constants;
-	p->info.attachments = array_init(BlendAttachmentDesc, desc->attachment_count, 1.f);
+	p->info.attachment_count = desc->attachment_count;
 
 	foreach(i, desc->attachment_count) {
-		array_push(&p->info.attachments, desc->attachments[i]);
+		p->info.attachments[i] = desc->attachments[i];
 	}
 
 	return TRUE;
@@ -1837,16 +1838,16 @@ void graphics_renderpass_begin(RenderPass* rp, GPUImage** attachments, const Col
 
 	state->render_pass = rp;
 
-	u32 att_count = array_size(&rp->info.attachments);
+	u32 att_count = rp->info.attachment_count;
 	memory_copy(state->attachments, attachments, sizeof(GPUImage*) * att_count);
 	gfx->pipeline_state.graphics[cmd].flags |= GraphicsPipelineState_RenderPass;
 
 	if (colors != NULL) {
-		foreach(i, array_size(&rp->info.attachments))
+		foreach(i, rp->info.attachment_count)
 			gfx->pipeline_state.graphics[cmd].clear_colors[i] = color_to_v4(colors[i]);
 	}
 	else {
-		foreach(i, array_size(&rp->info.attachments))
+		foreach(i, rp->info.attachment_count)
 			gfx->pipeline_state.graphics[cmd].clear_colors[i] = color_to_v4(color_black());
 	}
 	gfx->pipeline_state.graphics[cmd].clear_depth = depth;

@@ -1072,6 +1072,7 @@ void thread_wait(Thread thread)
 
 #define WRITE_BARRIER _WriteBarrier(); _mm_sfence()
 #define READ_BARRIER _ReadBarrier()
+#define GENERAL_BARRIER WRITE_BARRIER; READ_BARRIER
 
 static DWORD WINAPI task_thread(void* arg);
 
@@ -1146,8 +1147,8 @@ inline b8 _task_thread_do_work()
 	if (data->task_next < data->task_count) {
 
 		u32 task_index = InterlockedIncrement((volatile LONG*)& data->task_next) - 1;
-
 		READ_BARRIER;
+
 		TaskData task = data->tasks[task_index % TASK_QUEUE_SIZE];
 
 		assert(task.fn != NULL);
@@ -1189,7 +1190,6 @@ static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
 	if (desc.data) memory_copy(task->user_data, desc.data, desc.size);
 
 	WRITE_BARRIER;
-
 	++data->task_count;
 
 	ReleaseSemaphore(data->semaphore, 1, 0);
@@ -1219,7 +1219,7 @@ void task_wait(TaskContext* context)
 b8 task_running(TaskContext* context)
 {
 	if (context) {
-
+		
 		return context->completed < context->dispatched;
 	}
 	else {

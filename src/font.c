@@ -23,7 +23,7 @@ typedef struct {
 	u32 height;
 } GlyphLine;
 
-inline void add_glyph(char c, stbtt_fontinfo* info, f32 heightScale, TempGlyph** glyphs)
+inline void add_glyph(char c, stbtt_fontinfo* info, f32 heightScale, DynamicArray(TempGlyph)* glyphs)
 {
 	i32 index = stbtt_FindGlyphIndex(info, c);
 
@@ -55,8 +55,8 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 	font->glyphs = (Glyph*)memory_allocate(sizeof(Glyph) * FONT_CHAR_COUNT);
 		
 	// TODO: Resize
-	TempGlyph* glyphs = array_init(TempGlyph, 50, 1.7f);
-	GlyphLine* lines = array_init(GlyphLine, 50, 1.7f);
+	DynamicArray(TempGlyph) glyphs = array_init(TempGlyph, 1.7f);
+	DynamicArray(GlyphLine) lines = array_init(GlyphLine, 1.7f);
 
 	f32 height_scale = stbtt_ScaleForPixelHeight(&info, pixel_height);
 
@@ -113,7 +113,7 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 	add_glyph(' ', &info, height_scale, &glyphs);
 
 	// Sort the glyphs by their heights
-	SV_QUICKSORT(glyphs, array_size(&glyphs), glyph_less_than);
+	SV_QUICKSORT((TempGlyph*)glyphs.data, glyphs.size, glyph_less_than);
 
 	// Calculate num of lines and atlas resolution
 	u32 atlas_width;
@@ -128,9 +128,9 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 		GlyphLine* current_line = array_add(&lines);
 		current_line->begin_index = 0u;
 
-		foreach (i, array_size(&glyphs)) {
+		foreach (i, glyphs.size) {
 
-			TempGlyph* g = glyphs + i;
+			TempGlyph* g = (TempGlyph*)array_get(&glyphs, i);
 			if (g->bitmap == NULL) continue;
 
 			// Next line
@@ -138,7 +138,8 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 					
 				xoffset = 0u;
 
-				current_line->height = glyphs[current_line->begin_index].h + atlas_spacing;
+				TempGlyph* g0 = (TempGlyph*)array_get(&glyphs, current_line->begin_index);
+				current_line->height = g0->h + atlas_spacing;
 				current_line->end_index = i;
 
 				current_line = array_add(&lines);
@@ -149,13 +150,20 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 			xoffset += g->w + atlas_spacing;
 		}
 
-		u32 back = array_size(&lines) - 1;
-		lines[back].end_index = (u32)array_size(&glyphs);
-		lines[back].height = glyphs[lines[back].begin_index].h + atlas_spacing;
+		u32 back = lines.size - 1;
+
+		GlyphLine* line = (GlyphLine*)array_get(&lines, back);
+		line->end_index = glyphs.size;
+
+		TempGlyph* g0 = (TempGlyph*)array_get(&glyphs, line->begin_index);
+		line->height = g0->h + atlas_spacing;
 
 		// Calculate atlas height
 		atlas_height = 0u;
-		foreach (i, array_size(&lines)) atlas_height += lines[i].height;
+		foreach(i, lines.size) {
+			GlyphLine* line = (GlyphLine*)array_get(&lines, i);
+			atlas_height += line->height;
+		}
 	}
 
 	// Draw font atlas and set texcoords
@@ -164,13 +172,13 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 	size_t xoffset = 0u;
 	size_t yoffset = 0u;
 
-	foreach(j, array_size(&lines)) {
+	foreach(j, lines.size) {
 		
-		GlyphLine line = lines[j];
+		GlyphLine line = *(GlyphLine*)array_get(&lines, j);
 
 		for (u32 i = line.begin_index; i < line.end_index; ++i) {
 				
-			TempGlyph* g = glyphs + i;
+			TempGlyph* g = array_get(&glyphs, i);
 			if (g->bitmap == NULL) continue;
 
 			// Compute texcoord
@@ -197,9 +205,9 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 	}
 
 	// Free bitmaps and set data to the font
-	foreach(i, array_size(&glyphs)) {
+	foreach(i, glyphs.size) {
 
-		TempGlyph g0 = glyphs[i];
+		TempGlyph g0 = *(TempGlyph*)array_get(&glyphs, i);
 		
 		stbtt_FreeBitmap(g0.bitmap, 0);
 

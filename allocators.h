@@ -10,118 +10,84 @@ extern "C" {
 
 typedef struct {
 
+	u8* data;
 	u32 size;
 	u32 capacity;
 	f32 scale_factor;
-	
-} DynamicArrayHeader;
+	u32 stride;
 
-inline void* __impl__array_init(u32 stride, u32 initial_capacity, f32 scale_factor, u32 line, const char* file)
+} DynamicArray;
+
+inline DynamicArray __impl__array_init(u32 stride, f32 scale_factor)
 {
-	DynamicArrayHeader* array = (DynamicArrayHeader*)memory_allocate_ex(sizeof(DynamicArrayHeader) + (stride * initial_capacity), line, file);
-	array->size = 0u;
-	array->capacity = initial_capacity;
-	array->scale_factor = scale_factor;
-
-	++array;
+	DynamicArray array;
+	array.data = NULL;
+	array.size = 0u;
+	array.capacity = 0u;
+	array.scale_factor = SV_MAX(scale_factor, 1.f);
+	array.stride = stride;
 	
 	return array;
 }
 
-inline void __impl__array_close(void** ptr)
-{
-	if (*ptr == NULL) return;
-	
-	DynamicArrayHeader* array = (DynamicArrayHeader*)*ptr;
-	--array;
-	
-	memory_free(array);
-	*ptr = NULL;
+inline void array_close(DynamicArray* array)
+{	
+	if (array->data) {
+		memory_free(array->data);
+	}
 }
 
-inline void __impl__array_reset(void** ptr)
+inline void array_reset(DynamicArray* array)
 {
-	if (*ptr == NULL) return;
-	
-	DynamicArrayHeader* array = (DynamicArrayHeader*)*ptr;
-	--array;
-
 	array->size = 0u;
 }
 
-inline void* __impl__array_add(void** ptr, u32 stride, u32 line, const char* file)
+inline void* __impl__array_add(DynamicArray* array, u32 line, const char* file)
 {
-	DynamicArrayHeader* array = (DynamicArrayHeader*)*ptr;
-	--array;
-	
 	if (array->size == array->capacity) {
 		
 		u32 new_capacity = (u32)((f32)(array->capacity + 1) * array->scale_factor);
-		u32 bytes = sizeof(DynamicArrayHeader) + (new_capacity * stride);
 		
-		DynamicArrayHeader* new_array = (DynamicArrayHeader*)memory_allocate_ex(bytes, line, file);
+		u8* new_data = (u8*)memory_allocate_ex(new_capacity * array->stride, line, file);
 
-		memory_copy(new_array, array, sizeof(DynamicArrayHeader) + (array->size * stride));
-		memory_free(array);
+		if (array->size) {
+			memory_copy(new_data, array->data, array->size * array->stride);
+			memory_free(array->data);
+		}
 
-		*ptr = (u8*)(new_array) + sizeof(DynamicArrayHeader);
-		array = new_array;
-
+		array->data = new_data;
 		array->capacity = new_capacity;
 	}
 
-	void* res = (u8*)(*ptr) + (array->size * stride);
+	void* res = array->data + (array->size * array->stride);
 	++array->size;
 	return res;
 }
 
-inline void __impl__array_push(void** ptr, u32 stride, const void* data, u32 line, const char* file)
+inline void __impl__array_push(DynamicArray* array, const void* data, u32 line, const char* file)
 {
-	void* obj = __impl__array_add(ptr, stride, line, file);
-	memory_copy(obj, data, stride);
+	void* obj = __impl__array_add(array, line, file);
+	memory_copy(obj, data, array->stride);
 }
 
-inline void __impl__array_pop(void** ptr)
+inline void array_pop(DynamicArray* array)
 {
-	if (*ptr == NULL) return;
-	
-	DynamicArrayHeader* array = (DynamicArrayHeader*)*ptr;
-	--array;
-
 	assert(array->size != 0);
 	--array->size;
 }
 
-inline u32 __impl__array_size(void** ptr)
+inline void* array_get(DynamicArray* array, u32 index)
 {
-	if (*ptr == NULL) return 0u;
-	
-	DynamicArrayHeader* array = (DynamicArrayHeader*)*ptr;
-	--array;
-
-	return array->size;
+	assert(index < array->size);
+	return array->data + index * array->stride;
 }
 
-inline b8 __impl__array_empty(void** ptr)
-{
-	if (*ptr == NULL) return 0u;
-	
-	DynamicArrayHeader* array = (DynamicArrayHeader*)*ptr;
-	--array;
+#define DynamicArray(type) DynamicArray
 
-	return array->size == 0;
-}
+#define array_init(T, scale_factor) __impl__array_init(sizeof(T), scale_factor)
+#define array_add(array) __impl__array_add(array, __LINE__, __FILE__)	
+#define array_push(array, obj) __impl__array_push(array, &obj, __LINE__, __FILE__)
 
-#define array_init(T, initial_capacity, scale_factor) (T*)__impl__array_init(sizeof(T), initial_capacity, scale_factor, __LINE__, __FILE__)
-#define array_close(ptr) __impl__array_close((void**)(ptr))
-#define array_reset(ptr) __impl__array_reset((void**)(ptr))
-
-#define array_add(ptr) __impl__array_add((void**)(ptr), sizeof(**(ptr)), __LINE__, __FILE__)	
-#define array_push(ptr, obj) __impl__array_push((void**)(ptr), sizeof(**(ptr)), &obj, __LINE__, __FILE__)
-#define array_pop(ptr) __impl__array_pop((void**)(ptr))
-
-#define array_size(ptr) __impl__array_size((void**)(ptr))
-#define array_empty(ptr) __impl__array_empty((void**)(ptr))
 
 typedef struct {
 	u8* data;
