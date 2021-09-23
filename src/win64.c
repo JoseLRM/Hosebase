@@ -1179,13 +1179,14 @@ static DWORD WINAPI task_thread(void* arg)
 static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
 {
 	assert_title(desc.fn != NULL, "Null task function");
+	assert_title(desc.size <= TASK_DATA_SIZE, "The task data size is too large");
 
 	TaskSystemData* data = &platform->task_system;
 
 	TaskData* task = data->tasks + data->task_count % TASK_QUEUE_SIZE;
 	task->fn = desc.fn;
 	task->context = ctx;
-	if (desc.data) memory_copy(task->user_data, desc.data, TASK_DATA_SIZE);
+	if (desc.data) memory_copy(task->user_data, desc.data, desc.size);
 
 	WRITE_BARRIER;
 

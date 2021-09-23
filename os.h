@@ -99,7 +99,7 @@ typedef u64 Thread;
 
 typedef i32(*ThreadMainFn)(void*);
 
-#define TASK_DATA_SIZE 64
+#define TASK_DATA_SIZE 128
 
 typedef void(*TaskFn)(void* user_data);
 
@@ -133,6 +133,7 @@ void   thread_wait(Thread thread);
 typedef struct {
 	TaskFn fn;
 	const void* data;
+	u32 size;
 } TaskDesc;
 
 void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context);
