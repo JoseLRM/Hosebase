@@ -1144,19 +1144,24 @@ inline b8 _task_thread_do_work()
 	TaskSystemData* data = &platform->task_system;
 	b8 done = FALSE;
 
-	if (data->task_next < data->task_count) {
+	u32 task_next = data->task_next;
 
-		u32 task_index = InterlockedIncrement((volatile LONG*)& data->task_next) - 1;
+	if (task_next < data->task_count) {
+
+		u32 task_index = InterlockedCompareExchange((volatile LONG*)& data->task_next, task_next + 1, task_next);
 		READ_BARRIER;
 
-		TaskData task = data->tasks[task_index % TASK_QUEUE_SIZE];
+		if (task_index == task_next) {
 
-		assert(task.fn != NULL);
-		task.fn(task.user_data);
+			TaskData task = data->tasks[task_index % TASK_QUEUE_SIZE];
 
-		InterlockedIncrement((volatile LONG*)& data->task_completed);
-		if (task.context) InterlockedIncrement((volatile LONG*)& task.context->completed);
-		done = TRUE;
+			assert(task.fn != NULL);
+			task.fn(task.user_data);
+
+			InterlockedIncrement((volatile LONG*)& data->task_completed);
+			if (task.context) InterlockedIncrement((volatile LONG*)& task.context->completed);
+			done = TRUE;
+		}
 	}
 
 	return done;
@@ -1169,7 +1174,7 @@ static DWORD WINAPI task_thread(void* arg)
 
 	while (data->running) {
 
-		if (!_task_thread_do_work(thread)) {
+		if (!_task_thread_do_work(thread) && !task_running(NULL)) {
 			WaitForSingleObjectEx(data->semaphore, INFINITE, FALSE);
 		}
 	}
