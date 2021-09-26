@@ -1234,6 +1234,16 @@ b8 task_running(TaskContext* context)
 	}
 }
 
+u32 interlock_increment_u32(volatile u32* n)
+{
+	return InterlockedIncrement((volatile LONG*)n);
+}
+
+u32 interlock_decrement_u32(volatile u32* n)
+{
+	return InterlockedDecrement((volatile LONG*)n);
+}
+
 // DYNAMIC LIBRARIES
 
 Library library_load(const char* filepath_)

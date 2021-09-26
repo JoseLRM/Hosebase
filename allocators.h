@@ -82,6 +82,12 @@ inline void* array_get(DynamicArray* array, u32 index)
 	return array->data + index * array->stride;
 }
 
+inline void* array_last(DynamicArray* array)
+{
+	assert(array->size);
+	return array->data + (array->size- 1) * array->stride;
+}
+
 #define DynamicArray(type) DynamicArray
 
 #define array_init(T, scale_factor) __impl__array_init(sizeof(T), scale_factor)

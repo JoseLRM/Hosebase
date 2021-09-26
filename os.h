@@ -140,6 +140,9 @@ void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context);
 void task_wait(TaskContext* context);
 b8 task_running(TaskContext* context);
 
+u32 interlock_increment_u32(volatile u32* n);
+u32 interlock_decrement_u32(volatile u32* n);
+
 // DYNAMIC LIBRARIES
 
 typedef u64 Library;

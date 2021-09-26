@@ -265,47 +265,29 @@ inline NetHeader* _recive_message(u8* buffer, u32 buffer_capacity, SOCKET socket
 
 	if (!recived) return NULL;
 
-	u32 bytes = 0;
+	i32 res = recvfrom(socket, buffer, buffer_capacity, 0, hint, hint_size);
 
-	while (bytes < sizeof(NetHeader)) {
-		
-		i32 res = recvfrom(socket, buffer + bytes, buffer_capacity, 0, hint, hint_size);
-		
-		if (res == SOCKET_ERROR) {
+	if (res == SOCKET_ERROR) {
 
-			SV_LOG_ERROR("Error reciving data\n");
-			return NULL;
-		}
-		else if (res <= 0) {
-
-			SV_LOG_ERROR("Invalid message format\n");
-			return NULL;
-		}
-
-		bytes += res;
+		SV_LOG_ERROR("Error reciving data\n");
+		return NULL;
 	}
-	
-	NetHeader* header = (NetHeader*)buffer;
+	else if (res <= 0) {
 
-	while (bytes < sizeof(NetHeader) + header->size) {
-
-		i32 res = recvfrom(socket, buffer + bytes, buffer_capacity, 0, hint, hint_size);
-		
-		if (res == SOCKET_ERROR) {
-
-			SV_LOG_ERROR("Error reciving data\n");
-			return NULL;
-		}
-		else if (res <= 0) {
-
-			SV_LOG_ERROR("Invalid message format\n");
-			return NULL;
-		}
-
-		bytes += res;
+		SV_LOG_ERROR("Invalid message format\n");
+		return NULL;
 	}
+	else {
 
-	return header;
+		NetHeader* header = (NetHeader*)buffer;
+
+		if (header->size + sizeof(NetHeader) != res) {
+			SV_LOG_ERROR("Unexpected message\n");
+			return NULL;
+		}
+
+		return header;
+	}
 }
 
 inline NetHeader* server_recive_message(struct sockaddr_in* client, u32 timeout)
@@ -485,7 +467,7 @@ b8 web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, 
 {
 	ServerData* s = net->server;
 
-	// TODO: Check if do multiple sends is more performant
+	// TODO: Use thread stack
 	u32 buffer_size = sizeof(NetHeader) + size;
 	u8* buffer = memory_allocate(buffer_size);
 
@@ -514,6 +496,11 @@ b8 web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, 
 	memory_free(buffer);
 
 	return res;
+}
+
+b8 web_server_exists()
+{
+	return net->server != NULL;
 }
 
 /////////////////////////////////////////////// CLIENT /////////////////////////////////////////////////////////
@@ -692,10 +679,15 @@ b8 web_client_send(const void* data, u32 size)
 	msg.header.size = size + sizeof(u32);
 	msg.client_id = net->client->id;
 
-	// TODO: Check if is more performat doing a dynamic allocation
-	b8 res;
-	res = _client_send(&msg, sizeof(msg));
-	if (res) res =_client_send(data, size);
+	// TODO: Use thread stack
+	u8* mem = memory_allocate(sizeof(NetMessageCustom) + size);
+
+	memory_copy(mem, &msg, sizeof(NetMessageCustom));
+	memory_copy(mem + sizeof(NetMessageCustom), data, size);
+
+	b8 res = _client_send(mem, sizeof(NetMessageCustom) + size);
+
+	memory_free(mem);
 
 	return res;
 }

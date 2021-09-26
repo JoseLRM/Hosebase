@@ -18,6 +18,8 @@ b8   web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, W
 void web_server_close();
 b8   web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, u32 size);
 
+b8 web_server_exists();
+
 typedef enum {
 	DisconnectReason_Unknown,
 	DisconnectReason_ServerDisconnected,
