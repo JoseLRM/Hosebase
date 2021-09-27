@@ -60,6 +60,7 @@ typedef struct {
 #define HEADER_TYPE_ACCEPT 0x12
 #define HEADER_TYPE_CUSTOM_FROM_SERVER 0x32
 #define HEADER_TYPE_CUSTOM_FROM_CLIENT 0x69
+#define HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL 0x70
 #define HEADER_TYPE_DISCONNECT_CLIENT 0xFE
 #define HEADER_TYPE_DISCONNECT_SERVER 0xFF
 
@@ -330,6 +331,7 @@ static u32 server_loop(void* arg)
 			break;
 			
 			case HEADER_TYPE_CUSTOM_FROM_CLIENT:
+			case HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL:
 			{
 				NetMessageCustom* msg = (NetMessageCustom*)header;
 				
@@ -340,18 +342,21 @@ static u32 server_loop(void* arg)
 					SV_LOG_ERROR("Can't recive a client message, the ID '%u' is not registred\n", id);
 				}
 				else {
+
+					if (header->type == HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL) {
+
+						msg->header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT;
+
+						_server_send_all(msg, sizeof(NetMessageCustom) + header->size, &id, 1);
+
+						msg->header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL;
+					}
 					
 					// Callback
 					if (s->message_fn) {
 						s->message_fn(id, msg + 1, header->size);
 					}
 				}
-		
-				/*char client_ip[256];
-				memory_zero(client_ip, 256);
-				inet_ntop(AF_INET, &client.sin_addr, client_ip, 256);
-			
-				SV_LOG_INFO("'%s': %u bytes\n", client_ip, header->size);*/
 			}
 			break;
 			
@@ -530,7 +535,7 @@ static u32 client_loop(void* arg)
 
 			case HEADER_TYPE_CUSTOM_FROM_SERVER:
 				if (c->message_fn) {
-					c->message_fn(header + 1, header->size);
+					c->message_fn(0, header + 1, header->size);
 				}
 				break;
 
@@ -540,6 +545,19 @@ static u32 client_loop(void* arg)
 				}
 				c->running = FALSE;
 				break;
+
+			case HEADER_TYPE_CUSTOM_FROM_CLIENT:
+			{
+				NetMessageCustom* msg = (NetMessageCustom*)header;
+
+				u32 id = msg->client_id;
+
+				// Callback
+				if (c->message_fn) {
+					c->message_fn(id, msg + 1, header->size);
+				}
+			}
+			break;
 			
 			}
 		}
@@ -672,13 +690,8 @@ void web_client_close()
 	}		
 }
 
-b8 web_client_send(const void* data, u32 size)
+inline b8 _web_client_send(NetMessageCustom msg, const void* data, u32 size)
 {
-	NetMessageCustom msg;
-	msg.header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT;
-	msg.header.size = size + sizeof(u32);
-	msg.client_id = net->client->id;
-
 	// TODO: Use thread stack
 	u8* mem = memory_allocate(sizeof(NetMessageCustom) + size);
 
@@ -690,6 +703,26 @@ b8 web_client_send(const void* data, u32 size)
 	memory_free(mem);
 
 	return res;
+}
+
+b8 web_client_send(const void* data, u32 size)
+{
+	NetMessageCustom msg;
+	msg.header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT;
+	msg.header.size = size + sizeof(u32);
+	msg.client_id = net->client->id;
+
+	return _web_client_send(msg, data, size);
+}
+
+b8 web_client_send_all(const void* data, u32 size)
+{
+	NetMessageCustom msg;
+	msg.header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL;
+	msg.header.size = size + sizeof(u32);
+	msg.client_id = net->client->id;
+
+	return _web_client_send(msg, data, size);
 }
 
 b8 _net_initialize()

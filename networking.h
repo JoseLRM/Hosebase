@@ -26,12 +26,13 @@ typedef enum {
 	DisconnectReason_Timeout,
 } DisconnectReason;
 
-typedef void(*WebClientMessageFn)(const void* data, u32 size);
+typedef void(*WebClientMessageFn)(u32 sender_id, const void* data, u32 size);
 typedef void(*WebClientDisconnectFn)(DisconnectReason reason);
 
 b8   web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClientMessageFn message_fn, WebClientDisconnectFn disconnect_fn);
 void web_client_close();
 b8   web_client_send(const void* data, u32 size);
+b8   web_client_send_all(const void* data, u32 size);
 
 b8 _net_initialize();
 void _net_close();
