@@ -66,6 +66,7 @@ typedef struct {
 	v2     mouse_position;
 	b8     close_request;
 	b8     resize;
+	b8     show_cursor;
 
 	TaskSystemData task_system;
 	
@@ -476,6 +477,8 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 		return FALSE;
 	}
 
+	platform->show_cursor = TRUE;
+
 	SV_CHECK(_task_initialize());
 	
 	return TRUE;
@@ -505,6 +508,29 @@ b8 _os_recive_input()
 #if SV_GRAPHICS
 		graphics_swapchain_resize();
 #endif
+	}
+
+	if (!platform->show_cursor) {
+		RECT rect;
+		if (GetWindowRect(platform->handle, &rect)) {
+
+			i32 width = rect.right - rect.left;
+			i32 height = rect.bottom - rect.top;
+
+			rect.left = rect.left + width / 2 - 1;
+			rect.right = rect.right - width / 2 + 1;
+			rect.top = rect.top + height / 2 - 1;
+			rect.bottom = rect.bottom - height / 2 + 1;
+
+			ClipCursor(&rect);
+		}
+	}
+	else {
+		RECT rect;
+		if (GetWindowRect(GetDesktopWindow(), &rect)) {
+
+			ClipCursor(&rect);
+		}
 	}
 
 	return !platform->close_request;
@@ -571,6 +597,20 @@ v2_u32 desktop_size()
 	RECT rect;
 	GetWindowRect(desktop, &rect);
 	return (v2_u32){ .x = (u32)rect.right, .y = (u32)rect.bottom };
+}
+
+// Cursor
+
+void cursor_hide()
+{
+	ShowCursor(FALSE);
+	platform->show_cursor = FALSE;
+}
+
+void cursor_show()
+{
+	ShowCursor(TRUE);
+	platform->show_cursor = TRUE;
 }
 
 // File Management

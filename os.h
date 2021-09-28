@@ -51,6 +51,11 @@ u64         window_handle();
 v2_u32      window_size();
 f32         window_aspect();
 v2_u32      desktop_size();
+
+// Cursor
+
+void cursor_hide();
+void cursor_show();
     
 // File Management
 
