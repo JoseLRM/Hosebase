@@ -28,9 +28,11 @@ typedef struct {
 
 	WebServerAcceptFn accept_fn;
 	WebServerDisconnectFn disconnect_fn;
-	WebServerMessageFn message_fn;
+
+	DynamicArray(WebMessage) messages;
 
 	Mutex mutex_send;
+	Mutex mutex_message;
 	
 } ServerData;
 
@@ -44,10 +46,12 @@ typedef struct {
 	u32 buffer_capacity;
 	u32 id;
 
-	WebClientMessageFn message_fn;
 	WebClientDisconnectFn disconnect_fn;
 
 	Mutex mutex_send;
+	Mutex mutex_message;
+
+	DynamicArray(WebMessage) messages;
 
 } ClientData;
 
@@ -101,6 +105,11 @@ typedef struct {
 #pragma pack(pop)
 
 static NetData* net;
+
+void web_message_free(WebMessage* message)
+{
+	memory_free(message->data);
+}
 
 /////////////////////////////////////////////// SERVER /////////////////////////////////////////////////////////
 
@@ -319,6 +328,25 @@ inline NetHeader* server_recive_message(struct sockaddr_in* client, u32 timeout)
 	return _recive_message(s->buffer, s->buffer_capacity, s->socket, timeout, (struct sockaddr*)client, &client_size);
 }
 
+inline void _server_message_save(NetMessageCustom* header)
+{
+	ServerData* s = net->server;
+
+	u32 size = header->header.size + sizeof(NetHeader) - sizeof(NetMessageCustom);
+
+	WebMessage reg;
+	reg.data = memory_allocate(size);
+	memory_copy(reg.data, header + 1, size);
+
+	reg.size = size;
+	reg.client_id = header->client_id;
+
+	mutex_lock(s->mutex_message);
+	array_push(&s->messages, reg);
+	mutex_unlock(s->mutex_message);
+}
+
+
 static u32 server_loop(void* arg)
 {
 	struct sockaddr_in client;
@@ -371,10 +399,7 @@ static u32 server_loop(void* arg)
 						msg->header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL;
 					}
 					
-					// Callback
-					if (s->message_fn) {
-						s->message_fn(id, msg + 1, header->size);
-					}
+					_server_message_save(msg);
 				}
 			}
 			break;
@@ -386,7 +411,7 @@ static u32 server_loop(void* arg)
 	return 0;
 }
 
-b8 web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, WebServerAcceptFn accept_fn, WebServerDisconnectFn disconnect_fn, WebServerMessageFn message_fn)
+b8 web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, WebServerAcceptFn accept_fn, WebServerDisconnectFn disconnect_fn)
 {
 	net->server = memory_allocate(sizeof(ServerData));
 	ServerData* s = net->server;
@@ -402,10 +427,12 @@ b8 web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, Web
 		s->clients = memory_allocate(sizeof(ClientRegister) * s->client_capacity);
 
 		s->mutex_send = mutex_create();
+		s->mutex_message = mutex_create();
+
+		s->messages = array_init(WebMessage, 1.7f);
 
 		s->accept_fn = accept_fn;
 		s->disconnect_fn = disconnect_fn;
-		s->message_fn = message_fn;
 	}
 	
 	// Create socket
@@ -489,7 +516,10 @@ void web_server_close()
 	
 		thread_wait(s->thread);
 
+		array_close(&s->messages);
+
 		mutex_destroy(s->mutex_send);
+		mutex_destroy(s->mutex_message);
 
 		closesocket(s->socket);
 
@@ -536,6 +566,27 @@ b8 web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, 
 	return res;
 }
 
+b8 web_server_message_get(WebMessage* message)
+{
+	ServerData* s = net->server;
+
+	b8 res;
+
+	mutex_lock(s->mutex_message);
+
+	if (s->messages.size) {
+		WebMessage* msg = array_last(&s->messages);
+		*message = *msg;
+		array_pop(&s->messages);
+		res = TRUE;
+	}
+	else res = FALSE;
+
+	mutex_unlock(s->mutex_message);
+
+	return res;
+}
+
 b8 web_server_exists()
 {
 	return net->server != NULL;
@@ -548,6 +599,22 @@ inline NetHeader* client_recive_message(u32 timeout)
 	ClientData* c = net->client;
 
 	return _recive_message(c->buffer, c->buffer_capacity, c->socket, timeout, NULL, NULL);
+}
+
+inline void _client_message_save(const void* data, u32 size, u32 client_id)
+{
+	ClientData* c = net->client;
+
+	WebMessage reg;
+	reg.data = memory_allocate(size);
+	memory_copy(reg.data, data, size);
+
+	reg.size = size;
+	reg.client_id = client_id;
+
+	mutex_lock(c->mutex_message);
+	array_push(&c->messages, reg);
+	mutex_unlock(c->mutex_message);
 }
 
 static u32 client_loop(void* arg)
@@ -567,9 +634,7 @@ static u32 client_loop(void* arg)
 				break;
 
 			case HEADER_TYPE_CUSTOM_FROM_SERVER:
-				if (c->message_fn) {
-					c->message_fn(0, header + 1, header->size);
-				}
+				_client_message_save(header + 1, header->size, 0);
 				break;
 
 			case HEADER_TYPE_DISCONNECT_SERVER:
@@ -585,10 +650,9 @@ static u32 client_loop(void* arg)
 
 				u32 id = msg->client_id;
 
-				// Callback
-				if (c->message_fn) {
-					c->message_fn(id, msg + 1, header->size);
-				}
+				u32 size = msg->header.size + sizeof(NetHeader) - sizeof(NetMessageCustom);
+
+				_client_message_save(msg + 1, size, msg->client_id);
 			}
 			break;
 			
@@ -610,7 +674,7 @@ b8 _client_send(const void* data, u32 size)
 	return TRUE;
 }
 
-b8 web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClientMessageFn message_fn, WebClientDisconnectFn disconnect_fn)
+b8 web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClientDisconnectFn disconnect_fn)
 {
 	net->client = memory_allocate(sizeof(ClientData));
 	ClientData* c = net->client;
@@ -636,10 +700,12 @@ b8 web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClien
 		
 		c->socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		
-		c->message_fn = message_fn;
 		c->disconnect_fn = disconnect_fn;
 
 		c->mutex_send = mutex_create();
+		c->mutex_message = mutex_create();
+
+		c->messages = array_init(WebMessage, 1.7f);
 
 		if (c->socket == INVALID_SOCKET) {
 			SV_LOG_ERROR("Can't create client socket\n");
@@ -726,7 +792,10 @@ void web_client_close()
 
 		thread_wait(c->thread);
 
+		array_close(&c->messages);
+
 		mutex_destroy(c->mutex_send);
+		mutex_destroy(c->mutex_message);
 
 		closesocket(c->socket);
 
@@ -768,6 +837,27 @@ b8 web_client_send_all(const void* data, u32 size)
 	msg.client_id = net->client->id;
 
 	return _web_client_send(msg, data, size);
+}
+
+b8 web_client_message_get(WebMessage* message)
+{
+	ClientData* c = net->client;
+
+	b8 res;
+
+	mutex_lock(c->mutex_message);
+
+	if (c->messages.size) {
+		WebMessage* msg = array_last(&c->messages);
+		*message = *msg;
+		array_pop(&c->messages);
+		res = TRUE;
+	}
+	else res = FALSE;
+
+	mutex_unlock(c->mutex_message);
+
+	return res;
 }
 
 u32 web_client_id()
