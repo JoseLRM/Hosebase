@@ -725,6 +725,11 @@ b8 web_client_send_all(const void* data, u32 size)
 	return _web_client_send(msg, data, size);
 }
 
+u32 web_client_id()
+{
+	return net->client->id;
+}
+
 b8 _net_initialize()
 {
 	net = memory_allocate(sizeof(NetData));

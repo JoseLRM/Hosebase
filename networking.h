@@ -34,6 +34,8 @@ void web_client_close();
 b8   web_client_send(const void* data, u32 size);
 b8   web_client_send_all(const void* data, u32 size);
 
+u32 web_client_id();
+
 b8 _net_initialize();
 void _net_close();
 
