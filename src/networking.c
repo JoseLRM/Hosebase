@@ -862,7 +862,7 @@ b8 web_client_message_get(WebMessage* message)
 
 u32 web_client_id()
 {
-	return net->client->id;
+	return net->client ? net->client->id : 0;
 }
 
 b8 _net_initialize()
