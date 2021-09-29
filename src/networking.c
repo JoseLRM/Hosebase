@@ -29,6 +29,8 @@ typedef struct {
 	WebServerAcceptFn accept_fn;
 	WebServerDisconnectFn disconnect_fn;
 	WebServerMessageFn message_fn;
+
+	Mutex mutex_send;
 	
 } ServerData;
 
@@ -44,6 +46,8 @@ typedef struct {
 
 	WebClientMessageFn message_fn;
 	WebClientDisconnectFn disconnect_fn;
+
+	Mutex mutex_send;
 
 } ClientData;
 
@@ -100,14 +104,25 @@ static NetData* net;
 
 /////////////////////////////////////////////// SERVER /////////////////////////////////////////////////////////
 
-inline b8 _server_send(const void* data, u32 size, struct sockaddr_in dst)
+b8 _send(const void* data, u32 size, SOCKET socket, struct sockaddr_in dst)
 {
-	int ok = sendto(net->server->socket, data, size, 0, (struct sockaddr*)&dst, sizeof(dst));
+	int ok = sendto(socket, data, size, 0, (struct sockaddr*)&dst, sizeof(dst));
 
 	if (ok == SOCKET_ERROR) {
-		SV_LOG_ERROR("Can't send data to the client\n");
+		SV_LOG_ERROR("Can't send data\n");
 		return FALSE;
 	}
+
+	return TRUE;
+}
+
+inline b8 _server_send(const void* data, u32 size, struct sockaddr_in dst)
+{
+	ServerData* s = net->server;
+
+	mutex_lock(s->mutex_send);
+	_send(data, size, s->socket, dst);
+	mutex_unlock(s->mutex_send);
 
 	return TRUE;
 }
@@ -116,6 +131,8 @@ inline b8 _server_send_all(const void* data, u32 size, u32* clients_to_ignore, u
 {
 	ServerData* s = net->server;
 	b8 res = TRUE;
+
+	mutex_lock(s->mutex_send);
 	
 	foreach(i, s->client_capacity) {
 
@@ -134,10 +151,12 @@ inline b8 _server_send_all(const void* data, u32 size, u32* clients_to_ignore, u
 		
 		if (ignore) continue;
 
-		if (!_server_send(data, size, s->clients[i].hint)) {
+		if (!_send(data, size, s->socket, s->clients[i].hint)) {
 			res = FALSE;
 		}
 	}
+
+	mutex_unlock(s->mutex_send);
 
 	return res;
 }
@@ -371,16 +390,42 @@ b8 web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, Web
 {
 	net->server = memory_allocate(sizeof(ServerData));
 	ServerData* s = net->server;
+
+	// Initialize some data
+	{
+		s->running = TRUE;
+
+		s->buffer_capacity = SV_MAX(buffer_capacity, 1000);
+		s->buffer = memory_allocate(s->buffer_capacity);
+
+		s->client_capacity = SV_MAX(client_capacity, 1);
+		s->clients = memory_allocate(sizeof(ClientRegister) * s->client_capacity);
+
+		s->mutex_send = mutex_create();
+
+		s->accept_fn = accept_fn;
+		s->disconnect_fn = disconnect_fn;
+		s->message_fn = message_fn;
+	}
 	
 	// Create socket
 	{
-		s->socket = socket(AF_INET, SOCK_DGRAM, 0);
+		s->socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
 		if (s->socket == INVALID_SOCKET) {
 
 			SV_LOG_ERROR("Can't create the server socket\n");
 			goto error;
 		}
+	}
+
+	int socket_buffer_size = s->buffer_capacity * 100;
+
+	if (setsockopt(s->socket, SOL_SOCKET, SO_RCVBUF, (const char*)&socket_buffer_size, sizeof(int)) != 0) {
+		SV_LOG_ERROR("Can't change the recive buffer size\n");
+	}
+	if (setsockopt(s->socket, SOL_SOCKET, SO_SNDBUF, (const char*)&socket_buffer_size, sizeof(int)) != 0) {
+		SV_LOG_ERROR("Can't change the send buffer size\n");
 	}
 
 	// Fill hint
@@ -398,21 +443,6 @@ b8 web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, Web
 
 		SV_LOG_ERROR("Can't connect server socket\n");
 		goto error;
-	}
-
-	// Initialize some data
-	{
-		s->running = TRUE;
-		
-		s->buffer_capacity = SV_MAX(buffer_capacity, 1000);
-		s->buffer = memory_allocate(s->buffer_capacity);
-
-		s->client_capacity = SV_MAX(client_capacity, 1);
-		s->clients = memory_allocate(sizeof(ClientRegister) * s->client_capacity);
-		
-		s->accept_fn = accept_fn;
-		s->disconnect_fn = disconnect_fn;
-		s->message_fn = message_fn;
 	}
 
 	// Start server thread
@@ -458,6 +488,9 @@ void web_server_close()
 		_server_send_all(&header, sizeof(NetHeader), NULL, 0);
 	
 		thread_wait(s->thread);
+
+		mutex_destroy(s->mutex_send);
+
 		closesocket(s->socket);
 
 		memory_free(s->buffer);
@@ -568,12 +601,11 @@ static u32 client_loop(void* arg)
 
 b8 _client_send(const void* data, u32 size)
 {
-	int ok = sendto(net->client->socket, data, size, 0, (struct sockaddr*)&net->client->server_hint, sizeof(net->client->server_hint));
+	ClientData* c = net->client;
 
-	if (ok == SOCKET_ERROR) {
-		SV_LOG_ERROR("Can't send data to the server\n");
-		return FALSE;
-	}
+	mutex_lock(c->mutex_send);
+	_send(data, size, c->socket, net->client->server_hint);
+	mutex_unlock(c->mutex_send);
 
 	return TRUE;
 }
@@ -602,15 +634,26 @@ b8 web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClien
 		c->buffer_capacity = SV_MAX(buffer_capacity, 1000);
 		c->buffer = memory_allocate(c->buffer_capacity);
 		
-		c->socket = socket(AF_INET, SOCK_DGRAM, 0);
+		c->socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		
 		c->message_fn = message_fn;
 		c->disconnect_fn = disconnect_fn;
+
+		c->mutex_send = mutex_create();
 
 		if (c->socket == INVALID_SOCKET) {
 			SV_LOG_ERROR("Can't create client socket\n");
 			goto error;
 		}
+	}
+
+	int socket_buffer_size = c->buffer_capacity * 100;
+
+	if (setsockopt(c->socket, SOL_SOCKET, SO_RCVBUF, (const char*)&socket_buffer_size, sizeof(int)) != 0) {
+		SV_LOG_ERROR("Can't change the recive buffer size\n");
+	}
+	if (setsockopt(c->socket, SOL_SOCKET, SO_SNDBUF, (const char*)&socket_buffer_size, sizeof(int)) != 0) {
+		SV_LOG_ERROR("Can't change the send buffer size\n");
 	}
 
 	// Send connection message
@@ -682,6 +725,8 @@ void web_client_close()
 		_client_send(&msg, sizeof(NetMessageDisconnectClient));
 
 		thread_wait(c->thread);
+
+		mutex_destroy(c->mutex_send);
 
 		closesocket(c->socket);
 
