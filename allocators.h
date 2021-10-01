@@ -76,6 +76,37 @@ inline void array_pop(DynamicArray* array)
 	--array->size;
 }
 
+inline void array_erase(DynamicArray* array, u32 index)
+{
+	assert(index < array->size);
+	--array->size;
+
+	for (u32 i = index; i < array->size; ++i) {
+
+		memory_copy(array->data + (array->stride * i), array->data + (array->stride * (i + 1)), array->stride);
+	}
+}
+
+inline void array_erase_range(DynamicArray* array, u32 i0, u32 i1)
+{
+	assert(i0 <= i1);
+	assert(i0 <= array->size && i1 <= array->size);
+	
+	u32 dist = i1 - i0;
+
+	u32 move = array->size - i1;
+
+	for (u32 i = 0; i < move; ++i) {
+
+		u32 dst = i0 + i;
+		u32 src = dst + dist;
+
+		memory_copy(array->data + (array->stride * dst), array->data + (array->stride * src), array->stride);
+	}
+
+	array->size -= dist;
+}
+
 inline void* array_get(DynamicArray* array, u32 index)
 {
 	assert(index < array->size);
