@@ -7,6 +7,7 @@
 #include "Hosebase/font.h"
 #include "Hosebase/networking.h"
 #include "Hosebase/profiler.h"
+#include "Hosebase/render_utils.h"
 
 // TODO: Optional
 
@@ -53,6 +54,11 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		return FALSE;
 	}
 
+	if (!render_utils_initialize()) {
+		SV_LOG_ERROR("Can't initialize render utils\n");
+		return FALSE;
+	}
+
 	if (!imrend_initialize()) {
 		SV_LOG_ERROR("Can't initialize imrend\n");
 		return FALSE;
@@ -66,6 +72,7 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 inline void hosebase_close()
 {
 #if SV_GRAPHICS
+	render_utils_close();
 	imrend_close();
 	_graphics_close();
 #endif

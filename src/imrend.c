@@ -3,8 +3,7 @@
 #if SV_GRAPHICS
 
 #include "Hosebase/imrend.h"
-
-#define SV_STRING(x) #x
+#include "Hosebase/render_utils.h"
 
 static const char* PRIMITIVE_SHADER = SV_STRING(
 \n#include "core.hlsl"\n
@@ -169,7 +168,7 @@ inline b8 compile_shader(Shader** shader, ShaderType shader_type, const char* sr
 	cdesc.macro_count = 0u;
 
 	Buffer data = buffer_init(1.f);
-	SV_CHECK(graphics_shader_compile_string(&cdesc, PRIMITIVE_SHADER, string_size(PRIMITIVE_SHADER), &data));
+	SV_CHECK(graphics_shader_compile_string(&cdesc, src, string_size(src), &data));
 
 	ShaderDesc desc;
 	desc.bin_data = data.data;
@@ -315,7 +314,7 @@ void imrend_close()
 
 #define imrend_write(state, data) buffer_write_back(&(state)->buffer, &(data), sizeof(data))
 
-inline void imrend_text(ImRendState* state, const char* text)
+inline void imrend_write_text(ImRendState* state, const char* text)
 {
 	buffer_write_back(&state->buffer, text, string_size(string_validate(text)) + 1u);
 }
@@ -328,6 +327,7 @@ void* _imrend_read(u8** it, u32 size)
 }
 
 #define imrend_read(T, it) *(T*)_imrend_read(&it, sizeof(T))
+#define imrend_read_text(it) (const char*)it; it += (string_size((const char*)it) + 1)
 
 inline void update_current_matrix(ImRendState* state)
 {
@@ -694,6 +694,7 @@ void imrend_flush(CommandList cmd)
 			}
 			break;
 		
+			
 			case ImRendDrawCall_TextArea:
 			{
 				DrawTextAreaDesc desc;
@@ -715,27 +716,32 @@ void imrend_flush(CommandList cmd)
 				graphics_renderpass_begin(gfx.renderpass_off, att, cmd);
 		    
 			}break;
+			*/
 
 			case ImRendDrawCall_Text:
 			{
 				DrawTextDesc desc;
-				desc.text = (const char*)it;
-				it += string_size(desc.text) + 1u;
-				desc.max_width = imrend_read<f32>(it);
-				desc.max_lines = imrend_read<u32>(it);
-				desc.font_size = imrend_read<f32>(it);
-				desc.aspect = imrend_read<f32>(it);
-				desc.alignment = imrend_read<TextAlignment>(it);
-				desc.font = imrend_read<Font*>(it);
-				desc.color = imrend_read<Color>(it);
-				desc.transform_matrix = state.current_matrix;
+				desc.render_target = state->render_target;
+				desc.text = imrend_read_text(it);
+				desc.flags = imrend_read(u64, it);
+				desc.font = imrend_read(Font*, it);
+				desc.max_lines = imrend_read(u32, it);
+				desc.alignment = imrend_read(TextAlignment, it);
+				desc.aspect = imrend_read(f32, it);
+				desc.font_size = imrend_read(f32, it);
+				desc.transform_matrix = mat4_multiply(state->current_matrix, imrend_read(Mat4, it));
+				TextContext ctx = imrend_read(TextContext, it);
+				desc.context = &ctx;
+				desc.text_default_color = imrend_read(Color, it);
+				desc.text_selected_color = imrend_read(Color, it);
+				desc.selection_color = imrend_read(Color, it);
+				desc.cursor_color = imrend_read(Color, it);
 					
 				graphics_renderpass_end(cmd);
-				draw_text(desc, cmd);
-				graphics_renderpass_begin(gfx.renderpass_off, att, cmd);
+				draw_text(&desc, cmd);
+				graphics_renderpass_begin(gfx->render_pass, att, NULL, 1.f, 0, cmd);
 		    
 			}break;
-			*/
 		    
 			}
 		}
@@ -881,43 +887,34 @@ void imrend_draw_sprite(v3 position, v2 size, Color color, GPUImage* image, GPUI
 	
 	imrend_write(state, mesh);
 	imrend_write(state, color);
-}
+}*/
 
-SV_API void imrend_draw_text(const char* text, f32 font_size, f32 aspect, Font* font, Color color, CommandList cmd)
+void imrend_draw_text(const ImRendDrawTextDesc* desc, CommandList cmd)
 {
 	SV_IMREND();
 
-	imrend_write(state, ImRendHeader_DrawCall);
-	imrend_write(state, ImRendDrawCall_Text);
+	ImRendHeader header = ImRendHeader_DrawCall;
+	imrend_write(state, header);
+	ImRendDrawCall draw_call = ImRendDrawCall_Text;
+	imrend_write(state, draw_call);
 
-	imrend_write_text(state, text);
-	imrend_write(state, f32_max);
-	imrend_write(state, u32_max);
-	imrend_write(state, font_size);
-	imrend_write(state, aspect);
-	imrend_write(state, TextAlignment_Center);
-	imrend_write(state, font);
-	imrend_write(state, color);
-}
-	
-SV_API void imrend_draw_text_bounds(const char* text, f32 max_width, u32 max_lines, f32 font_size, f32 aspect, TextAlignment alignment, Font* font, Color color, CommandList cmd)
-{
-	SV_IMREND();
-
-	imrend_write(state, ImRendHeader_DrawCall);
-	imrend_write(state, ImRendDrawCall_Text);
-
-	imrend_write_text(state, text);
-	imrend_write(state, max_width);
-	imrend_write(state, max_lines);
-	imrend_write(state, font_size);
-	imrend_write(state, aspect);
-	imrend_write(state, alignment);
-	imrend_write(state, font);
-	imrend_write(state, color);
+	imrend_write_text(state, desc->text);
+	imrend_write(state, desc->flags);
+	imrend_write(state, desc->font);
+	imrend_write(state, desc->max_lines);
+	imrend_write(state, desc->alignment);
+	imrend_write(state, desc->aspect);
+	imrend_write(state, desc->font_size);
+	imrend_write(state, desc->transform_matrix);
+	imrend_write(state, *desc->context);
+	imrend_write(state, desc->text_default_color);
+	imrend_write(state, desc->text_selected_color);
+	imrend_write(state, desc->selection_color);
+	imrend_write(state, desc->cursor_color);
 }
 
-void imrend_draw_text_area(const char* text, size_t text_size, f32 max_width, u32 max_lines, f32 font_size, f32 aspect, TextAlignment alignment, u32 line_offset, b8 bottom_top, Font* font, Color color, CommandList cmd)
+
+/*void imrend_draw_text_area(const char* text, size_t text_size, f32 max_width, u32 max_lines, f32 font_size, f32 aspect, TextAlignment alignment, u32 line_offset, b8 bottom_top, Font* font, Color color, CommandList cmd)
 {
 	SV_IMREND();
 		

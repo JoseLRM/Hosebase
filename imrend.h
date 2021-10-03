@@ -4,6 +4,8 @@
 
 #if SV_GRAPHICS
 
+#include "Hosebase/render_utils.h"
+
 b8 imrend_initialize();
 void imrend_close();
 
@@ -41,10 +43,27 @@ void imrend_draw_sprite(v3 position, v2 size, Color color, GPUImage* image, GPUI
 // void imrend_draw_mesh_wireframe(Mesh* mesh, Color color, CommandList cmd);
 
 // TODO: Font, color and alignment in stack
-	
-/*void imrend_draw_text(const char* text, f32 font_size, f32 aspect, Font* font, Color color, CommandList cmd);
-void imrend_draw_text_bounds(const char* text, f32 max_width, u32 max_lines, f32 font_size, f32 aspect, TextAlignment alignment, Font* font, Color color, CommandList cmd);
-void imrend_draw_text_area(const char* text, size_t text_size, f32 max_width, u32 max_lines, f32 font_size, f32 aspect, TextAlignment alignment, u32 line_offset, b8 bottom_top, Font* font, Color color, CommandList cmd);*/
+
+typedef struct {
+
+	const char* text;
+	u64 flags;
+	Font* font;
+	u32 max_lines;
+	TextAlignment alignment;
+	f32 aspect;
+	f32 font_size;
+	Mat4 transform_matrix;
+	TextContext* context;
+	Color text_default_color;
+	Color text_selected_color;
+	Color selection_color;
+	Color cursor_color;
+
+} ImRendDrawTextDesc;
+
+void imrend_draw_text(const ImRendDrawTextDesc* desc, CommandList cmd);
+//void imrend_draw_text_area(const char* text, size_t text_size, f32 max_width, u32 max_lines, f32 font_size, f32 aspect, TextAlignment alignment, u32 line_offset, b8 bottom_top, Font* font, Color color, CommandList cmd);
 
 // High level draw calls
 

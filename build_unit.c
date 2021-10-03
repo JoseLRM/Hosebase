@@ -11,5 +11,7 @@
 #include "src/graphics_shader.c"
 #include "src/imrend.c"
 #include "src/font.c"
+#include "src/text_processing.c"
+#include "src/render_utils.c"
 
 CoreData core;
