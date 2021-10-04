@@ -13,7 +13,7 @@ typedef struct {
 
 	v2	mouse_position;
 	v2	mouse_last_position;
-	v2	mouse_dragged;
+	v2	mouse_dragging;
 	f32	mouse_wheel;
 
 	b8 unused;
@@ -55,7 +55,7 @@ v2 input_mouse_position()
 
 v2 input_mouse_dragging()
 {
-	return input->mouse_dragged;
+	return input->mouse_dragging;
 }
 
 const char* input_text()
@@ -118,7 +118,6 @@ void _input_update()
 		}
 	}
 
-	input->mouse_dragged = v2_sub(input->mouse_position, input->mouse_last_position);
 	input->mouse_last_position = input->mouse_position;
 	input->text[0] = '\0';
 	array_reset(&input->text_commands);
@@ -163,4 +162,9 @@ void _input_mouse_wheel_set(f32 value)
 void _input_mouse_position_set(v2 value)
 {
 	input->mouse_position = value;
+}
+
+void _input_mouse_dragging_set(v2 value)
+{
+	input->mouse_dragging = value;
 }

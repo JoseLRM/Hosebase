@@ -144,3 +144,4 @@ void _input_text_add(const char* text);
 
 void _input_mouse_wheel_set(f32 value);
 void _input_mouse_position_set(v2 value);
+void _input_mouse_dragging_set(v2 value);

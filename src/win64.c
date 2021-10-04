@@ -67,6 +67,8 @@ typedef struct {
 	b8     close_request;
 	b8     resize;
 	b8     show_cursor;
+	v2_i32 last_raw_mouse_dragging;
+	v2_i32 raw_mouse_dragging;
 
 	TaskSystemData task_system;
 	
@@ -377,6 +379,34 @@ LRESULT CALLBACK window_proc (
 		break;
 	}
 
+	case WM_INPUT:
+	{
+		UINT size;
+		u8 buffer[1000];
+
+		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER)) == -1) {
+			SV_LOG_ERROR("Can't recive raw input data\n");
+			break;
+		}
+
+		if (size > 1000) {
+			SV_LOG_ERROR("Raw input data is too large\n");
+			break;
+		}
+
+		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buffer, &size, sizeof(RAWINPUTHEADER)) != size) {
+			SV_LOG_ERROR("Can't recive raw input data\n");
+			break;
+		}
+
+		const RAWINPUT* input = (const RAWINPUT*)buffer;
+		if (input->header.dwType == RIM_TYPEMOUSE && (input->data.mouse.lLastX != 0 || input->data.mouse.lLastY != 0)) {
+			platform->raw_mouse_dragging.x += input->data.mouse.lLastX;
+			platform->raw_mouse_dragging.y -= input->data.mouse.lLastY;
+		}
+	}
+	break;
+
 	case WM_SIZE:
 	{
 		platform->size.x = LOWORD(lParam);
@@ -480,6 +510,21 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	platform->show_cursor = TRUE;
 
 	SV_CHECK(_task_initialize());
+
+	// Register raw input
+	{
+		RAWINPUTDEVICE device;
+		device.usUsagePage = 0x01;
+		device.usUsage = 0x02;
+		device.dwFlags = 0;
+		device.hwndTarget = NULL;
+
+		if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
+			
+			SV_LOG_ERROR("Can't register raw input devices\n");
+			return FALSE;
+		}
+	}
 	
 	return TRUE;
 }
@@ -492,6 +537,8 @@ b8 _os_recive_input()
 		SetWindowLongPtrW(platform->handle, GWL_STYLE, (LONG_PTR)platform->new_style);
 		SetWindowPos(platform->handle, 0, platform->new_position.x, platform->new_position.y, platform->new_size.x, platform->new_size.y, 0);
 		}*/
+
+	platform->last_raw_mouse_dragging = platform->raw_mouse_dragging;
 	
 	MSG msg;
 	
@@ -500,7 +547,21 @@ b8 _os_recive_input()
 		DispatchMessageW(&msg);
 	}
 
-	_input_mouse_position_set(platform->mouse_position);
+	// Send mouse info
+	{
+		RECT r;
+		GetClientRect(platform->handle, &r);
+
+		f32 width = r.right - r.left;
+		f32 height = r.bottom - r.top;
+
+		v2 drag;
+		drag.x = (platform->raw_mouse_dragging.x - platform->last_raw_mouse_dragging.x) / width;
+		drag.y = (platform->raw_mouse_dragging.y - platform->last_raw_mouse_dragging.y) / height;
+
+		_input_mouse_position_set(platform->mouse_position);
+		_input_mouse_dragging_set(drag);
+	}
 
 	if (platform->resize) {
 		platform->resize = FALSE;
@@ -531,6 +592,10 @@ b8 _os_recive_input()
 
 			ClipCursor(&rect);
 		}
+	}
+
+	if (input_key(Key_Alt, InputState_Any) && input_key(Key_F4, InputState_Pressed)) {
+		platform->close_request = TRUE;
 	}
 
 	return !platform->close_request;
