@@ -234,9 +234,9 @@ void render_utils_close()
 	}
 }
 
-inline void draw_text_batch(GPUImage* image, u32 batch_count, u64 flags, CommandList cmd)
+inline void draw_text_batch(GPUImage* image, TextAlignment alignment, f32 font_size, u32 batch_count, u64 flags, CommandList cmd)
 {
-	if (batch_count == 0) return;
+	if (batch_count < 4) return;
 
 	/*if (flags & DrawTextFlag_BottomTop) {
 
@@ -245,6 +245,40 @@ inline void draw_text_batch(GPUImage* image, u32 batch_count, u64 flags, Command
 		foreach(i, batch_count)
 			render->batch_data[i].position.y += add;
 	}*/
+
+	if (alignment == TextAlignment_Center) {
+
+		f32 current_height = render->batch_data[0].position.y;
+		f32 begin_x = render->batch_data[0].position.x;
+		u32 begin = 0;
+
+		for (u32 i = 0; i < batch_count / 4; ++i) {
+
+			u32 j = i * 4 + 1;
+
+			f32 y = render->batch_data[j].position.y;
+			if (current_height - y >= font_size * 0.7f) {
+
+				f32 pos = begin_x + (render->batch_data[j].position.x - begin_x) * 0.5f;
+				f32 add = 0.5f - pos;
+
+				for (u32 w = begin; w <= j + 3; ++w) {
+					render->batch_data[w].position.x += add;
+				}
+
+				current_height = y;
+				begin = j - 1;
+				begin_x = render->batch_data[j - 1].position.x;
+			}
+		}
+
+		f32 pos = begin_x + (render->batch_data[batch_count - 1].position.x - begin_x) * 0.5f;
+		f32 add = 0.5f - pos;
+
+		for (u32 w = begin; w < batch_count; ++w) {
+			render->batch_data[w].position.x += add;
+		}
+	}
 
 	graphics_buffer_update(render->vbuffer_text, GPUBufferState_Vertex, render->batch_data, sizeof(TextVertex) * batch_count, 0, cmd);
 
@@ -274,6 +308,7 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd)
 
 	Font* font = desc->font;
 	GPUImage* render_target = desc->render_target;
+	TextAlignment alignment = desc->alignment;
 
 	u32 c0 = 0, c1 = 0;
 	u32 c = 0;
@@ -597,7 +632,7 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd)
 		// Draw if the buffer are filled
 		if (batch_count == TEXT_BATCH_SIZE * 4) {
 
-			draw_text_batch(render_target, batch_count, desc->flags, cmd);
+			draw_text_batch(render_target, alignment, line_height, batch_count, desc->flags, cmd);
 			batch_count = 0u;
 		}
 
@@ -606,7 +641,7 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd)
 
 	if (batch_count) {
 
-		draw_text_batch(render_target, batch_count, desc->flags, cmd);
+		draw_text_batch(render_target, alignment, line_height, batch_count, desc->flags, cmd);
 	}
 }
 
