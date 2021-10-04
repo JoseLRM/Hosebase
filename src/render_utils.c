@@ -246,7 +246,7 @@ inline void draw_text_batch(GPUImage* image, TextAlignment alignment, f32 font_s
 			render->batch_data[i].position.y += add;
 	}*/
 
-	if (alignment == TextAlignment_Center) {
+	if (alignment != TextAlignment_Left) {
 
 		f32 current_height = render->batch_data[0].position.y;
 		f32 begin_x = render->batch_data[0].position.x;
@@ -259,8 +259,16 @@ inline void draw_text_batch(GPUImage* image, TextAlignment alignment, f32 font_s
 			f32 y = render->batch_data[j].position.y;
 			if (current_height - y >= font_size * 0.7f) {
 
-				f32 pos = begin_x + (render->batch_data[j].position.x - begin_x) * 0.5f;
-				f32 add = 0.5f - pos;
+				f32 add;
+
+				if (alignment == TextAlignment_Center) {
+					f32 pos = begin_x + (render->batch_data[j].position.x - begin_x) * 0.5f;
+					add = 0.5f - pos;
+				}
+				else {
+					f32 pos = render->batch_data[j].position.x;
+					add = 1.f - pos;
+				}
 
 				for (u32 w = begin; w <= j + 3; ++w) {
 					render->batch_data[w].position.x += add;
@@ -272,8 +280,16 @@ inline void draw_text_batch(GPUImage* image, TextAlignment alignment, f32 font_s
 			}
 		}
 
-		f32 pos = begin_x + (render->batch_data[batch_count - 1].position.x - begin_x) * 0.5f;
-		f32 add = 0.5f - pos;
+		f32 add;
+
+		if (alignment == TextAlignment_Center) {
+			f32 pos = begin_x + (render->batch_data[batch_count - 1].position.x - begin_x) * 0.5f;
+			add = 0.5f - pos;
+		}
+		else {
+			f32 pos = render->batch_data[batch_count - 1].position.x;
+			add = 1.f - pos;
+		}
 
 		for (u32 w = begin; w < batch_count; ++w) {
 			render->batch_data[w].position.x += add;
