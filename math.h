@@ -899,7 +899,47 @@ inline Ray ray_mouse_picking_perspective(v2 mouse_position, v3 camera_position, 
 	return ray;
 }
 
+inline Ray ray_transform(Ray ray, Mat4 matrix)
+{
+	v4 origin = v4_transform(v3_to_v4(ray.origin, 1.f), matrix);
+	v4 direction = v4_transform(v3_to_v4(ray.direction, 0.f), matrix);
 
+	ray.origin = v4_to_v3(origin);
+	ray.direction = v4_to_v3(direction);
+	return ray;
+}
+
+inline b8 ray_intersect_triangle(Ray ray, const v3 p0, const v3 p1, const v3 p2, v3* out)
+{
+	const f32 EPSILON = 0.0000001f;
+	v3 edge1, edge2, h, s, q;
+	f32 a, f, u, v;
+	edge1 = v3_sub(p1, p0);
+	edge2 = v3_sub(p2, p0);
+	h = v3_cross(ray.direction, edge2);
+	a = v3_dot(edge1, h);
+	if (a > -EPSILON && a < EPSILON)
+		return FALSE;    // This ray is parallel to this triangle.
+	f = 1.f / a;
+	s = v3_sub(ray.origin, p0);
+	u = f * v3_dot(s, h);
+	if (u < 0.0 || u > 1.0)
+		return FALSE;
+	q = v3_cross(s, edge1);
+	v = f * v3_dot(ray.direction, q);
+	if (v < 0.0 || u + v > 1.0)
+		return FALSE;
+	// At this stage we can compute t to find out where the intersection point is on the line.
+	f32 t = f * v3_dot(edge2, q);
+	if (t > EPSILON) // ray intersection
+	{
+		*out= v3_mul_scalar(ray.direction, t);
+		*out= v3_add(ray.origin, *out);
+		return TRUE;
+	}
+	else // This means that there is a line intersection but not a ray intersection.
+		return TRUE;
+}
 
 // Color
 
@@ -1161,40 +1201,7 @@ inline f32 math_perlin_noise(u32 seed, f32 n)
 		v3_f32 direction;
     };
 	
-    inline bool intersect_ray_vs_traingle(const Ray& ray,
-											 const v3_f32& v0,
-											 const v3_f32& v1,
-											 const v3_f32& v2,
-											 v3_f32& outIntersectionPoint)
-    {
-		const f32 EPSILON = 0.0000001f;
-		v3_f32 edge1, edge2, h, s, q;
-		f32 a, f, u, v;
-		edge1 = v1 - v0;
-		edge2 = v2 - v0;
-		h = vec3_cross(ray.direction, edge2);
-		a = vec3_dot(edge1, h);
-		if (a > -EPSILON && a < EPSILON)
-			return false;    // This ray is parallel to this triangle.
-		f = 1.f / a;
-		s = ray.origin - v0;
-		u = f * vec3_dot(s, h);
-		if (u < 0.0 || u > 1.0)
-			return false;
-		q = vec3_cross(s, edge1);
-		v = f * vec3_dot(ray.direction, q);
-		if (v < 0.0 || u + v > 1.0)
-			return false;
-		// At this stage we can compute t to find out where the intersection point is on the line.
-		float t = f * vec3_dot(edge2, q);
-		if (t > EPSILON) // ray intersection
-		{
-			outIntersectionPoint = ray.origin + ray.direction * t;
-			return true;
-		}
-		else // This means that there is a line intersection but not a ray intersection.
-			return false;
-    }
+   
 */
 
 // Hash functions
