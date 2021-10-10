@@ -42,6 +42,24 @@ inline void array_reset(DynamicArray* array)
 	array->size = 0u;
 }
 
+inline void __impl__array_resize(DynamicArray* array, u32 size, u32 line, const char* file)
+{
+	if (size != array->capacity) {
+
+		u8* new_data = (u8*)memory_allocate_ex(size * array->stride, line, file);
+
+		if (array->size) {
+			memory_free(array->data);
+		}
+
+		array->data = new_data;
+		array->capacity = size;
+	}
+	else memory_zero(array->data, size * array->stride);
+
+	array->size = size;
+}
+
 inline void* __impl__array_add(DynamicArray* array, u32 line, const char* file)
 {
 	if (array->size == array->capacity) {
@@ -124,7 +142,7 @@ inline void* array_last(DynamicArray* array)
 #define array_init(T, scale_factor) __impl__array_init(sizeof(T), scale_factor)
 #define array_add(array) __impl__array_add(array, __LINE__, __FILE__)	
 #define array_push(array, obj) __impl__array_push(array, &obj, __LINE__, __FILE__)
-
+#define array_resize(array, size) __impl__array_resize(array, size, __LINE__, __FILE__)	
 
 typedef struct {
 	u8* data;
