@@ -771,6 +771,11 @@ inline Mat4 mat4_translate(f32 x, f32 y, f32 z)
 	return m;
 }
 
+inline Mat4 mat4_translate_v3(v3 position)
+{
+	return mat4_translate(position.x, position.y, position.z);
+}
+
 inline Mat4 mat4_scale(f32 x, f32 y, f32 z)
 {
 	Mat4 m = mat4_zero();
@@ -779,6 +784,16 @@ inline Mat4 mat4_scale(f32 x, f32 y, f32 z)
 	m.v[2][2] = z;
 	m.v[3][3] = 1.f;
 	return m;
+}
+
+inline Mat4 mat4_scale_v3(v3 scale)
+{
+	return mat4_scale(scale.x, scale.y, scale.z);
+}
+
+inline Mat4 mat4_scale_f32(f32 scale)
+{
+	return mat4_scale(scale, scale, scale);
 }
 
 inline Mat4 mat4_rotate_roll(f32 roll)

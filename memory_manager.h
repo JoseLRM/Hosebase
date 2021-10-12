@@ -2,6 +2,8 @@
 
 #include "Hosebase/defines.h"
 
+SV_BEGIN_C_HEADER
+
 #if SV_SLOW
 
 void* __impl__memory_allocate(size_t size, u32 line, const char* file);
@@ -56,6 +58,19 @@ inline u32 string_size(const char* str)
 	u32 size = 0u;
 	while (*str++) ++size;
 	return size;
+}
+
+inline b8 string_begins(const char* s0, const char* s1)
+{
+	while (*s0 && *s1) {
+		if (*s0 != *s1)
+			return FALSE;
+		
+		++s0;
+		++s1;
+	}
+	
+	return *s0 == *s1 || *s1 == '\0';
 }
 
 inline b8 string_equals(const char* s0, const char* s1)
@@ -113,14 +128,18 @@ inline void string_erase(char* str, u32 index)
 	*(end - 1u) = '\0';
 }
 
-inline u32 string_copy(char* dst, const char* src, u32 buff_size)
+inline u32 string_set(char* dst, const char* src, u32 src_size, u32 buff_size)
 {
-	u32 src_size = string_size(src);
-	
 	u32 size = SV_MIN(buff_size - 1u, src_size);
 	memory_copy(dst, src, size);
 	dst[size] = '\0';
 	return (src_size > buff_size - 1u) ? (src_size - buff_size - 1u) : 0u;
+}
+
+inline u32 string_copy(char* dst, const char* src, u32 buff_size)
+{
+	u32 src_size = string_size(src);
+	return string_set(dst, src, src_size, buff_size);
 }
 
 inline u32 string_insert(char* dst, const char* src, u32 index, u32 buff_size)
@@ -375,6 +394,183 @@ inline b8 string_to_u32_hexadecimal(u32* dst, char* str)
 	}
 
 	return TRUE;
+}
+
+inline const char* filepath_extension(const char* filepath)
+{
+	const char* last_dot = NULL;
+	
+	const char* it = filepath;
+	
+	while (*it) {
+		
+		switch (*it) {
+			
+		case '/':
+			last_dot = NULL;
+			break;
+			
+		case '.':
+			last_dot = it;
+			break;
+			
+		}
+	    
+		++it;
+	}
+	
+	if (last_dot) {
+		
+		if (last_dot == filepath)
+			last_dot = NULL;
+	    
+		else if (*(last_dot - 1u) == '/')
+			last_dot = NULL;
+	}
+	
+	return last_dot;
+}
+
+inline const char* filepath_name(const char* filepath)
+{
+	u32 s = string_size(filepath);
+	
+	if (s) {
+		
+		--s;
+		while (s && filepath[s] != '/') --s;
+		
+		if (s) {
+			return filepath + s + 1u;
+		}
+	}
+	
+	return filepath;
+}
+
+inline b8 char_is_letter(u32 c)
+{
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+inline b8 char_is_number(u32 c)
+{
+	return c >= '0' && c <= '9';
+}
+
+inline b8 char_is_lower_case(u32 c)
+{
+	return c >= 'a' && c <= 'z';
+}
+
+inline b8 char_is_capital(u32 c)
+{
+	return c >= 'A' && c <= 'Z';
+}
+
+// Line processing
+
+inline const char* line_next(const char* it)
+{
+	while (*it != '\n' && *it != '\0')
+		++it;
+
+	if (*it == '\n')
+		++it;
+
+	return it;
+}
+
+inline const char* line_jump_spaces(const char* it)
+{
+	while (*it == ' ')
+		++it;
+	return it;
+}
+
+inline const char* line_read_f32(const char* it, f32* value, b8* res)
+{
+	*value = 0.f;
+	it = line_jump_spaces(it);
+	
+	if (res) *res = FALSE;
+	const char* start = it;
+
+	if (*it == '-') ++it;
+	
+	u32 dots = 0u;
+	
+	while (*it != '\0' && *it != ' ' && *it != '\n' && *it != '\r') {
+		if (!char_is_number(*it) && *it != '.')
+			return start;
+		
+		if (*it == '.')
+			++dots;
+		
+		++it;
+	}
+	
+	if (it == start || dots > 1) return start;
+	
+	u32 size = it - start;	
+	
+	char value_str[20u];
+	memory_copy(value_str, start, size);
+	value_str[size] = '\0';
+	// TODO: Use my own function
+	*value = (f32)atof(value_str);
+	
+	if (res) *res = TRUE;
+	
+	return it;
+}
+
+inline const char* line_read_i32(const char* it, i32* value, const char* delimiters, u32 delimiter_count, b8* pres)
+{
+	*value = 0;
+	it = line_jump_spaces(it);
+
+	if (pres) *pres = FALSE;
+	const char* start = it;
+	
+	if (*it == '-') ++it;
+	
+	while (*it != '\0' && *it != '\n' && *it != '\r') {
+		
+		b8 end = FALSE;
+		
+		foreach(i, delimiter_count)
+			if (delimiters[i] == *it) end = TRUE;
+		
+		if (end)
+			break;
+	    
+		if (!char_is_number(*it))
+			return start;
+		++it;
+	}
+	
+	if (it == start) return start;
+	
+	u32 size = it - start;
+	
+	char value_str[20u];
+	memory_copy(value_str, start, size);
+	value_str[size] = '\0';
+	// TODO: Use my own function
+	*value = atoi(value_str);
+	
+	if (pres) *pres = TRUE;
+	
+	return it;
+}
+
+inline const char* line_read_v3(const char* it, v3* value, b8* res)
+{
+	it = line_read_f32(it, &value->x, res);
+	if (*res) it = line_read_f32(it, &value->y, res);
+	if (*res) it = line_read_f32(it, &value->z, res);
+	return it;
 }
 
 // Sorting algorithms
@@ -798,3 +994,5 @@ inline char* filepath_extension(char* filepath)
     }
     
 */
+
+SV_END_C_HEADER

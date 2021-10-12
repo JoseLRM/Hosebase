@@ -8,10 +8,6 @@
 #include "stdio.h"
 #include "stdint.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // types
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -34,6 +30,7 @@ typedef char b8;
 
 #define FILE_PATH_SIZE 260
 #define FILE_NAME_SIZE 51
+#define NAME_SIZE 31
 
 #define u8_max 0xFF
 #define u16_max 0xFFFF
@@ -69,6 +66,18 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 #define SV_BUFFER_WRITE(it, src) do { memory_copy((it), &(src), sizeof(src)); it += sizeof(src); } while(0)
 #define SV_BUFFER_READ(it, dst) do { memory_copy(&(dst), (it), sizeof(dst)); it += sizeof(dst); } while(0)
 
+#ifdef __cplusplus
+
+#define SV_BEGIN_C_HEADER extern "C" {
+#define SV_END_C_HEADER }
+
+#else
+
+#define SV_BEGIN_C_HEADER
+#define SV_END_C_HEADER
+
+#endif
+	
 // TODO
 
 #if SV_SLOW
@@ -92,6 +101,8 @@ void throw_assertion(const char* title, u32 line, const char* file);
 #define SV_LOG_ERROR(x, ...) {}
 
 #endif
+
+SV_BEGIN_C_HEADER
 
 typedef struct {
 	f32 delta_time;
@@ -189,6 +200,4 @@ typedef struct {
 	v3 direction;
 } Ray;
 	
-#ifdef __cplusplus
-}
-#endif
+SV_END_C_HEADER

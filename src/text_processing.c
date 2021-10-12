@@ -1,5 +1,7 @@
 #include "text_processing.h"
 
+#include "Hosebase/memory_manager.h"
+
 v2 text_pos(const void* text, u32 cursor, Font* font, f32 font_size)
 {
 	const char* it = (const char*)text;
@@ -241,26 +243,6 @@ u32 text_move_right(void* buffer, u32 cursor)
 	if (text[cursor] == '\n' || text[cursor] == '\0') return cursor;
 
 	return ++cursor;
-}
-
-inline b8 char_is_letter(u32 c)
-{
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-}
-
-inline b8 char_is_number(u32 c)
-{
-	return c >= '0' && c <= '9';
-}
-
-inline b8 char_is_lower_case(u32 c)
-{
-	return c >= 'a' && c <= 'z';
-}
-
-inline b8 char_is_capital(u32 c)
-{
-	return c >= 'A' && c <= 'Z';
 }
 
 inline u8 char_mode(u32 c)

@@ -2,6 +2,8 @@
 
 #include "Hosebase/defines.h"
 
+SV_BEGIN_C_HEADER
+
 b8 load_image(const char* filepath, void** pdata, u32* width, u32* height);
 
 b8 bin_read(u64 hash, Buffer* data, b8 system);
@@ -9,6 +11,60 @@ b8 bin_read(u64 hash, Buffer* data, b8 system);
 
 b8 bin_write(u64 hash, const void* data, size_t size, b8 system);
 //b8 bin_write(u64 hash, Serializer& serializer, b8 system); // Ends the serializer
+
+// MESH LOADING
+
+typedef struct {
+
+	char name[NAME_SIZE];
+
+	DynamicArray(v3) positions;
+	DynamicArray(v3) normals;
+	DynamicArray(v2) texcoords;
+
+	DynamicArray(u32) indices;
+
+	Mat4 transform_matrix;
+	u32 material_index;
+
+	b8 import;
+
+} MeshInfo;
+
+typedef struct {
+
+	char name[NAME_SIZE];
+	
+	// Pipeline settings
+	b8 transparent;
+	RasterizerCullMode culling;
+
+	// Values
+	
+	Color ambient_color;
+	Color diffuse_color;
+	Color specular_color;
+	Color emissive_color;
+	f32 shininess;
+
+	// Textures
+	
+	char diffuse_map_path[FILE_PATH_SIZE];
+	char normal_map_path[FILE_PATH_SIZE];
+	char specular_map_path[FILE_PATH_SIZE];
+	char emissive_map_path[FILE_PATH_SIZE];
+
+	b8 import;
+} MaterialInfo;
+
+typedef struct {
+	char folderpath[FILE_PATH_SIZE];
+	DynamicArray(MeshInfo) meshes;
+	DynamicArray(MaterialInfo) materials;
+} ModelInfo;
+
+b8 model_load(ModelInfo* model_info, const char* filepath);
+void model_free(ModelInfo* model_info);
 
 /*
 constexpr u32 VARNAME_SIZE = 30u;
@@ -478,3 +534,5 @@ constexpr u32 VARVALUE_SIZE = 30u;
     }    
     
 */
+
+SV_END_C_HEADER
