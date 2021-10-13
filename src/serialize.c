@@ -385,6 +385,8 @@ inline void read_mtl(const char* filepath, ModelInfo* model_info)
 			}
 			break;
 			}	
+
+			it = line_next(it);
 		}
 
 		/*for (const MaterialInfo& m : model_info.materials) {
