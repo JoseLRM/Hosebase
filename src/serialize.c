@@ -418,27 +418,35 @@ inline u32 parse_objindex_to_absolute(i32 i, i32 max)
 
 #define OBJ_POLYGON_COUNT 4
 
+typedef struct {
+	i32 position_indices[3u];
+	i32 normal_indices[3u];
+	i32 texcoord_indices[3u];
+	b8 smooth;
+} ObjTriangle;
+
+typedef struct {
+	char name[NAME_SIZE];
+	DynamicArray(ObjTriangle) triangles;
+	u32 material_index;
+} ObjMesh;
+
+inline ObjMesh* new_obj_mesh(DynamicArray* array)
+{
+	ObjMesh* mesh = array_add(array);
+	mesh->triangles = array_init(ObjTriangle, 2.f);
+	mesh->material_index = u32_max;
+	return mesh;
+}
+
 static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char* it)
 {
-	typedef struct {
-		i32 position_indices[3u];
-		i32 normal_indices[3u];
-		i32 texcoord_indices[3u];
-		b8 smooth;
-	} ObjTriangle;
-	    
-	typedef struct {
-		char name[NAME_SIZE];
-		DynamicArray(ObjTriangle) triangles;
-		u32 material_index;
-	} ObjMesh;
-	    
 	DynamicArray(v3) positions = array_init(v3, 1.7f);
 	DynamicArray(v3) normals = array_init(v3, 1.7f);
 	DynamicArray(v2) texcoords = array_init(v2, 1.7f);
 	DynamicArray(ObjMesh) meshes = array_init(ObjMesh, 1.7f);
 	    
-	ObjMesh* mesh = array_add(&meshes);
+	ObjMesh* mesh = new_obj_mesh(&meshes);
 	mesh->triangles = array_init(ObjTriangle, 2.f);
 		
 	mesh->material_index = u32_max;
@@ -574,9 +582,7 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 				}
 				else {
 						
-					mesh = array_add(&meshes);
-					mesh->triangles = array_init(ObjTriangle, 2.f);
-					mesh->material_index = u32_max;
+					mesh = new_obj_mesh(&meshes);
 				}
 
 				string_set(mesh->name, it, name_size, NAME_SIZE);
@@ -620,9 +626,7 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 				}
 				else {
 						
-					mesh = array_add(&meshes);
-					mesh->triangles = array_init(ObjTriangle, 2.f);
-					mesh->material_index = u32_max;
+					mesh = new_obj_mesh(&meshes);
 				}
 			}
 		}
@@ -855,6 +859,10 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 			}
 
 			MeshInfo* mesh = array_add(&model_info->meshes);
+			mesh->positions = array_init(v3, 2.f);
+			mesh->normals = array_init(v3, 2.f);
+			mesh->texcoords = array_init(v2, 2.f);
+			mesh->indices = array_init(u32, 2.f);
 
 			if (obj_mesh->name[0])
 				string_copy(mesh->name, obj_mesh->name, NAME_SIZE);
@@ -969,6 +977,11 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 		memory_copy(model_info->folderpath, filepath, folderpath_size);
 		model_info->folderpath[folderpath_size] = '\0';
 	}
+
+	b8 res = TRUE;
+
+	model_info->meshes = array_init(MeshInfo, 1.3f);
+	model_info->materials = array_init(MaterialInfo, 1.3f);
 	
 	// Load .obj file
 	DynamicString file = dynamic_string_init("", 1.7f);
@@ -979,12 +992,16 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 	}
 	else {
 		SV_LOG_ERROR("Can't load the model '%s', not found", filepath);
-		return FALSE;
+		res = FALSE;
 	}
 
 	dynamic_string_close(&file);
 
-	return TRUE;
+	if (!res) {
+		model_free(model_info);
+	}
+
+	return res;
 }
 
 void model_free(ModelInfo* model_info)
