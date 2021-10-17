@@ -1551,12 +1551,12 @@ namespace sv {
 				imageCount = swapChain.capabilities.maxImageCount;
 
 			// Choose format
-			VkSurfaceFormatKHR format = { VK_FORMAT_B8G8R8A8_SRGB, VK_COLORSPACE_SRGB_NONLINEAR_KHR };
+			VkSurfaceFormatKHR format = { VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR };
 			if (!swapChain.formats.empty()) format = swapChain.formats[0];
 
 			for (u32 i = 0; i < swapChain.formats.size(); ++i) {
 				VkSurfaceFormatKHR f = swapChain.formats[i];
-				if (f.format == VK_FORMAT_B8G8R8A8_SRGB && f.colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR) {
+				if (f.format == VK_FORMAT_B8G8R8A8_UNORM && f.colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR) {
 					format = f;
 					break;
 				}
