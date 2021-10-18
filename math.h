@@ -1030,7 +1030,7 @@ inline Color color_interpolate(Color c0, Color c1, f32 n)
 
 inline Color color_transparent() { return color_rgba(0u, 0u, 0u, 0u); }
 inline Color color_red()         { return color_rgb(255u, 0u, 0u); }
-inline Color color_green()       { return color_rgb(0u, 0u, 128u); }
+inline Color color_green()       { return color_rgb(0u, 128u, 0u); }
 inline Color color_blue()        { return color_rgb(0u, 0u, 255u); }
 inline Color color_orange()      { return color_rgb(255u, 69u, 0u); }
 inline Color color_black()       { return color_rgb(0u, 0u, 0u); }
