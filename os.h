@@ -3,9 +3,7 @@
 #include "Hosebase/allocators.h"
 #include "Hosebase/math.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SV_BEGIN_C_HEADER
 
 void filepath_resolve(char* dst, const char* src);
 	
@@ -47,10 +45,20 @@ Date timer_date();
 
 // Window
 
+typedef enum {
+	WindowState_Windowed,
+	WindowState_Maximized,
+	WindowState_Minimized,
+	WindowState_Fullscreen
+} WindowState;
+
 u64         window_handle();
 v2_u32      window_size();
 f32         window_aspect();
-v2_u32      desktop_size();
+WindowState window_state();
+void        set_window_fullscreen(b8 fullscreen);
+
+v2_u32 desktop_size();
 
 // Cursor
 
@@ -173,6 +181,4 @@ b8   _os_initialize(const OSInitializeDesc* desc);
 void _os_close();
 b8 _os_recive_input();
 
-#ifdef __cplusplus
-}
-#endif
+SV_END_C_HEADER

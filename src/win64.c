@@ -60,8 +60,6 @@ typedef struct {
 	HINSTANCE   hinstance;
 	HINSTANCE   user_lib;
 	HWND        handle;
-	v2_u32      size;
-	v2_u32      position;
 
 	v2     mouse_position;
 	b8     close_request;
@@ -69,6 +67,11 @@ typedef struct {
 	b8     show_cursor;
 	v2_i32 last_raw_mouse_dragging;
 	v2_i32 raw_mouse_dragging;
+
+	b8 in_fullscreen;
+	u8 fullscreen_request;
+	LONG style_before_fullscreen;
+	v4_i32 pos_before_fullscreen;
 
 	TaskSystemData task_system;
 	
@@ -188,6 +191,20 @@ inline Key wparam_to_key(WPARAM wParam)
 	}
 
 	return key;
+}
+
+inline v2_u32 get_window_size()
+{
+	RECT rect;
+	if (GetClientRect(platform->handle, &rect)) {
+
+		v2_u32 size;
+		size.x = rect.right - rect.left;
+		size.y = rect.bottom - rect.top;
+		return size;
+	}
+
+	return (v2_u32){0, 0};
 }
 
 LRESULT CALLBACK window_proc (
@@ -320,8 +337,9 @@ LRESULT CALLBACK window_proc (
 		u16 _x = LOWORD(lParam);
 		u16 _y = HIWORD(lParam);
 
-		f32 w = (f32)platform->size.x;
-		f32 h = (f32)platform->size.y;
+		v2_u32 size = get_window_size();
+		f32 w = (f32)size.x;
+		f32 h = (f32)size.y;
 
 		platform->mouse_position.x = ((f32)_x / w) - 0.5f;
 		platform->mouse_position.y = -((f32)_y / h) + 0.5f;
@@ -409,9 +427,6 @@ LRESULT CALLBACK window_proc (
 
 	case WM_SIZE:
 	{
-		platform->size.x = LOWORD(lParam);
-		platform->size.y = HIWORD(lParam);
-
 		/*switch (wParam)
 		{
 		case SIZE_MAXIMIZED:
@@ -423,13 +438,6 @@ LRESULT CALLBACK window_proc (
 			}*/
 
 		platform->resize = TRUE;
-
-		break;
-	}
-	case WM_MOVE:
-	{
-		platform->position.x = LOWORD(lParam);
-		platform->position.y = HIWORD(lParam);
 
 		break;
 	}
@@ -492,7 +500,6 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	if (desc->window.open) {
 
 		flags = WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_OVERLAPPED | WS_BORDER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
-		// TOOD: FULLSCREEN flags = WS_POPUP | WS_VISIBLE;
 	}
 
 	platform->handle = CreateWindowExA(0u,
@@ -539,6 +546,48 @@ b8 _os_recive_input()
 		}*/
 
 	platform->last_raw_mouse_dragging = platform->raw_mouse_dragging;
+
+	if (platform->fullscreen_request) {
+
+		if (platform->fullscreen_request == 1 && platform->in_fullscreen) {
+			
+			LONG style = platform->style_before_fullscreen;
+			v4_i32 pos = platform->pos_before_fullscreen;
+			
+			SetWindowLongA(platform->handle, GWL_STYLE, style);
+			SetWindowPos(platform->handle, HWND_TOP, pos.x, pos.y, pos.z, pos.w, 0);
+
+			SV_LOG_INFO("Fullscreen off\n");
+			platform->in_fullscreen = FALSE;
+		}
+		else if (platform->fullscreen_request == 2 && !platform->in_fullscreen) {
+
+			// Save last state
+			{
+				platform->style_before_fullscreen = GetWindowLongA(platform->handle, GWL_STYLE);
+				RECT rect;
+
+				if (GetWindowRect(platform->handle, &rect)) {
+
+					platform->pos_before_fullscreen.x = rect.left;
+					platform->pos_before_fullscreen.y = rect.top;
+					platform->pos_before_fullscreen.z = rect.right - rect.left;
+					platform->pos_before_fullscreen.w = rect.bottom - rect.top;
+				}
+			}
+			
+			LONG style = WS_POPUP | WS_VISIBLE;
+			v2_u32 size = desktop_size();
+			
+			SetWindowLongA(platform->handle, GWL_STYLE, style);
+			SetWindowPos(platform->handle, HWND_TOP, 0, 0, size.x, size.y, 0);
+
+			SV_LOG_INFO("Fullscreen on\n");
+			platform->in_fullscreen = TRUE;
+		}
+
+		platform->fullscreen_request = 0;
+	}
 	
 	MSG msg;
 	
@@ -597,6 +646,16 @@ b8 _os_recive_input()
 	if (input_key(Key_Alt, InputState_Any) && input_key(Key_F4, InputState_Pressed)) {
 		platform->close_request = TRUE;
 	}
+	if (input_key(Key_F11, InputState_Released)) {
+
+		WindowState state = window_state();
+
+		if (state == WindowState_Fullscreen) SV_LOG_INFO("State: Fullscreen\n");
+		else if (state == WindowState_Maximized) SV_LOG_INFO("State: Maximized\n");
+		else SV_LOG_INFO("State: Normal\n");
+
+		set_window_fullscreen(state != WindowState_Fullscreen);
+	}
 
 	return !platform->close_request;
 }
@@ -648,12 +707,29 @@ u64 window_handle()
 
 v2_u32 window_size()
 {
-	return platform->size;
+	return get_window_size();
 }
 
 f32 window_aspect()
 {
-	return (f32)(platform->size.x) / (f32)(platform->size.y);
+	v2_u32 size = get_window_size();
+	return (f32)size.x / (f32)size.y;
+}
+
+WindowState window_state()
+{
+	LONG style = GetWindowLongA(platform->handle, GWL_STYLE);
+
+	if (style & WS_POPUP) return WindowState_Fullscreen;
+	if (style & WS_MAXIMIZE) return WindowState_Maximized;
+	if (style & WS_MINIMIZE) return WindowState_Minimized;
+	
+	return WindowState_Windowed;
+}
+
+void set_window_fullscreen(b8 fullscreen)
+{
+	platform->fullscreen_request = fullscreen + 1;
 }
 
 v2_u32 desktop_size()
