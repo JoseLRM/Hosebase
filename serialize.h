@@ -95,7 +95,7 @@ inline void serializer_write(Serializer* s, const void* data, u32 size)
 		s->capacity = new_capacity;
 	}
 
-	memory_copy(s->data, data, size);
+	memory_copy(s->data + s->size, data, size);
 	s->size += size;
 }
 
@@ -257,7 +257,7 @@ typedef struct {
 inline void deserializer_read(Deserializer* s, void* data, u32 size)
 {
 	if (s->cursor + size <= s->size) {
-		memory_copy(s->data + s->cursor, data, size);
+		memory_copy(data, s->data + s->cursor, size);
 		s->cursor += size;
 	}
 	else {
@@ -400,6 +400,27 @@ inline void deserialize_v4(Deserializer* s, v4* v)
 	deserialize_f32(s, &v->y);
 	deserialize_f32(s, &v->z);
 	deserialize_f32(s, &v->w);
+}
+
+inline void deserialize_v2_i32(Deserializer* s, v2_i32* v)
+{
+	deserialize_i32(s, &v->x);
+	deserialize_i32(s, &v->y);
+}
+
+inline void deserialize_v3_i32(Deserializer* s, v3_i32* v)
+{
+	deserialize_i32(s, &v->x);
+	deserialize_i32(s, &v->y);
+	deserialize_i32(s, &v->z);
+}
+
+inline void deserialize_v4_i32(Deserializer* s, v4_i32* v)
+{
+	deserialize_i32(s, &v->x);
+	deserialize_i32(s, &v->y);
+	deserialize_i32(s, &v->z);
+	deserialize_i32(s, &v->w);
 }
 
 SV_END_C_HEADER

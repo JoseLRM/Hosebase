@@ -252,6 +252,77 @@ inline void string_from_u32(char* dst, u32 value)
 	dst[end + 1] = '\0';
 }
 
+inline void string_from_u64(char* dst, u64 value)
+{
+	u32 digits = 0u;
+
+	u64 aux = value;
+	while (aux != 0) {
+		aux /= 10;
+		++digits;
+	}
+
+	if (digits == 0u) {
+		string_copy(dst, "0", 20);
+		return;
+	}
+
+	i32 end = (i32)digits - 1;
+
+	for (i32 i = end; i >= 0; --i) {
+
+		u64 v = value % 10;
+
+		switch (v) {
+
+		case 0:
+			dst[i] = '0';
+			break;
+
+		case 1:
+			dst[i] = '1';
+			break;
+
+		case 2:
+			dst[i] = '2';
+			break;
+
+		case 3:
+			dst[i] = '3';
+			break;
+
+		case 4:
+			dst[i] = '4';
+			break;
+
+		case 5:
+			dst[i] = '5';
+			break;
+
+		case 6:
+			dst[i] = '6';
+			break;
+
+		case 7:
+			dst[i] = '7';
+			break;
+
+		case 8:
+			dst[i] = '8';
+			break;
+
+		case 9:
+			dst[i] = '9';
+			break;
+
+		}
+
+		value /= 10;
+	}
+
+	dst[end + 1] = '\0';
+}
+
 inline b8 string_to_u32(u32* dst, char* str)
 {
 	u32 digits = string_size(str);
