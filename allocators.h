@@ -201,6 +201,17 @@ inline void __impl__buffer_prepare(Buffer* buffer, u32 capacity, u32 line, const
 	}
 }
 
+inline void buffer_set(Buffer* buffer, u8* data, u32 size)
+{
+	if (buffer->data) {
+		memory_free(buffer->data);
+	}
+
+	buffer->data = data;
+	buffer->size = size;
+	buffer->capacity = size;
+}
+
 inline void buffer_close(Buffer* buffer)
 {
 	if (buffer->data) {

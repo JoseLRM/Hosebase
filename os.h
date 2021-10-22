@@ -70,8 +70,9 @@ void cursor_show();
 b8 path_is_absolute(const char* path);
 void path_clear(char* path);
 
-b8 file_read_binary(const char* filepath, Buffer* data);
-b8 file_read_text(const char* filepath, DynamicString* str);
+
+b8 file_read_binary(const char* filepath, u8** data, u32* size);
+b8 file_read_text(const char* filepath, u8** data, u32* size);
 b8 file_write_binary(const char* filepath, const u8* data, size_t size, b8 append, b8 recursive);
 b8 file_write_text(const char* filepath, const char* str, size_t size, b8 append, b8 recursive);
 

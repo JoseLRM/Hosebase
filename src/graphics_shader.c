@@ -222,8 +222,12 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 
 	// Read from file
 	{
-		if (!file_read_binary(filepath, data)) 
+		u8* file_data;
+		u32 file_size;
+		if (!file_read_binary(filepath, &file_data, &file_size)) 
 			return FALSE;
+
+		buffer_set(data, file_data, file_size);
 	}
 
 	// Remove tem file
@@ -276,9 +280,9 @@ b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shader
 
 	if (alwais_compile || !bin_read(hash, &data, TRUE))
 	{
-		DynamicString str = dynamic_string_init("", 1.f);
-		
-		if (!file_read_text(filepath, &str)) {
+		u8* file_data = NULL;
+		u32 file_size = 0;
+		if (!file_read_text(filepath, &file_data, &file_size)) {
 			SV_LOG_ERROR("Shader source not found: %s\n", filepath);
 			return FALSE;
 		}
@@ -291,12 +295,13 @@ b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shader
 		c.shader_type = shader_type;
 		c.macro_count = 0u;
 
-		if (!graphics_shader_compile_string(&c, str.data, str.size, &data)) {
+		if (!graphics_shader_compile_string(&c, (const char*)file_data, file_size, &data)) {
 			SV_LOG_ERROR("Can't compile the shader '%s'\n", filepath);
 			return FALSE;
 		}
 
-		dynamic_string_close(&str);
+		if (file_data)
+			memory_free(file_data);
 
 		SV_CHECK(bin_write(hash, data.data, data.size, TRUE));
 

@@ -44,13 +44,12 @@ static b8 glyph_less_than(const TempGlyph* g0, const TempGlyph* g1)
 
 b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags flags)
 {
-	Buffer data;
-	data = buffer_init(1.f);
-	
-	SV_CHECK(file_read_binary(filepath, &data));
+	u8* file_data;
+	u32 file_size;
+	SV_CHECK(file_read_binary(filepath, &file_data, &file_size));
 
 	stbtt_fontinfo info;
-	stbtt_InitFont(&info, data.data, 0);
+	stbtt_InitFont(&info, file_data, 0);
 
 	font->glyphs = (Glyph*)memory_allocate(sizeof(Glyph) * FONT_CHAR_COUNT);
 		
@@ -251,7 +250,7 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 	font->pixel_height = pixel_height;
 
 	memory_free(atlas);
-	buffer_close(&data);
+	if (file_data) memory_free(file_data);
 
 	return TRUE;
 }

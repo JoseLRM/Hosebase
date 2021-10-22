@@ -827,11 +827,11 @@ void path_clear(char* path)
 	}
 }
 
-b8 file_read_binary(const char* filepath_, Buffer* data)
+b8 file_read_binary(const char* filepath_, u8** data, u32* psize)
 {
 	char filepath[MAX_PATH];
 	filepath_resolve(filepath, filepath_);
-	
+
 	HANDLE file = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (file == INVALID_HANDLE_VALUE) {
@@ -841,20 +841,21 @@ b8 file_read_binary(const char* filepath_, Buffer* data)
 	DWORD size;
 	size = GetFileSize(file, NULL);
 
-	buffer_resize(data, (u32)size);
-	
+	*psize = size;
+	*data = memory_allocate(size);
+
 	SetFilePointer(file, 0, NULL, FILE_BEGIN);
-	ReadFile(file, data->data, size, NULL, NULL);
-	
+	ReadFile(file, *data, size, NULL, NULL);
+
 	CloseHandle(file);
 	return TRUE;
 }
 
-b8 file_read_text(const char* filepath_, DynamicString* str)
+b8 file_read_text(const char* filepath_, u8** data, u32* psize)
 {
 	char filepath[MAX_PATH];
 	filepath_resolve(filepath, filepath_);
-	
+
 	HANDLE file = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (file == INVALID_HANDLE_VALUE) {
@@ -864,11 +865,12 @@ b8 file_read_text(const char* filepath_, DynamicString* str)
 	DWORD size;
 	size = GetFileSize(file, NULL);
 
-	dynamic_string_resize(str, (u32)size);
-	
+	*psize = size;
+	*data = memory_allocate(size);
+
 	SetFilePointer(file, 0, NULL, FILE_BEGIN);
-	ReadFile(file, str->data, size, NULL, NULL);
-	
+	ReadFile(file, *data, size, NULL, NULL);
+
 	CloseHandle(file);
 	return TRUE;
 }

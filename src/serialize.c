@@ -41,7 +41,13 @@ b8 bin_read(u64 hash, Buffer* data, b8 system)
 {
 	char filepath[BIN_PATH_SIZE];
 	bin_filepath(filepath, hash, system);
-	return file_read_binary(filepath, data);
+
+	u8* d;
+	u32 size;
+	if (!file_read_binary(filepath, &d, &size)) return FALSE;
+
+	buffer_set(data, d, size);
+	return TRUE;
 }
     
 /*b8 bin_read(u64 hash, Deserializer& deserializer, b8 system)
@@ -79,15 +85,15 @@ inline void set_default_material(MaterialInfo* mat)
 
 inline void read_mtl(const char* filepath, ModelInfo* model_info)
 {
-	DynamicString file = dynamic_string_init("", 1.7f);
-	
-	if (file_read_text(filepath, &file)) {
+	u8* file_data;
+	u32 file_size;
+	if (file_read_text(filepath, &file_data, &file_size)) {
 
 		MaterialInfo* mat = array_add(&model_info->materials);
 		set_default_material(mat);
 		b8 use_default = TRUE;
 
-		const char* it = file.data;
+		const char* it = file_data;
 		u32 line_count = 0;
 		b8 corrupted = FALSE;
 		
@@ -401,8 +407,6 @@ inline void read_mtl(const char* filepath, ModelInfo* model_info)
 		  }*/
 	}
 	else SV_LOG_ERROR("Can't load the mtl file at '%s'", filepath);
-	
-	dynamic_string_close(&file);
 }
 
 inline u32 parse_objindex_to_absolute(i32 i, i32 max)
@@ -986,18 +990,20 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 	model_info->materials = array_init(MaterialInfo, 1.3f);
 	
 	// Load .obj file
-	DynamicString file = dynamic_string_init("", 1.7f);
-	
-	if (file_read_text(filepath, &file)) {
+	u8* file_data = NULL;
+	u32 file_size = 0;
+	if (file_read_text(filepath, &file_data, &file_size)) {
 		
-		model_load_obj(model_info, filepath, file.data);
+		model_load_obj(model_info, filepath, file_data);
 	}
 	else {
 		SV_LOG_ERROR("Can't load the model '%s', not found", filepath);
 		res = FALSE;
 	}
 
-	dynamic_string_close(&file);
+	if (file_data) {
+		memory_free(file_data);
+	}
 
 	if (!res) {
 		model_free(model_info);
