@@ -119,8 +119,6 @@ typedef struct {
 	Sampler* sampler_def_linear;
 	Sampler* sampler_def_nearest;
 
-	GPUImage* image_white;
-	
 } ImRendGfx;
 
 typedef struct {
@@ -236,25 +234,6 @@ b8 imrend_initialize()
 		desc.min_filter = SamplerFilter_Nearest;
 		desc.mag_filter = SamplerFilter_Nearest;
 		SV_CHECK(graphics_sampler_create(&imrend->gfx.sampler_def_nearest, &desc));
-	}
-
-	{
-		GPUImageDesc desc;
-		
-		u8 bytes[4];
-		foreach(i, 4) bytes[i] = 255u;
-
-		desc.data = bytes;
-		desc.size = sizeof(u8) * 4u;
-		desc.format = Format_R8G8B8A8_UNORM;
-		desc.layout = GPUImageLayout_ShaderResource;
-		desc.type = GPUImageType_ShaderResource;
-		desc.usage = ResourceUsage_Static;
-		desc.cpu_access = CPUAccess_None;
-		desc.width = 1u;
-		desc.height = 1u;
-
-		SV_CHECK(graphics_image_create(&imrend->gfx.image_white, &desc));
 	}
 
 	foreach(i, GraphicsLimit_CommandList) {
@@ -559,7 +538,7 @@ void imrend_flush(CommandList cmd)
 					v3 position = imrend_read(v3, it);
 					v2 size = imrend_read(v2, it);
 					Color color = imrend_read(Color, it);
-					GPUImage* image = gfx->image_white;
+					GPUImage* image = get_white_image();
 					v4 tc = (v4){ 0.f, 0.f, 1.f, 1.f };
 
 					if (draw_call == ImRendDrawCall_Sprite) {
@@ -568,7 +547,7 @@ void imrend_flush(CommandList cmd)
 						tc = imrend_read(v4, it);
 
 						if (image == NULL)
-							image = gfx->image_white;
+							image = get_white_image();
 							
 						if (layout != GPUImageLayout_ShaderResource && layout != GPUImageLayout_DepthStencilReadOnly) {
 								
@@ -631,7 +610,7 @@ void imrend_flush(CommandList cmd)
 					vertices[1u] = (ImRendVertex){ c1, (v2){0.f, 0.f}, color };
 					vertices[2u] = (ImRendVertex){ c2, (v2){0.f, 0.f}, color };
 
-					graphics_shader_resource_bind_image(gfx->image_white, 0u, ShaderType_Pixel, cmd);
+					graphics_shader_resource_bind_image(get_white_image(), 0u, ShaderType_Pixel, cmd);
 
 					graphics_buffer_update(state->gfx.cbuffer_primitive, GPUBufferState_Constant, vertices, sizeof(ImRendVertex) * 3u, 0u, cmd);
 
@@ -654,7 +633,7 @@ void imrend_flush(CommandList cmd)
 					vertices[0u] = (ImRendVertex){ c0, (v2){0.f, 0.f}, color };
 					vertices[1u] = (ImRendVertex){ c1, (v2){0.f, 0.f}, color };
 
-					graphics_shader_resource_bind_image(gfx->image_white, 0u, ShaderType_Pixel, cmd);
+					graphics_shader_resource_bind_image(get_white_image(), 0u, ShaderType_Pixel, cmd);
 
 					graphics_buffer_update(state->gfx.cbuffer_primitive, GPUBufferState_Constant, vertices, sizeof(ImRendVertex) * 2u, 0u, cmd);
 

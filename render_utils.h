@@ -38,4 +38,6 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd);
 b8 render_utils_initialize();
 void render_utils_close();
 
+GPUImage* get_white_image();
+
 #endif

@@ -79,6 +79,8 @@ typedef struct {
 	InputLayoutState* ils_text;
 	BlendState* bs_text;
 
+	GPUImage* white_image;
+
 	TextVertex batch_data[TEXT_BATCH_SIZE * 4];
 
 } RenderUtilsData;
@@ -213,6 +215,25 @@ b8 render_utils_initialize()
 		SV_CHECK(graphics_renderpass_create(&render->render_pass_text, &desc));
 	}
 
+	{
+		GPUImageDesc desc;
+
+		u8 bytes[4];
+		foreach(i, 4) bytes[i] = 255u;
+
+		desc.data = bytes;
+		desc.size = sizeof(u8) * 4u;
+		desc.format = Format_R8G8B8A8_UNORM;
+		desc.layout = GPUImageLayout_ShaderResource;
+		desc.type = GPUImageType_ShaderResource;
+		desc.usage = ResourceUsage_Static;
+		desc.cpu_access = CPUAccess_None;
+		desc.width = 1u;
+		desc.height = 1u;
+
+		SV_CHECK(graphics_image_create(&render->white_image, &desc));
+	}
+
 	return TRUE;
 }
 
@@ -229,6 +250,8 @@ void render_utils_close()
 		graphics_destroy(render->sampler_text);
 		graphics_destroy(render->ils_text);
 		graphics_destroy(render->bs_text);
+
+		graphics_destroy(render->white_image);
 
 		memory_free(render);
 	}
@@ -659,6 +682,11 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd)
 
 		draw_text_batch(render_target, alignment, line_height, batch_count, desc->flags, cmd);
 	}
+}
+
+GPUImage* get_white_image()
+{
+	return render->white_image;
 }
 
 #endif
