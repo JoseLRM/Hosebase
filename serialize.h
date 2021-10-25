@@ -73,52 +73,69 @@ void model_free(ModelInfo* model_info);
 
 typedef struct {
 	u8* data;
-	u32 size;
+	u32 cursor;
 	u32 capacity;
+	b8 extern_data;
 } Serializer;
 
 inline void serializer_write(Serializer* s, const void* data, u32 size)
 {
 	assert(data && size);
 
-	if (s->size + size > s->capacity) {
+	if (s->cursor + size > s->capacity) {
 
-		u32 new_capacity = SV_MAX(s->size + size, s->capacity + SERIALIZER_ALLOCATE);
+		u32 new_capacity = SV_MAX(s->cursor + size, s->capacity + SERIALIZER_ALLOCATE);
 		u8* new_data = memory_allocate(new_capacity);
 
-		if (s->size) {
-			memory_copy(new_data, s->data, s->size);
-			memory_free(s->data);
+		if (s->cursor) {
+			memory_copy(new_data, s->data, s->cursor);
+			if (!s->extern_data)
+				memory_free(s->data);
 		}
 
 		s->data = new_data;
 		s->capacity = new_capacity;
+		s->extern_data = FALSE;
 	}
 
-	memory_copy(s->data + s->size, data, size);
-	s->size += size;
+	memory_copy(s->data + s->cursor, data, size);
+	s->cursor += size;
 }
 
-inline void serializer_begin(Serializer* s, u32 initial_capacity)
+inline void serializer_begin_file(Serializer* s, u32 initial_capacity)
 {
 	s->capacity = SV_MAX(initial_capacity, SERIALIZER_ALLOCATE);
 	s->data = memory_allocate(s->capacity);
-	s->size = 0u;
+	s->cursor = 0u;
+	s->extern_data = FALSE;
 
 	u32 version = SERIALIZER_VERSION;
 	serializer_write(s, &version, sizeof(u32));
 }
 
-inline b8 serializer_end(Serializer* s, const char* filepath)
+inline void serializer_begin_buffer(Serializer* s, void* buffer, u32 size)
 {
-	if (s->size == 0)
+	s->capacity = size;
+	s->data = buffer;
+	s->cursor = 0u;
+	s->extern_data = buffer != NULL;
+}
+
+inline b8 serializer_end_file(Serializer* s, const char* filepath)
+{
+	if (s->cursor == 0)
 		return FALSE;
 	
-	b8 res = file_write_binary(filepath, s->data, s->size, FALSE, TRUE);
+	b8 res = file_write_binary(filepath, s->data, s->cursor, FALSE, TRUE);
 
-	if (s->data) memory_free(s->data);
+	if (s->data && !s->extern_data) memory_free(s->data);
 
 	return res;
+}
+
+inline void serializer_end_buffer(Serializer* s)
+{
+	if (s->data && !s->extern_data) memory_free(s->data);
 }
 
 inline void serialize_u8(Serializer* s, u8 n)
@@ -182,7 +199,7 @@ inline void serialize_char(Serializer* s, char n)
 	serializer_write(s, &n, sizeof(char));
 }
 
-inline void serialize_bool(Serializer* s, b8 n)
+inline void serialize_b8(Serializer* s, b8 n)
 {
 	serializer_write(s, &n, sizeof(b8));
 }
@@ -252,6 +269,7 @@ typedef struct {
 	u8* data;
 	u32 size;
 	u32 cursor;
+	b8 extern_data;
 } Deserializer;
 
 inline void deserializer_read(Deserializer* s, void* data, u32 size)
@@ -266,9 +284,10 @@ inline void deserializer_read(Deserializer* s, void* data, u32 size)
 	}
 }
 
-inline b8 deserializer_begin(Deserializer* s, const char* filepath)
+inline b8 deserializer_begin_file(Deserializer* s, const char* filepath)
 {
 	s->cursor = 0;
+	s->extern_data = FALSE;
 	if (file_read_binary(filepath, &s->data, &s->size)) {
 
 		deserializer_read(s, &s->version, sizeof(u32));
@@ -278,9 +297,23 @@ inline b8 deserializer_begin(Deserializer* s, const char* filepath)
 	return FALSE;
 }
 
-inline void deserializer_end(Deserializer* s)
+inline void deserializer_begin_buffer(Deserializer* s, void* buffer, u32 size)
 {
-	if (s->data) memory_free(s->data);
+	s->cursor = 0;
+	s->extern_data = TRUE;
+	s->data = buffer;
+	s->size = size;
+	s->version = SERIALIZER_VERSION;
+}
+
+inline void deserializer_end_file(Deserializer* s)
+{
+	if (s->data && !s->extern_data) memory_free(s->data);
+}
+
+inline void deserializer_end_buffer(Deserializer* s)
+{
+	if (s->data && !s->extern_data) memory_free(s->data);
 }
 
 inline void deserialize_u8(Deserializer* s, u8* n)
@@ -345,7 +378,7 @@ inline void deserialize_char(Deserializer* s, char* n)
 	deserializer_read(s, n, sizeof(char));
 }
 
-inline void deserialize_bool(Deserializer* s, b8* n)
+inline void deserialize_b8(Deserializer* s, b8* n)
 {
 	deserializer_read(s, n, sizeof(b8));
 }

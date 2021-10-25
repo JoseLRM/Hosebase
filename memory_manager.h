@@ -519,6 +519,13 @@ inline const char* filepath_name(const char* filepath)
 	return filepath;
 }
 
+inline u32 filepath_folder(const char* filepath)
+{
+	u32 size = string_size(filepath);
+	while (size != 0 && filepath[size] != '/') --size;
+	return size;
+}
+
 inline b8 char_is_letter(u32 c)
 {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
