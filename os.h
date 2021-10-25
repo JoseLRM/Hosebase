@@ -6,6 +6,7 @@
 SV_BEGIN_C_HEADER
 
 void filepath_resolve(char* dst, const char* src);
+void filepath_user(char* dst);
 	
 void print(const char* str, ...);
 

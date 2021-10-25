@@ -1,10 +1,12 @@
 #define NOMINMAX
 #include "windows.h"
+#include "Shlobj.h"
 
 #undef near
 #undef far
 
 #pragma comment(lib,"user32.lib")
+#pragma comment(lib,"Shell32.lib")
 
 #include "time.h"
 
@@ -92,6 +94,15 @@ void filepath_resolve(char* dst, const char* src)
 			string_copy(dst, platform->origin_path, FILE_PATH_SIZE);
 			string_append(dst, src, FILE_PATH_SIZE);
 		}
+	}
+}
+
+void filepath_user(char* dst)
+{
+	SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, dst);
+	while (*dst != '\0') {
+		if (*dst == '\\') *dst = '/';
+		++dst;
 	}
 }
 
