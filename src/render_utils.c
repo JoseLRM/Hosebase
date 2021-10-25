@@ -87,6 +87,9 @@ typedef struct {
 
 static RenderUtilsData* render = NULL;
 
+b8 imrend_initialize();
+void imrend_close();
+
 b8 render_utils_initialize()
 {
 	render = memory_allocate(sizeof(RenderUtilsData));

@@ -2,7 +2,6 @@
 
 #if SV_GRAPHICS
 
-#include "Hosebase/imrend.h"
 #include "Hosebase/render_utils.h"
 
 static const char* PRIMITIVE_SHADER = SV_STRING(

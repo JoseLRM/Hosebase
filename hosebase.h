@@ -9,10 +9,6 @@
 #include "Hosebase/profiler.h"
 #include "Hosebase/render_utils.h"
 
-// TODO: Optional
-
-#include "Hosebase/imrend.h"
-
 typedef struct {
 	OSInitializeDesc os;
 
@@ -59,11 +55,6 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		return FALSE;
 	}
 
-	if (!imrend_initialize()) {
-		SV_LOG_ERROR("Can't initialize imrend\n");
-		return FALSE;
-	}
-
 #endif
 
 	return TRUE;
@@ -73,7 +64,6 @@ inline void hosebase_close()
 {
 #if SV_GRAPHICS
 	render_utils_close();
-	imrend_close();
 	_graphics_close();
 #endif
 
