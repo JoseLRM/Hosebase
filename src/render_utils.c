@@ -237,12 +237,16 @@ b8 render_utils_initialize()
 		SV_CHECK(graphics_image_create(&render->white_image, &desc));
 	}
 
+	SV_CHECK(imrend_initialize());
+
 	return TRUE;
 }
 
 void render_utils_close()
 {
 	if (render) {
+
+		imrend_close();
 
 		graphics_destroy(render->render_pass_text);
 		graphics_destroy(render->vbuffer_text);
