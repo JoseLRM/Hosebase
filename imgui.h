@@ -5,13 +5,16 @@
 b8 gui_initialize();
 void gui_close();
 
-void gui_begin(Font* default_font);
+void gui_begin(const char* layout, Font* default_font);
 void gui_end();
 void gui_draw(GPUImage* image, CommandList cmd);
 
+void gui_push_id(u64 id);
+void gui_pop_id(u32 count);
+
 // Parents
 
-void gui_begin_parent();
+void gui_begin_parent(const char* layout);
 void gui_end_parent();
 
 // Widget utils
@@ -35,5 +38,6 @@ typedef struct {
 	f32 padding;
 } GuiStackLayoutData;
 
-GuiStackLayoutData gui_stack_layout_get_desc();
+GuiStackLayoutData gui_stack_layout_get_data();
 void gui_stack_layout_update(GuiStackLayoutData data);
+void gui_stack_layout_update_size(f32 width, f32 height);

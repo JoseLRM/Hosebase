@@ -2,6 +2,7 @@
 
 #define PARENT_WIDGET_BUFFER_SIZE (500 * 30)
 #define LAYOUT_DATA_SIZE 30
+#define PARENTS_MAX 100
 
 typedef struct GuiParent GuiParent;
 typedef struct GuiWidget GuiWidget;
@@ -12,8 +13,9 @@ typedef struct {
 } GuiLayout;
 
 struct GuiParent {
-	b8 bounds;
-	b8 widget_bounds;
+	u64 id;
+	v4 bounds;
+	v4 widget_bounds;
 	u8 widget_buffer[PARENT_WIDGET_BUFFER_SIZE];
 	u32 widget_buffer_size;
 	u32 widget_count;
@@ -23,30 +25,43 @@ struct GuiParent {
 
 typedef enum {
 	GuiHeader_Widget,
-	GuiHeader_LayoutUpdate
+	GuiHeader_LayoutUpdate,
+	GuiHeader_BeginParent,
+	GuiHeader_EndParent
 } GuiHeader;
 
 typedef struct {
 	u8*(*read_fn)(GuiWidget* widget, u8* it);
-	u8*(*update_fn)(GuiWidget* widget, b8 has_focus);
-	u8*(*draw_fn)(GuiWidget* widget, CommandList cmd);
+	u8*(*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
+	u8*(*draw_fn)(GuiWidget* widget);
 	u32 size;
 } GuiWidgetRegister;
 
 typedef struct {
 	void(*initialize_fn)(GuiParent* parent);
-	v4(*compute_bounds_fn)(GuiParent* parent, const GuiWidget* widget);
+	v4(*compute_bounds_fn)(GuiParent* parent);
 	u8*(*update_fn)(GuiParent* parent, u8* it);
+	char name[NAME_SIZE];
 } GuiLayoutRegister;
 
 typedef struct {
 
 	Buffer buffer;
 	
-	// GuiParent parents[PARENTS_MAX];
+	GuiParent parents[PARENTS_MAX];
+	u32 parent_count;
+
 	GuiParent root;
 
+	GuiParent* parent_stack[PARENTS_MAX];
+	u32 parent_stack_count;
+
+	DynamicArray(u64) id_stack;
+	u64 current_id;
+
 	struct {
+		u64 parent_id;
+		GuiParent* parent;
 		u64 id;
 		u32 type;
 		GuiWidget* widget;
@@ -96,18 +111,18 @@ static u8* gui_widget_read(GuiWidget* widget, u8* it)
 	return gui->widget_registers[type].read_fn(widget, it);
 }
 
-static void gui_widget_update(GuiWidget* widget, b8 has_focus)
+static void gui_widget_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
 {
 	u32 type = widget->type;
 	if (type >= gui->widget_register_count) return;
-	gui->widget_registers[type].update_fn(widget, has_focus);
+	gui->widget_registers[type].update_fn(parent, widget, has_focus);
 }
 
-static void gui_widget_draw(GuiWidget* widget, CommandList cmd)
+static void gui_widget_draw(GuiWidget* widget)
 {
 	u32 type = widget->type;
 	if (type >= gui->widget_register_count) return;
-	gui->widget_registers[type].draw_fn(widget, cmd);
+	gui->widget_registers[type].draw_fn(widget);
 }
 
 static void gui_initialize_layout(GuiParent* parent)
@@ -119,12 +134,12 @@ static void gui_initialize_layout(GuiParent* parent)
 	gui->layout_registers[type].initialize_fn(parent);
 }
 
-static v4 gui_compute_bounds(GuiParent* parent, GuiWidget* widget)
+static v4 gui_compute_bounds(GuiParent* parent)
 {
 	u32 type = parent->layout.type;
 
 	if (type >= gui->layout_register_count) return v4_zero();
-	return gui->layout_registers[type].compute_bounds_fn(parent, widget);
+	return gui->layout_registers[type].compute_bounds_fn(parent);
 }
 
 static u8* gui_layout_update(GuiParent* parent, u8* it)
@@ -135,12 +150,26 @@ static u8* gui_layout_update(GuiParent* parent, u8* it)
 	return gui->layout_registers[type].update_fn(parent, it);
 }
 
-static GuiWidget* gui_find_widget(u32 type, u64 id)
+static u32 gui_find_layout_index(const char* name)
+{
+	// TODO: Optimize
+	foreach(i, gui->layout_register_count) {
+		
+		if (string_equals(gui->layout_registers[i].name, name))
+			return i;
+	}
+	return u32_max;
+}
+
+static GuiWidget* gui_find_widget(u32 type, u64 id, GuiParent* parent)
 {
 	// TODO: Optimize?
+
+	if (parent == NULL)
+		return NULL;
 	
-	u8* it = gui->root.widget_buffer;
-	foreach(i, gui->root.widget_count) {
+	u8* it = parent->widget_buffer;
+	foreach(i, parent->widget_count) {
 
 		GuiWidget* widget = (GuiWidget*)it;
 		if (widget->type == type && widget->id == id) {
@@ -151,6 +180,95 @@ static GuiWidget* gui_find_widget(u32 type, u64 id)
 	}
 
 	return NULL;
+}
+
+static GuiParent* gui_find_parent(u64 parent_id)
+{
+	if (parent_id == 0) return &gui->root;
+
+	foreach(i, gui->parent_count) {
+
+		if (gui->parents[i].id == parent_id)
+			return gui->parents + i;
+	}
+
+	return NULL;
+}
+
+static GuiParent* gui_current_parent()
+{
+	if (gui->parent_stack_count == 0)
+		return NULL;
+
+	return gui->parent_stack[gui->parent_stack_count - 1];
+}
+
+static void gui_push_parent(GuiParent* parent)
+{
+	gui->parent_stack[gui->parent_stack_count++] = parent;
+}
+
+static void gui_pop_parent()
+{
+	if (gui->parent_stack_count != 0) {
+		gui->parent_stack_count--;
+		gui->parent_stack[gui->parent_stack_count] = NULL;
+	}
+	else assert_title(FALSE, "Parent stack error");
+}
+
+static void adjust_widget_bounds(GuiParent* parent)
+{
+	u8* it = parent->widget_buffer;
+	v4 pb = parent->widget_bounds;
+
+	f32 inv_height = 1.f / gui->resolution.y;
+
+	foreach(i, parent->widget_count) {
+
+		GuiWidget* w = (GuiWidget*)it;
+
+		w->bounds.x = (w->bounds.x * pb.z) + pb.x - (pb.z * 0.5f);
+		w->bounds.y = (w->bounds.y * pb.w) + pb.y - (pb.w * 0.5f);
+		w->bounds.z *= pb.z;
+		w->bounds.w *= pb.w;
+
+		it += sizeof(GuiWidget) + gui_widget_size(w->type);
+	}
+}
+
+static void update_parent(GuiParent* parent)
+{
+	u8* it = parent->widget_buffer;
+
+	foreach(i, parent->widget_count) {
+
+		GuiWidget* widget = (GuiWidget*)it;
+
+		if (widget->type == gui->focus.type && widget->id == gui->focus.id)
+			continue;
+
+		gui_widget_update(parent, widget, FALSE);
+		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+	}
+}
+
+static void draw_parent(GuiParent* parent)
+{
+	v4 b = parent->widget_bounds;
+	imrend_push_scissor(b.x, b.y, b.z, b.w, FALSE, gui->cmd);
+
+	u8* it = parent->widget_buffer;
+
+	foreach(i, parent->widget_count) {
+
+		GuiWidget* widget = (GuiWidget*)it;
+
+		gui_widget_draw(widget);
+		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+	}
+
+	imrend_pop_scissor(gui->cmd);
 }
 
 static void gui_write_(const void* data, u32 size)
@@ -168,6 +286,8 @@ static void gui_write_text(const char* text)
 
 static u64 gui_write_widget(u32 type, u64 flags, u64 id)
 {
+	id = hash_combine(id, gui->current_id);
+
 	GuiHeader header = GuiHeader_Widget;
 	gui_write(header);
 	gui_write(type);
@@ -214,14 +334,31 @@ static void gui_free_focus()
 {
 	gui->focus.type = u32_max;
 	gui->focus.id = 0;
+	gui->focus.parent_id = 0;
 	gui->focus.widget = NULL;
 }
 
-static void gui_set_focus(GuiWidget* widget)
+static void gui_set_focus(GuiWidget* widget, u64 parent_id)
 {
 	gui->focus.type = widget->type;
 	gui->focus.id = widget->id;
 	gui->focus.widget = widget;
+	gui->focus.parent_id = parent_id;
+}
+
+static GuiParent* allocate_parent()
+{
+	if (gui->parent_count >= PARENTS_MAX) {
+		assert_title(FALSE, "Parent limit exceeded");
+		return NULL;
+	}
+	return gui->parents + gui->parent_count++;
+}
+
+static void free_parents()
+{
+	memory_zero(gui->parents, sizeof(GuiParent) * gui->parent_count);
+	gui->parent_count = 0;
 }
 
 static void register_default_widgets();
@@ -232,6 +369,7 @@ b8 gui_initialize()
 	gui = memory_allocate(sizeof(GUI));
 
 	gui->buffer = buffer_init(1.7f);
+	gui->id_stack = array_init(u64, 2.f);
 
 	gui->focus.type = u32_max;
 	gui->focus.id = 0;
@@ -247,14 +385,17 @@ void gui_close()
 	if (gui) {
 
 		buffer_close(&gui->buffer);
+		array_close(&gui->id_stack);
 
 		memory_free(gui);
 	}
 }
 
-void gui_begin(Font* default_font)
+void gui_begin(const char* layout, Font* default_font)
 {
 	buffer_reset(&gui->buffer);
+	array_reset(&gui->id_stack);
+	gui->current_id = 69;
 
 	v2_u32 size = window_size();
 
@@ -263,6 +404,16 @@ void gui_begin(Font* default_font)
 	gui->aspect = gui->resolution.x / gui->resolution.y;
 	gui->pixel = v2_set(1.f / gui->resolution.x, 1.f / gui->resolution.y);
 	gui->mouse_position = v2_add_scalar(input_mouse_position(), 0.5f);
+
+	gui->parent_stack[0] = &gui->root;
+	gui->parent_stack_count = 1;
+
+	u32 layout_index = gui_find_layout_index(layout);
+	if (layout_index == u32_max) {
+		SV_LOG_ERROR("Invalid root layout name: %s\n", layout);
+		layout_index = 0;
+	}
+	gui->root.layout.type = layout_index;
 }
 
 void gui_end()
@@ -270,11 +421,19 @@ void gui_end()
 	// Reset state
 	{
 		gui->focus.widget = NULL;
+		gui->focus.parent = NULL;
 		
 		memory_zero(gui->root.widget_buffer, gui->root.widget_buffer_size);
 		gui->root.widget_buffer_size = 0;
 		gui->root.widget_count = 0;
+		gui->root.bounds = v4_set(0.5f, 0.5f, 1.f, 1.f);
+		gui->root.widget_bounds = gui->root.bounds;
 		gui_initialize_layout(&gui->root);
+
+		gui->parent_stack[0] = &gui->root;
+		gui->parent_stack_count = 1;
+
+		free_parents();
 	}
 	
 	// Read buffer
@@ -297,32 +456,56 @@ void gui_end()
 
 				u32 widget_size = gui_widget_size(type);
 
-				if (gui->root.widget_buffer_size + widget_size + sizeof(GuiWidget) >= PARENT_WIDGET_BUFFER_SIZE) {
+				GuiParent* parent = gui_current_parent();
+
+				if (parent->widget_buffer_size + widget_size + sizeof(GuiWidget) >= PARENT_WIDGET_BUFFER_SIZE) {
 					SV_LOG_ERROR("The parent buffer has a limit of %u bytes\n", PARENT_WIDGET_BUFFER_SIZE);
 					return;
 				}
 
-				GuiWidget* widget = (GuiWidget*)(gui->root.widget_buffer + gui->root.widget_buffer_size);
+				GuiWidget* widget = (GuiWidget*)(parent->widget_buffer + parent->widget_buffer_size);
 
 				gui_read(it, widget->flags);
 				gui_read(it, widget->id);
 				widget->type = type;
 
-				gui->root.widget_buffer_size += widget_size + sizeof(GuiWidget);
-				gui->root.widget_count++;
+				parent->widget_buffer_size += widget_size + sizeof(GuiWidget);
+				parent->widget_count++;
 				
 				it = gui_widget_read(widget, it);
 
 				// Set bounds
-				widget->bounds = gui_compute_bounds(&gui->root, widget);
+				widget->bounds = gui_compute_bounds(parent);
 			}
 			break;
 
 			case GuiHeader_LayoutUpdate:
 			{
-				GuiParent* parent = &gui->root;
+				GuiParent* parent = gui_current_parent();
 
 				it = gui_layout_update(parent, it);
+			}
+			break;
+
+			case GuiHeader_BeginParent:
+			{
+				GuiParent* current = gui_current_parent();
+
+				GuiParent* parent = allocate_parent();
+				parent->parent = current;
+				gui_read(it, parent->id);
+				gui_read(it, parent->layout.type);
+				parent->bounds = gui_compute_bounds(current);
+				parent->widget_bounds = parent->bounds;
+
+				gui_push_parent(parent);
+				gui_initialize_layout(parent);
+			}
+			break;
+
+			case GuiHeader_EndParent:
+			{
+				gui_pop_parent();
 			}
 			break;
 			
@@ -330,30 +513,42 @@ void gui_end()
 		}
 	}
 
+	// Adjust widget bounds
+	{
+		foreach(i, gui->parent_count) {
+
+			GuiParent* parent = gui->parents + i;
+			
+			adjust_widget_bounds(parent);
+		}
+
+		adjust_widget_bounds(&gui->root);
+	}
+
 	// Update focus
 	{
 		if (gui->focus.type != u32_max) {
 
-			gui->focus.widget = gui_find_widget(gui->focus.type, gui->focus.id);
+			gui->focus.parent = gui_find_parent(gui->focus.parent_id);
 
-			gui_widget_update(gui->focus.widget, TRUE);
+			if (gui->focus.parent) {
+
+				gui->focus.widget = gui_find_widget(gui->focus.type, gui->focus.id, gui->focus.parent);
+				gui_widget_update(gui->focus.parent, gui->focus.widget, TRUE);
+			}
+			else gui_free_focus();
 		}
 	}
 	
 	// Update widget
 	{
-		u8* it = gui->root.widget_buffer;
-		
-		foreach(i, gui->root.widget_count) {
+		foreach(i, gui->parent_count) {
 
-			GuiWidget* widget = (GuiWidget*)it;
-
-			if (widget->type == gui->focus.type && widget->id == gui->focus.id)
-				continue;
-
-			gui_widget_update(widget, FALSE);
-			it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+			GuiParent* parent = gui->parents + i;
+			update_parent(parent);
 		}
+
+		update_parent(&gui->root);
 	}
 }
 
@@ -364,21 +559,74 @@ void gui_draw(GPUImage* image, CommandList cmd)
 
 	imrend_begin_batch(image, cmd);
 	imrend_camera(ImRendCamera_Normal, cmd);
-	
-	// Draw widget
-	{
-		u8* it = gui->root.widget_buffer;
-		
-		foreach(i, gui->root.widget_count) {
 
-			GuiWidget* widget = (GuiWidget*)it;
+	foreach(i, gui->parent_count) {
 
-			gui_widget_draw(widget, cmd);
-			it += sizeof(GuiWidget) + gui_widget_size(widget->type);
-		}
+		GuiParent* parent = gui->parents + i;
+		draw_parent(parent);
 	}
 
+	draw_parent(&gui->root);
+
 	imrend_flush(cmd);
+}
+
+void gui_push_id(u64 id)
+{
+	array_push(&gui->id_stack, id);
+
+	gui->current_id = 69;
+
+	foreach(i, gui->id_stack.size) {
+
+		gui->current_id = hash_combine(gui->current_id, *(u64*)array_get(&gui->id_stack, i));
+	}
+}
+
+void gui_pop_id(u32 count)
+{
+	if (gui->id_stack.size >= count)
+		array_pop_count(&gui->id_stack, count);
+	else {
+		assert_title(FALSE, "Can't pop gui id");
+	}
+
+	gui->current_id = 69;
+
+	foreach(i, gui->id_stack.size) {
+
+		gui->current_id = hash_combine(gui->current_id, *(u64*)array_get(&gui->id_stack, i));
+	}
+}
+
+void gui_begin_parent(const char* layout)
+{
+	GuiHeader header = GuiHeader_BeginParent;
+	gui_write(header);
+	u64 id = hash_combine(0x83487, gui->current_id);
+	gui_write(id);
+
+	u32 layout_index = gui_find_layout_index(layout);
+	if (layout_index == u32_max) {
+		SV_LOG_ERROR("Invalid layout '%s'\n", layout);
+		layout_index = 0;
+	}
+
+	gui_write(layout_index);
+
+	GuiParent* parent = gui_find_parent(id);
+	gui_push_parent(parent);
+
+	gui_push_id(id);
+}
+
+void gui_end_parent()
+{
+	GuiHeader header = GuiHeader_EndParent;
+	gui_write(header);
+
+	gui_pop_parent();
+	gui_pop_id(1);
 }
 
 //////////////////////////////// WIDGET UTILS //////////////////////////////////
@@ -435,7 +683,7 @@ b8 gui_button(const char* text, u64 flags)
 
 	b8 res = FALSE;
 
-	GuiWidget* widget = gui_find_widget(type, id);
+	GuiWidget* widget = gui_find_widget(type, id, gui_current_parent());
 	if (widget) {
 
 		Button* button = (Button*)(widget + 1);
@@ -457,7 +705,7 @@ static u8* button_read(GuiWidget* widget, u8* it)
 	return it;
 }
 
-static void button_update(GuiWidget* widget, b8 has_focus)
+static void button_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
 {
 	Button* button = (Button*)(widget + 1);
 
@@ -475,12 +723,12 @@ static void button_update(GuiWidget* widget, b8 has_focus)
 	else {
 		if (input_mouse_button(MouseButton_Left, InputState_Pressed) && gui_mouse_in_bounds(widget->bounds)) {
 
-			gui_set_focus(widget);
+			gui_set_focus(widget, parent->id);
 		}
 	}
 }
 
-static void button_draw(GuiWidget* widget, CommandList cmd)
+static void button_draw(GuiWidget* widget)
 {
 	Button* button = (Button*)(widget + 1);
 
@@ -506,7 +754,7 @@ typedef struct {
 	f32 offset;
 } GuiStackLayoutInternal;
 
-GuiStackLayoutData gui_stack_layout_get_desc()
+GuiStackLayoutData gui_stack_layout_get_data()
 {
 	GuiLayout* layout = &gui->root.layout;
 	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
@@ -517,7 +765,21 @@ void gui_stack_layout_update(GuiStackLayoutData data)
 {
 	u32 type = gui->register_ids.layout_stack;
 	imgui_write_layout_update(type);
+
+	u8 update = 0;
+	gui_write(update);
 	gui_write_(&data, sizeof(data));
+}
+
+void gui_stack_layout_update_size(f32 width, f32 height)
+{
+	u32 type = gui->register_ids.layout_stack;
+	imgui_write_layout_update(type);
+
+	u8 update = 1;
+	gui_write(update);
+	gui_write(width);
+	gui_write(height);
 }
 
 static void stack_layout_initialize(GuiParent* parent)
@@ -531,7 +793,7 @@ static void stack_layout_initialize(GuiParent* parent)
 	d->offset = d->data.margin;
 }
 
-static v4 stack_layout_compute_bounds(GuiParent* parent, const GuiWidget* widget)
+static v4 stack_layout_compute_bounds(GuiParent* parent)
 {
 	GuiLayout* layout = &parent->layout;
 	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
@@ -547,7 +809,23 @@ static u8* stack_layout_update(GuiParent* parent, u8* it)
 	GuiLayout* layout = &parent->layout;
 	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
 	
-	gui_read(it, d->data);
+	u8 update;
+	gui_read(it, update);
+
+	switch (update)
+	{
+	case 0:
+		gui_read(it, d->data);
+		break;
+
+	case 1:
+	{
+		gui_read(it, d->data.width);
+		gui_read(it, d->data.height);
+	}
+	break;
+	
+	}
 	
 	return it;
 }
@@ -568,6 +846,7 @@ static void register_default_layouts()
 	gui->layout_registers[0].initialize_fn = stack_layout_initialize;
 	gui->layout_registers[0].compute_bounds_fn = stack_layout_compute_bounds;
 	gui->layout_registers[0].update_fn = stack_layout_update;
+	string_copy(gui->layout_registers[0].name, "stack", NAME_SIZE);
 	gui->register_ids.layout_stack = 0;
 
 	gui->layout_register_count = 1;

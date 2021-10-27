@@ -94,6 +94,12 @@ inline void array_pop(DynamicArray* array)
 	--array->size;
 }
 
+inline void array_pop_count(DynamicArray* array, u32 count)
+{
+	assert(array->size >= count);
+	array->size -= count;
+}
+
 inline void array_erase(DynamicArray* array, u32 index)
 {
 	assert(index < array->size);
