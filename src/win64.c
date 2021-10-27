@@ -83,17 +83,11 @@ static PlatformData* platform = NULL;
 
 void filepath_resolve(char* dst, const char* src)
 {
-	if (src[0] == '$') {
-		++src;
+	if (path_is_absolute(src))
 		string_copy(dst, src, FILE_PATH_SIZE);
-	}
 	else {
-		if (path_is_absolute(src))
-			string_copy(dst, src, FILE_PATH_SIZE);
-		else {
-			string_copy(dst, platform->origin_path, FILE_PATH_SIZE);
-			string_append(dst, src, FILE_PATH_SIZE);
-		}
+		string_copy(dst, platform->origin_path, FILE_PATH_SIZE);
+		string_append(dst, src, FILE_PATH_SIZE);
 	}
 }
 

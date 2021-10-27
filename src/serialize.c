@@ -29,18 +29,15 @@ b8 load_image(const char* filepath_, void** pdata, u32* width, u32* height)
 
 #define BIN_PATH_SIZE 101
     
-inline void bin_filepath(char* buf, u64 hash, b8 system)
+inline void bin_filepath(char* buf, u64 hash)
 {
-	if (system)
-		sprintf(buf, "$system/cache/%llu.bin", hash);
-	else
-		sprintf(buf, "bin/%llu.bin", hash);
+	sprintf(buf, "bin/%llu.bin", hash);
 }
 
-b8 bin_read(u64 hash, Buffer* data, b8 system)
+b8 bin_read(u64 hash, Buffer* data)
 {
 	char filepath[BIN_PATH_SIZE];
-	bin_filepath(filepath, hash, system);
+	bin_filepath(filepath, hash);
 
 	u8* d;
 	u32 size;
@@ -57,10 +54,10 @@ b8 bin_read(u64 hash, Buffer* data, b8 system)
   return deserialize_begin(deserializer, filepath);
   }*/
 
-b8 bin_write(u64 hash, const void* data, size_t size, b8 system)
+b8 bin_write(u64 hash, const void* data, u32 size)
 {
 	char filepath[BIN_PATH_SIZE];
-	bin_filepath(filepath, hash, system);
+	bin_filepath(filepath, hash);
 	return file_write_binary(filepath, (u8*)data, size, FALSE, TRUE);
 }
     

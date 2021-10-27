@@ -248,7 +248,7 @@ b8 graphics_shader_compile_fastbin_from_string(const char* name, ShaderType shad
 	ShaderDesc desc;
 	desc.shader_type = shader_type;
 
-	if (alwais_compile || !bin_read(hash, &data, TRUE))
+	if (alwais_compile || !bin_read(hash, &data))
 	{
 		ShaderCompileDesc c;
 		c.api = graphics_api();
@@ -259,7 +259,7 @@ b8 graphics_shader_compile_fastbin_from_string(const char* name, ShaderType shad
 		c.macro_count = 0u;
 
 		SV_CHECK(graphics_shader_compile_string(&c, src, (u32)string_size(src), &data));
-		SV_CHECK(bin_write(hash, data.data, data.size, TRUE));
+		SV_CHECK(bin_write(hash, data.data, data.size));
 
 		SV_LOG_INFO("Shader Compiled: '%s'\n", name);
 	}
@@ -278,7 +278,7 @@ b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shader
 	ShaderDesc desc;
 	desc.shader_type = shader_type;
 
-	if (alwais_compile || !bin_read(hash, &data, TRUE))
+	if (alwais_compile || !bin_read(hash, &data))
 	{
 		u8* file_data = NULL;
 		u32 file_size = 0;
@@ -303,7 +303,7 @@ b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shader
 		if (file_data)
 			memory_free(file_data);
 
-		SV_CHECK(bin_write(hash, data.data, data.size, TRUE));
+		SV_CHECK(bin_write(hash, data.data, data.size));
 
 		SV_LOG_INFO("Shader Compiled: '%s'\n", name);
 	}
