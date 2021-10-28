@@ -696,4 +696,89 @@ GPUImage* get_white_image()
 	return render->white_image;
 }
 
+GPUImage* load_skybox_image(const char* filepath)
+{
+	Color* data;
+	u32 w, h;
+	if (load_image(filepath, (void**)&data, &w, &h) == FALSE)
+		return NULL;
+
+	u32 image_width = w / 4u;
+	u32 image_height = h / 3u;
+
+	Color* images[6u];
+	Color* mem = (Color*)memory_allocate(image_width * image_height * 4u * 6u);
+
+	foreach(i, 6u) {
+
+		images[i] = mem + image_width * image_height * i;
+
+		u32 xoff;
+		u32 yoff;
+
+		switch (i)
+		{
+		case 0:
+			xoff = image_width;
+			yoff = image_height;
+			break;
+		case 1:
+			xoff = image_width * 3u;
+			yoff = image_height;
+			break;
+		case 2:
+			xoff = image_width;
+			yoff = 0u;
+			break;
+		case 3:
+			xoff = image_width;
+			yoff = image_height * 2u;
+			break;
+		case 4:
+			xoff = image_width * 2u;
+			yoff = image_height;
+			break;
+		default:
+			xoff = 0u;
+			yoff = image_height;
+			break;
+		}
+
+		for (u32 y = yoff; y < yoff + image_height; ++y) {
+
+			Color* src = data + xoff + y * w;
+
+			Color* dst = images[i] + (y - yoff) * image_width;
+			Color* dst_end = dst + image_width;
+
+			while (dst != dst_end) {
+
+				*dst = *src;
+
+				++src;
+				++dst;
+			}
+		}
+	}
+
+	GPUImageDesc desc;
+	desc.data = images;
+	desc.size = image_width * image_height * 4u;
+	desc.format = Format_R8G8B8A8_UNORM;
+	desc.layout = GPUImageLayout_ShaderResource;
+	desc.type = GPUImageType_ShaderResource | GPUImageType_CubeMap;
+	desc.usage = ResourceUsage_Static;
+	desc.cpu_access = CPUAccess_None;
+	desc.width = image_width;
+	desc.height = image_height;
+
+	GPUImage* image;
+	b8 res = graphics_image_create(&image, &desc);
+
+	memory_free(mem);
+	memory_free(data);
+
+	return res ? image : NULL;
+}
+
 #endif

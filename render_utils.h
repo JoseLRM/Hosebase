@@ -39,6 +39,7 @@ b8 render_utils_initialize();
 void render_utils_close();
 
 GPUImage* get_white_image();
+GPUImage* load_skybox_image(const char* filepath);
 
 // IMMEDIATE MODE RENDERER
 
