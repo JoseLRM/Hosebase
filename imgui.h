@@ -2,6 +2,32 @@
 
 #include "Hosebase/graphics.h"
 
+typedef enum {
+	GuiUnit_Relative,
+	GuiUnit_Pixel,
+	GuiUnit_Aspect,
+} GuiUnit;
+
+typedef enum {
+	GuiCoordAlign_Center,
+	GuiCoordAlign_Left,
+	GuiCoordAlign_Right,
+	GuiCoordAlign_InverseCenter,
+	GuiCoordAlign_InverseLeft,
+	GuiCoordAlign_InverseRight,
+} GuiCoordAlign;
+
+typedef struct {
+	f32 value;
+	GuiUnit unit;
+	GuiCoordAlign align;
+} GuiCoord;
+
+typedef struct {
+	f32 value;
+	GuiUnit unit;
+} GuiDimension;
+
 b8 gui_initialize();
 void gui_close();
 
@@ -33,11 +59,31 @@ b8 gui_button(const char* text, u64 flags);
 
 typedef struct {
 	f32 width;
+	GuiUnit width_unit;
 	f32 height;
+	GuiUnit height_unit;
 	f32 margin;
+	GuiUnit margin_unit;
 	f32 padding;
+	GuiUnit padding_unit;
 } GuiStackLayoutData;
 
 GuiStackLayoutData gui_stack_layout_get_data();
 void gui_stack_layout_update(GuiStackLayoutData data);
-void gui_stack_layout_update_size(f32 width, f32 height);
+void gui_stack_layout_update_size(f32 width, GuiUnit width_unit, f32 height, GuiUnit height_unit);
+
+typedef struct {
+
+	GuiCoord x;
+	GuiCoord y;
+	GuiDimension width;
+	GuiDimension height;
+
+} GuiFreeLayoutData;
+
+GuiFreeLayoutData gui_free_layout_get_data();
+void gui_free_layout_update(GuiFreeLayoutData data);
+void gui_free_layout_update_x(f32 value, GuiUnit unit, GuiCoordAlign align);
+void gui_free_layout_update_y(f32 value, GuiUnit unit, GuiCoordAlign align);
+void gui_free_layout_update_width(f32 value, GuiUnit unit);
+void gui_free_layout_update_height(f32 value, GuiUnit unit);

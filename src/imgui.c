@@ -1,7 +1,7 @@
 #include "Hosebase/imgui.h"
 
 #define PARENT_WIDGET_BUFFER_SIZE (500 * 30)
-#define LAYOUT_DATA_SIZE 30
+#define LAYOUT_DATA_SIZE 500
 #define PARENTS_MAX 100
 
 typedef struct GuiParent GuiParent;
@@ -85,6 +85,7 @@ typedef struct {
 		u32 widget_button;
 
 		u32 layout_stack;
+		u32 layout_free;
 	} register_ids;
 	
 } GUI;
@@ -127,7 +128,7 @@ static void gui_widget_draw(GuiWidget* widget)
 
 static void gui_initialize_layout(GuiParent* parent)
 {
-	memory_zero(&parent->layout, sizeof(GuiLayout));
+	memory_zero(&parent->layout.data, LAYOUT_DATA_SIZE);
 	u32 type = parent->layout.type;
 
 	if (type >= gui->layout_register_count) return;
@@ -299,7 +300,10 @@ static u64 gui_write_widget(u32 type, u64 flags, u64 id)
 
 static void imgui_write_layout_update(u32 type)
 {
-	GuiParent* parent = &gui->root;
+	GuiParent* parent = gui_current_parent();
+	if (parent == NULL)
+		return;
+
 	if (parent->layout.type == type) {
 
 		GuiHeader header = GuiHeader_LayoutUpdate;
@@ -677,9 +681,20 @@ typedef struct {
 
 b8 gui_button(const char* text, u64 flags)
 {
+	u64 id;
+
+	{
+		text = string_validate(text);
+		if (text[0] == '#') {
+			id = 0x8ff42a8d34;
+			text++;
+		}
+		else id = (u64)text;
+	}
+
 	u32 type = gui->register_ids.widget_button;
 	
-	u64 id = gui_write_widget(type, flags, (u64)text);
+	id = gui_write_widget(type, flags, id);
 
 	b8 res = FALSE;
 
@@ -771,7 +786,7 @@ void gui_stack_layout_update(GuiStackLayoutData data)
 	gui_write_(&data, sizeof(data));
 }
 
-void gui_stack_layout_update_size(f32 width, f32 height)
+void gui_stack_layout_update_size(f32 width, GuiUnit width_unit, f32 height, GuiUnit height_unit)
 {
 	u32 type = gui->register_ids.layout_stack;
 	imgui_write_layout_update(type);
@@ -779,7 +794,9 @@ void gui_stack_layout_update_size(f32 width, f32 height)
 	u8 update = 1;
 	gui_write(update);
 	gui_write(width);
+	gui_write(width_unit);
 	gui_write(height);
+	gui_write(height_unit);
 }
 
 static void stack_layout_initialize(GuiParent* parent)
@@ -787,9 +804,13 @@ static void stack_layout_initialize(GuiParent* parent)
 	GuiLayout* layout = &parent->layout;
 	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
 	d->data.width = 0.9f;
+	d->data.width_unit = GuiUnit_Relative;
 	d->data.height = 0.05f;
+	d->data.height_unit = GuiUnit_Relative;
 	d->data.margin = 0.03f;
+	d->data.margin_unit = GuiUnit_Relative;
 	d->data.padding = 0.01f;
+	d->data.padding_unit = GuiUnit_Relative;
 	d->offset = d->data.margin;
 }
 
@@ -798,10 +819,28 @@ static v4 stack_layout_compute_bounds(GuiParent* parent)
 	GuiLayout* layout = &parent->layout;
 	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
 
-	f32 y = 1.f - d->offset - d->data.height * 0.5f;
-	d->offset += d->data.height + d->data.padding;
+	f32 width = d->data.width;
+	switch (d->data.width_unit) {
+
+	case GuiUnit_Pixel:
+		width = width * gui->pixel.x;
+		break;
+
+	}
+
+	f32 height = d->data.height;
+	switch (d->data.height_unit) {
+
+	case GuiUnit_Pixel:
+		height = height * gui->pixel.y;
+		break;
+
+	}
+
+	f32 y = 1.f - d->offset - height * 0.5f;
+	d->offset += height + d->data.padding;
 	
-	return v4_set(0.5f, y, d->data.width, d->data.height);
+	return v4_set(0.5f, y, width, height);
 }
 
 static u8* stack_layout_update(GuiParent* parent, u8* it)
@@ -821,9 +860,216 @@ static u8* stack_layout_update(GuiParent* parent, u8* it)
 	case 1:
 	{
 		gui_read(it, d->data.width);
+		gui_read(it, d->data.width_unit);
 		gui_read(it, d->data.height);
+		gui_read(it, d->data.height_unit);
 	}
 	break;
+	
+	}
+	
+	return it;
+}
+
+////////////////////////////////////////////////// FREE LAYOUT ///////////////////////////////////////////////
+
+typedef struct {
+	GuiFreeLayoutData data;
+} GuiFreeLayoutInternal;
+
+GuiFreeLayoutData gui_free_layout_get_data()
+{
+	GuiLayout* layout = &gui->root.layout;
+	GuiFreeLayoutInternal* d = (GuiFreeLayoutInternal*)layout->data;
+	return d->data;
+}
+
+void gui_free_layout_update(GuiFreeLayoutData data)
+{
+	u32 type = gui->register_ids.layout_free;
+	imgui_write_layout_update(type);
+
+	u8 update = 0;
+	gui_write(update);
+	gui_write_(&data, sizeof(data));
+}
+
+void gui_free_layout_update_x(f32 value, GuiUnit unit, GuiCoordAlign align)
+{
+	u32 type = gui->register_ids.layout_free;
+	imgui_write_layout_update(type);
+
+	u8 update = 1;
+
+	GuiCoord coord;
+	coord.value = value;
+	coord.unit = unit;
+	coord.align = align;
+
+	gui_write(update);
+	gui_write(coord);
+}
+
+void gui_free_layout_update_y(f32 value, GuiUnit unit, GuiCoordAlign align)
+{
+	u32 type = gui->register_ids.layout_free;
+	imgui_write_layout_update(type);
+
+	u8 update = 2;
+
+	GuiCoord coord;
+	coord.value = value;
+	coord.unit = unit;
+	coord.align = align;
+
+	gui_write(update);
+	gui_write(coord);
+}
+
+void gui_free_layout_update_width(f32 value, GuiUnit unit)
+{
+	u32 type = gui->register_ids.layout_free;
+	imgui_write_layout_update(type);
+
+	u8 update = 3;
+
+	GuiDimension dim;
+	dim.value = value;
+	dim.unit = unit;
+
+	gui_write(update);
+	gui_write(dim);
+}
+
+void gui_free_layout_update_height(f32 value, GuiUnit unit)
+{
+	u32 type = gui->register_ids.layout_free;
+	imgui_write_layout_update(type);
+
+	u8 update = 4;
+
+	GuiDimension dim;
+	dim.value = value;
+	dim.unit = unit;
+
+	gui_write(update);
+	gui_write(dim);
+}
+
+static void free_layout_initialize(GuiParent* parent)
+{
+	GuiLayout* layout = &parent->layout;
+	GuiFreeLayoutInternal* d = (GuiFreeLayoutInternal*)layout->data;
+	d->data.x = (GuiCoord) { 0.5f, GuiUnit_Relative, GuiCoordAlign_Center };
+	d->data.y = (GuiCoord) { 0.5f, GuiUnit_Relative, GuiCoordAlign_Center };
+	d->data.width = (GuiDimension) { 0.5f, GuiUnit_Relative };
+	d->data.height = (GuiDimension) { 1.f, GuiUnit_Aspect };
+}
+
+static f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension)
+{
+	f32 value = 0.f;
+
+	f32 pixel = vertical ? gui->pixel.y : gui->pixel.x;
+
+	switch (coord.unit)
+	{
+
+	case GuiUnit_Relative:
+		value = coord.value;
+		break;
+
+	case GuiUnit_Pixel:
+		value = coord.value * pixel;
+		break;
+
+	}
+
+	switch (coord.align)
+	{
+	
+	case GuiCoordAlign_Left:
+	case GuiCoordAlign_InverseLeft:
+		value += dimension * 0.5f;
+		break;
+
+	case GuiCoordAlign_InverseRight:
+		value -= dimension * 0.5f;
+		break;
+
+	}
+
+	if (coord.align == GuiCoordAlign_InverseLeft || coord.align == GuiCoordAlign_InverseRight || coord.align == GuiCoordAlign_InverseCenter) {
+		value = 1.f - value;
+	}
+
+	return value;
+}
+
+static f32 gui_compute_dimension(GuiDimension dimension, b8 vertical)
+{
+	f32 value = 0.f;
+
+	f32 pixel = vertical ? gui->pixel.y : gui->pixel.x;
+
+	switch (dimension.unit)
+	{
+
+	case GuiUnit_Relative:
+		value = dimension.value;
+		break;
+
+	case GuiUnit_Pixel:
+		value = dimension.value * pixel;
+		break;
+
+	}
+
+	return value;
+}
+
+static v4 free_layout_compute_bounds(GuiParent* parent)
+{
+	GuiLayout* layout = &parent->layout;
+	GuiFreeLayoutInternal* d = (GuiFreeLayoutInternal*)layout->data;
+
+	f32 width = gui_compute_dimension(d->data.width, FALSE);
+	f32 height = gui_compute_dimension(d->data.height, TRUE);
+	f32 x = gui_compute_coord(d->data.x, FALSE, width);
+	f32 y = gui_compute_coord(d->data.y, TRUE, height);
+	
+	return v4_set(x, y, width, height);
+}
+
+static u8* free_layout_update(GuiParent* parent, u8* it)
+{
+	GuiLayout* layout = &parent->layout;
+	GuiFreeLayoutInternal* d = (GuiFreeLayoutInternal*)layout->data;
+	
+	u8 update;
+	gui_read(it, update);
+
+	switch (update)
+	{
+	case 0:
+		gui_read(it, d->data);
+		break;
+
+	case 1:
+		gui_read(it, d->data.x);
+		break;
+
+	case 2:
+		gui_read(it, d->data.y);
+		break;
+
+	case 3:
+		gui_read(it, d->data.width);
+		break;
+
+	case 4:
+		gui_read(it, d->data.height);
+		break;
 	
 	}
 	
@@ -849,5 +1095,11 @@ static void register_default_layouts()
 	string_copy(gui->layout_registers[0].name, "stack", NAME_SIZE);
 	gui->register_ids.layout_stack = 0;
 
-	gui->layout_register_count = 1;
+	gui->layout_registers[1].initialize_fn = free_layout_initialize;
+	gui->layout_registers[1].compute_bounds_fn = free_layout_compute_bounds;
+	gui->layout_registers[1].update_fn = free_layout_update;
+	string_copy(gui->layout_registers[1].name, "free", NAME_SIZE);
+	gui->register_ids.layout_free = 1;
+
+	gui->layout_register_count = 2;
 }
