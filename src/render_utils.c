@@ -458,8 +458,6 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd)
 
 	// Prepare gfx pipeline
 	{
-		graphics_scissor_set_image(render_target, 0u, cmd);
-		graphics_viewport_set_image(render_target, 0u, cmd);
 		graphics_topology_set(GraphicsTopology_Triangles, cmd);
 
 		graphics_vertex_buffer_bind(render->vbuffer_text, 0, 0, cmd);
