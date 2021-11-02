@@ -40,13 +40,7 @@ typedef struct {
 	DynamicArray(u64) id_stack;
 	u64 current_id;
 
-	struct {
-		u64 parent_id;
-		GuiParent* parent;
-		u64 id;
-		u32 type;
-		GuiWidget* widget;
-	} focus;
+	GuiFocus focus;
 
 	CommandList cmd;
 	GPUImage* image;
@@ -136,48 +130,6 @@ static u32 gui_find_layout_index(const char* name)
 	return u32_max;
 }
 
-static GuiWidget* gui_find_widget(u32 type, u64 id, GuiParent* parent)
-{
-	// TODO: Optimize?
-
-	if (parent == NULL)
-		return NULL;
-	
-	u8* it = parent->widget_buffer;
-	foreach(i, parent->widget_count) {
-
-		GuiWidget* widget = (GuiWidget*)it;
-		if (widget->type == type && widget->id == id) {
-			return widget;
-		}
-
-		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
-	}
-
-	return NULL;
-}
-
-static GuiParent* gui_find_parent(u64 parent_id)
-{
-	if (parent_id == 0) return &gui->root;
-
-	foreach(i, gui->parent_count) {
-
-		if (gui->parents[i].id == parent_id)
-			return gui->parents + i;
-	}
-
-	return NULL;
-}
-
-static GuiParent* gui_current_parent()
-{
-	if (gui->parent_stack_count == 0)
-		return NULL;
-
-	return gui->parent_stack[gui->parent_stack_count - 1];
-}
-
 static void gui_push_parent(GuiParent* parent)
 {
 	gui->parent_stack[gui->parent_stack_count++] = parent;
@@ -248,20 +200,18 @@ static void draw_parent(GuiParent* parent)
 	imrend_pop_scissor(gui->cmd);
 }
 
-static void gui_write_(const void* data, u32 size)
+void gui_write_(const void* data, u32 size)
 {
 	buffer_write_back(&gui->buffer, data, size);
 }
 
-#define gui_write(data) gui_write_(&data, sizeof(data))
-
-static void gui_write_text(const char* text)
+void gui_write_text(const char* text)
 {
 	text = string_validate(text);
 	buffer_write_back(&gui->buffer, text, string_size(text) + 1);
 }
 
-static u64 gui_write_widget(u32 type, u64 flags, u64 id)
+u64 gui_write_widget(u32 type, u64 flags, u64 id)
 {
 	id = hash_combine(id, gui->current_id);
 
@@ -274,7 +224,7 @@ static u64 gui_write_widget(u32 type, u64 flags, u64 id)
 	return id;
 }
 
-static b8 imgui_write_layout_update(u32 type)
+b8 imgui_write_layout_update(u32 type)
 {
 	GuiParent* parent = gui_current_parent();
 	if (parent == NULL)
@@ -294,7 +244,7 @@ static b8 imgui_write_layout_update(u32 type)
 	}
 }
 
-static void gui_read_(u8** it_, void* data, u32 size)
+void gui_read_(u8** it_, void* data, u32 size)
 {
 	u8* it = *it_;
 	memory_copy(data, it, size);
@@ -302,7 +252,7 @@ static void gui_read_(u8** it_, void* data, u32 size)
 	*it_ = it;
 }
 
-static void gui_read_text_(u8** it_, const char** text)
+void gui_read_text_(u8** it_, const char** text)
 {
 	u8* it = *it_;
 	*text = (const char*)it;
@@ -310,10 +260,7 @@ static void gui_read_text_(u8** it_, const char** text)
 	*it_ = it;
 }
 
-#define gui_read(it, data) gui_read_(&it, &data, sizeof(data))
-#define gui_read_text(it, text) gui_read_text_(&it, &text)
-
-static void gui_free_focus()
+void gui_free_focus()
 {
 	gui->focus.type = u32_max;
 	gui->focus.id = 0;
@@ -321,12 +268,17 @@ static void gui_free_focus()
 	gui->focus.widget = NULL;
 }
 
-static void gui_set_focus(GuiWidget* widget, u64 parent_id)
+void gui_set_focus(GuiWidget* widget, u64 parent_id)
 {
 	gui->focus.type = widget->type;
 	gui->focus.id = widget->id;
 	gui->focus.widget = widget;
 	gui->focus.parent_id = parent_id;
+}
+
+GuiFocus gui_get_focus()
+{
+	return gui->focus;
 }
 
 static GuiParent* allocate_parent()
@@ -700,97 +652,49 @@ void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment)
 	imrend_draw_text(&desc, gui->cmd);
 }
 
-///////////////////////////////// BUTTON /////////////////////////////////
-
-typedef struct {
-	const char* text;
-	b8 pressed;
-} Button;
-
-b8 gui_button(const char* text, u64 flags)
+GuiWidget* gui_find_widget(u32 type, u64 id, GuiParent* parent)
 {
-	u64 id;
+	// TODO: Optimize?
 
-	{
-		text = string_validate(text);
-		if (text[0] == '#') {
-			id = 0x8ff42a8d34;
-			text++;
-		}
-		else id = (u64)text;
-	}
-
-	u32 type = gui->register_ids.widget_button;
+	if (parent == NULL)
+		return NULL;
 	
-	id = gui_write_widget(type, flags, id);
+	u8* it = parent->widget_buffer;
+	foreach(i, parent->widget_count) {
 
-	b8 res = FALSE;
-
-	GuiWidget* widget = gui_find_widget(type, id, gui_current_parent());
-	if (widget) {
-
-		Button* button = (Button*)(widget + 1);
-		res = button->pressed;
-	}
-
-	gui_write_text(text);
-
-	return res;
-}
-
-static u8* button_read(GuiWidget* widget, u8* it)
-{
-	Button* button = (Button*)(widget + 1);
-	button->pressed = FALSE;
-
-	gui_read_text(it, button->text);
-	
-	return it;
-}
-
-static void button_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
-{
-	Button* button = (Button*)(widget + 1);
-
-	if (has_focus) {
-
-		if (input_mouse_button(MouseButton_Left, InputState_Released)) {
-			
-			if (gui_mouse_in_bounds(widget->bounds)) {
-				button->pressed = TRUE;
-			}
-
-			gui_free_focus();
+		GuiWidget* widget = (GuiWidget*)it;
+		if (widget->type == type && widget->id == id) {
+			return widget;
 		}
-	}
-	else {
-		if (input_mouse_button(MouseButton_Left, InputState_Pressed) && gui_mouse_in_bounds(widget->bounds)) {
 
-			gui_set_focus(widget, parent->id);
-		}
+		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
 	}
+
+	return NULL;
 }
 
-static void button_draw(GuiWidget* widget)
+GuiParent* gui_find_parent(u64 parent_id)
 {
-	Button* button = (Button*)(widget + 1);
+	if (parent_id == 0) return &gui->root;
 
-	Color color = color_gray(100);
+	foreach(i, gui->parent_count) {
 
-	if (gui->focus.type == widget->type && gui->focus.id == widget->id) {
-
-		color = color_red();
-	}
-	else if (gui_mouse_in_bounds(widget->bounds)) {
-
-		color = color_gray(175);
+		if (gui->parents[i].id == parent_id)
+			return gui->parents + i;
 	}
 
-	gui_draw_bounds(widget->bounds, color);
-	gui_draw_text(button->text, widget->bounds, TextAlignment_Center);
+	return NULL;
 }
 
-static f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dimension)
+GuiParent* gui_current_parent()
+{
+	if (gui->parent_stack_count == 0)
+		return NULL;
+
+	return gui->parent_stack[gui->parent_stack_count - 1];
+}
+
+f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dimension)
 {
 	f32 value = 0.f;
 
@@ -830,7 +734,7 @@ static f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 par
 	return value;
 }
 
-static f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimension)
+f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimension)
 {
 	f32 value = 0.f;
 
@@ -1095,18 +999,6 @@ static u8* free_layout_update(GuiParent* parent, u8* it)
 	}
 	
 	return it;
-}
-
-static void register_default_widgets()
-{
-	GuiRegisterWidgetDesc desc;
-
-	desc.name = "Button";
-	desc.read_fn = button_read;
-	desc.update_fn = button_update;
-	desc.draw_fn = button_draw;
-	desc.size = sizeof(Button);
-	gui->register_ids.widget_button = gui_register_widget(&desc);
 }
 
 static void register_default_layouts()

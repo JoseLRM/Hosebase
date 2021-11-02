@@ -10,6 +10,7 @@
 #include "src/graphics.c"
 #include "src/graphics_shader.c"
 #include "src/imrend.c"
+#include "src/default_widgets.c"
 #include "src/imgui.c"
 #include "src/font.c"
 #include "src/text_processing.c"
