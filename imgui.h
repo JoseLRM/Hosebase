@@ -15,9 +15,13 @@ typedef enum {
 	GuiCoordAlign_Center,
 	GuiCoordAlign_Left,
 	GuiCoordAlign_Right,
+	GuiCoordAlign_Bottom,
+	GuiCoordAlign_Top,
 	GuiCoordAlign_InverseCenter,
 	GuiCoordAlign_InverseLeft,
 	GuiCoordAlign_InverseRight,
+	GuiCoordAlign_InverseBottom,
+	GuiCoordAlign_InverseTop,
 } GuiCoordAlign;
 
 typedef struct {
@@ -68,6 +72,7 @@ typedef struct {
 	u64 id;
 	u32 type;
 	GuiWidget* widget;
+	u32 action;
 } GuiFocus;
 
 b8 gui_initialize();
@@ -81,9 +86,10 @@ void gui_push_id(u64 id);
 void gui_pop_id(u32 count);
 
 void gui_free_focus();
-void gui_set_focus(GuiWidget* widget, u64 parent_id);
+void gui_set_focus(GuiWidget* widget, u64 parent_id, u32 action);
 
 GuiFocus gui_get_focus();
+b8 gui_has_focus();
 
 typedef struct {
 	const char* name;

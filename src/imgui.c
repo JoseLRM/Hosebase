@@ -266,21 +266,30 @@ void gui_free_focus()
 {
 	gui->focus.type = u32_max;
 	gui->focus.id = 0;
+	gui->focus.action = 0;
 	gui->focus.parent_id = 0;
 	gui->focus.widget = NULL;
+	gui->focus.parent = NULL;
 }
 
-void gui_set_focus(GuiWidget* widget, u64 parent_id)
+void gui_set_focus(GuiWidget* widget, u64 parent_id, u32 action)
 {
 	gui->focus.type = widget->type;
 	gui->focus.id = widget->id;
+	gui->focus.action = action;
 	gui->focus.widget = widget;
 	gui->focus.parent_id = parent_id;
+	gui->focus.parent = NULL;
 }
 
 GuiFocus gui_get_focus()
 {
 	return gui->focus;
+}
+
+b8 gui_has_focus()
+{
+	return gui->focus.type != u32_max;
 }
 
 static GuiParent* allocate_parent()
@@ -720,16 +729,21 @@ f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dim
 
 	case GuiCoordAlign_Left:
 	case GuiCoordAlign_InverseLeft:
+	case GuiCoordAlign_Bottom:
+	case GuiCoordAlign_InverseBottom:
 		value += dimension * 0.5f;
 		break;
 
+	case GuiCoordAlign_Right:
 	case GuiCoordAlign_InverseRight:
+	case GuiCoordAlign_Top:
+	case GuiCoordAlign_InverseTop:
 		value -= dimension * 0.5f;
 		break;
 
 	}
 
-	if (coord.align == GuiCoordAlign_InverseLeft || coord.align == GuiCoordAlign_InverseRight || coord.align == GuiCoordAlign_InverseCenter) {
+	if (coord.align == GuiCoordAlign_InverseLeft || coord.align == GuiCoordAlign_InverseRight || coord.align == GuiCoordAlign_InverseBottom || coord.align == GuiCoordAlign_InverseTop || coord.align == GuiCoordAlign_InverseCenter) {
 		value = 1.f - value;
 	}
 

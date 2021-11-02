@@ -66,7 +66,7 @@ static void button_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
 	else {
 		if (input_mouse_button(MouseButton_Left, InputState_Pressed) && gui_mouse_in_bounds(widget->bounds)) {
 
-			gui_set_focus(widget, parent->id);
+			gui_set_focus(widget, parent->id, 0);
 		}
 	}
 }
