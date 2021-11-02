@@ -2,12 +2,12 @@
 
 ///////////////////////////////// BUTTON /////////////////////////////////
 
+static u32 BUTTON_TYPE;
+
 typedef struct {
 	const char* text;
 	b8 pressed;
 } Button;
-
-static u32 BUTTON_TYPE;
 
 b8 gui_button(const char* text, u64 flags)
 {
@@ -92,6 +92,36 @@ static void button_draw(GuiWidget* widget)
 	gui_draw_text(button->text, widget->bounds, TextAlignment_Center);
 }
 
+/////////////////////////////////////////////// DRAWABLE ////////////////////////////////////////////////////////////
+
+static u32 DRAWABLE_TYPE;
+
+typedef struct {
+	GuiDrawableFn fn;
+} Drawable;
+
+void gui_drawable(GuiDrawableFn fn, u64 flags)
+{
+	if (fn == NULL)
+		return;
+
+	gui_write_widget(DRAWABLE_TYPE, flags, (u64)fn);
+	gui_write(fn);
+}
+
+static u8* drawable_read(GuiWidget* widget, u8* it)
+{
+	Drawable* drawable = (Drawable*)(widget + 1);
+	gui_read(it, drawable->fn);
+	return it;
+}
+
+static void drawable_draw(GuiWidget* widget)
+{
+	Drawable* drawable = (Drawable*)(widget + 1);
+	drawable->fn(widget);
+}
+
 static void register_default_widgets()
 {
 	GuiRegisterWidgetDesc desc;
@@ -102,4 +132,11 @@ static void register_default_widgets()
 	desc.draw_fn = button_draw;
 	desc.size = sizeof(Button);
 	BUTTON_TYPE = gui_register_widget(&desc);
+
+	desc.name = "drawable";
+	desc.read_fn = drawable_read;
+	desc.update_fn = NULL;
+	desc.draw_fn = drawable_draw;
+	desc.size = sizeof(Drawable);
+	DRAWABLE_TYPE = gui_register_widget(&desc);
 }

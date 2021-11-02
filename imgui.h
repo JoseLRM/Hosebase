@@ -132,7 +132,10 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 
 // Default widgets
 
+typedef void(*GuiDrawableFn)(GuiWidget* widget);
+
 b8 gui_button(const char* text, u64 flags);
+void gui_drawable(GuiDrawableFn fn, u64 flags);
 
 // Default layouts
 

@@ -84,14 +84,16 @@ static void gui_widget_update(GuiParent* parent, GuiWidget* widget, b8 has_focus
 {
 	u32 type = widget->type;
 	if (type >= gui->widget_register_count) return;
-	gui->widget_registers[type].update_fn(parent, widget, has_focus);
+	if (gui->widget_registers[type].update_fn)
+		gui->widget_registers[type].update_fn(parent, widget, has_focus);
 }
 
 static void gui_widget_draw(GuiWidget* widget)
 {
 	u32 type = widget->type;
 	if (type >= gui->widget_register_count) return;
-	gui->widget_registers[type].draw_fn(widget);
+	if (gui->widget_registers[type].draw_fn)
+		gui->widget_registers[type].draw_fn(widget);
 }
 
 static void gui_initialize_layout(GuiParent* parent)
