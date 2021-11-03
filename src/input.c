@@ -16,7 +16,10 @@ typedef struct {
 	v2	mouse_dragging;
 	f32	mouse_wheel;
 
-	b8 unused;
+	Key release_keys[Key_MaxEnum];
+	u32 release_key_count;
+	Key release_mouse_buttons[MouseButton_MaxEnum];
+	u32 release_mouse_button_count;
 
 } InputData;
 
@@ -106,6 +109,13 @@ void _input_update()
 		}
 	}
 
+	foreach(i, input->release_key_count) {
+
+		Key key = input->release_keys[i];
+		input->keys[key] = InputState_Released;
+	}
+	input->release_key_count = 0;
+
 	foreach(i, MouseButton_MaxEnum) {
 
 		InputState* state = input->mouse_buttons + i;
@@ -117,6 +127,13 @@ void _input_update()
 			*state = InputState_None;
 		}
 	}
+
+	foreach(i, input->release_mouse_button_count) {
+
+		MouseButton button = input->release_mouse_buttons[i];
+		input->mouse_buttons[button] = InputState_Released;
+	}
+	input->release_mouse_button_count = 0;
 
 	input->mouse_last_position = input->mouse_position;
 	input->text[0] = '\0';
@@ -131,7 +148,11 @@ void _input_key_set_pressed(Key key)
 
 void _input_key_set_released(Key key)
 {
-	input->keys[key] = InputState_Released;
+	if (input->keys[key] == InputState_Pressed && input->release_key_count < Key_MaxEnum) {
+
+		input->release_keys[input->release_key_count++] = key;
+	}
+	else input->keys[key] = InputState_Released;
 }
 
 void _input_mouse_button_set_pressed(MouseButton mouse_button)
@@ -141,7 +162,11 @@ void _input_mouse_button_set_pressed(MouseButton mouse_button)
 
 void _input_mouse_button_set_released(MouseButton mouse_button)
 {
-	input->mouse_buttons[mouse_button] = InputState_Released;
+	if (input->mouse_buttons[mouse_button] == InputState_Pressed && input->release_mouse_button_count < MouseButton_MaxEnum) {
+
+		input->release_mouse_buttons[input->release_mouse_button_count++] = mouse_button;
+	}
+	else input->mouse_buttons[mouse_button] = InputState_Released;
 }
 
 void _input_text_command_add(TextCommand text_command)
