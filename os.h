@@ -86,10 +86,6 @@ b8 folder_remove(const char* filepath);
 b8 file_date(const char* filepath, Date* create, Date* last_write, Date* last_access);
 
 typedef struct {
-	u64 _handle;
-} FolderIterator;
-
-typedef struct {
 	Date        create_date;
 	Date        last_write_date;
 	Date        last_access_date;
@@ -98,9 +94,17 @@ typedef struct {
 	const char* extension;
 } FolderElement;
 
-b8   folder_iterator_begin(const char* folderpath, FolderIterator* iterator, FolderElement* element);
-b8   folder_iterator_next(FolderIterator* iterator, FolderElement* element);
+typedef struct {
+	u64 _handle;
+	b8 has_next;
+	FolderElement element;
+} FolderIterator;
+
+FolderIterator folder_iterator_begin(const char* folderpath);
+void folder_iterator_next(FolderIterator* iterator);
 void folder_iterator_close(FolderIterator* iterator);
+
+#define foreach_file(it, path) for (FolderIterator it = folder_iterator_begin(path); it.has_next; folder_iterator_next(&it))
 
 // CLIPBOARD
 

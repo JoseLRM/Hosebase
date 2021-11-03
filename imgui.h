@@ -123,6 +123,9 @@ b8 imgui_write_layout_update(u32 type);
 void gui_read_(u8** it_, void* data, u32 size);
 void gui_read_text_(u8** it_, const char** text);
 
+v2 gui_pixel_size();
+v2 gui_mouse_position();
+
 void gui_draw_bounds(v4 bounds, Color color);
 void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc);
 void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment);

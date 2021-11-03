@@ -626,6 +626,16 @@ void gui_set_background(GPUImage* image, v4 texcoord, Color color)
 
 //////////////////////////////// WIDGET UTILS //////////////////////////////////
 
+v2 gui_pixel_size()
+{
+	return gui->pixel;
+}
+
+v2 gui_mouse_position()
+{
+	return gui->mouse_position;
+}
+
 void gui_draw_bounds(v4 bounds, Color color)
 {
 	imrend_draw_quad(v3_set(bounds.x, bounds.y, 0.f), v2_set(bounds.z, bounds.w), color, gui->cmd);

@@ -1107,7 +1107,7 @@ inline FolderElement finddata_to_folderelement(WIN32_FIND_DATAA d)
 	return e;
 }
 
-b8 folder_iterator_begin(const char* folderpath__, FolderIterator* iterator, FolderElement* element)
+FolderIterator folder_iterator_begin(const char* folderpath__)
 {
 	WIN32_FIND_DATAA data;
 
@@ -1139,34 +1139,39 @@ b8 folder_iterator_begin(const char* folderpath__, FolderIterator* iterator, Fol
 	*it0++ = '\0';
 	
 
+	FolderIterator iterator;
+	iterator.has_next = FALSE;
 	HANDLE find = FindFirstFileA(folderpath, &data);
 	
-	if (find == INVALID_HANDLE_VALUE) return FALSE;
+	if (find == INVALID_HANDLE_VALUE) return iterator;
 
-	*element = finddata_to_folderelement(data);
-	iterator->_handle = (u64)find;
+	iterator.has_next = TRUE;
+	iterator.element = finddata_to_folderelement(data);
+	iterator._handle = (u64)find;
 
-	return TRUE;
+	return iterator;
 }
     
-b8 folder_iterator_next(FolderIterator* iterator, FolderElement* element)
+void folder_iterator_next(FolderIterator* it)
 {
-	HANDLE find = (HANDLE)iterator->_handle;
+	HANDLE find = (HANDLE)it->_handle;
 	
 	WIN32_FIND_DATAA data;
 	if (FindNextFileA(find, &data)) {
 
-		*element = finddata_to_folderelement(data);
-		return TRUE;
+		it->element = finddata_to_folderelement(data);
 	}
-
-	return FALSE;
+	else {
+		it->has_next = FALSE;
+		FindClose(find);
+	}
 }
 
-void folder_iterator_close(FolderIterator* iterator)
+void folder_iterator_close(FolderIterator* it)
 {
-	HANDLE find = (HANDLE)iterator->_handle;
-	FindClose(find);
+	HANDLE find = (HANDLE)it->_handle;
+	if (it->has_next)
+		FindClose(find);
 }
 
 //////////////////////////////// CLIPBOARD ////////////////////////////
