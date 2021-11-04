@@ -239,11 +239,8 @@ b8 imgui_write_layout_update(u32 type)
 
 		return TRUE;
 	}
-	else {
-		
-		assert_title(FALSE, "Invalid layout update");
-		return FALSE;
-	}
+	
+	return FALSE;
 }
 
 void gui_read_(u8** it_, void* data, u32 size)
