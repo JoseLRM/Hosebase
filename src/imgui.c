@@ -61,6 +61,7 @@ typedef struct {
 
 		u32 layout_stack;
 		u32 layout_free;
+		u32 layout_grid;
 	} register_ids;
 	
 } GUI;
@@ -148,10 +149,10 @@ static void gui_pop_parent()
 
 static void adjust_widget_bounds(GuiParent* parent)
 {
-	u8* it = parent->widget_buffer;
 	v4 pb = parent->widget_bounds;
-
 	f32 inv_height = 1.f / gui->resolution.y;
+	
+	u8* it = parent->widget_buffer;
 
 	foreach(i, parent->widget_count) {
 
@@ -442,6 +443,19 @@ void gui_end()
 				gui_read(it, parent->id);
 				gui_read(it, parent->layout.type);
 				parent->bounds = gui_compute_bounds(current);
+
+				if (current) {
+					v4 pb = parent->bounds;
+					v4 b = current->bounds;
+		
+					pb.x = (pb.x * b.z) + b.x - (b.z * 0.5f);
+					pb.y = (pb.y * b.w) + b.y - (b.w * 0.5f);
+					pb.z *= b.z;
+					pb.w *= b.w;
+
+					parent->bounds = pb;
+				}
+				
 				parent->widget_bounds = parent->bounds;
 
 				gui_push_parent(parent);
@@ -504,7 +518,9 @@ void gui_end()
 			if (gui->focus.parent) {
 
 				gui->focus.widget = gui_find_widget(gui->focus.type, gui->focus.id, gui->focus.parent);
-				gui_widget_update(gui->focus.parent, gui->focus.widget, TRUE);
+				if (gui->focus.widget != NULL)
+					gui_widget_update(gui->focus.parent, gui->focus.widget, TRUE);
+				else gui_free_focus();
 			}
 			else gui_free_focus();
 		}
@@ -735,16 +751,17 @@ f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dim
 	{
 
 	case GuiCoordAlign_Left:
-	case GuiCoordAlign_InverseLeft:
 	case GuiCoordAlign_Bottom:
-	case GuiCoordAlign_InverseBottom:
+	case GuiCoordAlign_InverseRight:
+	case GuiCoordAlign_InverseTop:
 		value += dimension * 0.5f;
 		break;
 
 	case GuiCoordAlign_Right:
-	case GuiCoordAlign_InverseRight:
 	case GuiCoordAlign_Top:
-	case GuiCoordAlign_InverseTop:
+	case GuiCoordAlign_InverseLeft:
+	case GuiCoordAlign_InverseBottom:
+	
 		value -= dimension * 0.5f;
 		break;
 
@@ -1024,6 +1041,122 @@ static u8* free_layout_update(GuiParent* parent, u8* it)
 	return it;
 }
 
+/////////////////////////// GRID LAYOUT //////////////////////////////
+
+typedef struct {
+	GuiGridLayoutData data;
+	u32 count;
+} GuiGridLayoutInternal;
+
+GuiGridLayoutData gui_grid_layout_get_data()
+{
+	GuiLayout* layout = &gui->root.layout;
+	GuiGridLayoutInternal* d = (GuiGridLayoutInternal*)layout->data;
+	return d->data;
+}
+
+void gui_grid_layout_update(GuiGridLayoutData data)
+{
+	u32 type = gui->register_ids.layout_grid;
+	if (imgui_write_layout_update(type)) {
+
+		u8 update = 0;
+		gui_write(update);
+		gui_write_(&data, sizeof(data));
+	}
+}
+
+void gui_grid_layout_update_height(f32 height, GuiUnit height_unit)
+{
+	u32 type = gui->register_ids.layout_grid;
+	if (imgui_write_layout_update(type)) {
+
+		u8 update = 1;
+
+		GuiDimension h;
+		h = (GuiDimension){ height, height_unit };
+
+		gui_write(update);
+		gui_write(h);
+	}
+}
+
+void gui_grid_layout_update_columns(u32 columns)
+{
+	u32 type = gui->register_ids.layout_grid;
+	if (imgui_write_layout_update(type)) {
+
+		u8 update = 2;
+
+		gui_write(update);
+		gui_write(columns);
+	}
+}
+
+static void grid_layout_initialize(GuiParent* parent)
+{
+	GuiLayout* layout = &parent->layout;
+	GuiGridLayoutInternal* d = (GuiGridLayoutInternal*)layout->data;
+	d->data.height = (GuiDimension){ 1.f, GuiUnit_Aspect };
+	d->data.horizontal_margin = (GuiDimension){ 10.f, GuiUnit_Pixel };
+	d->data.vertical_margin = (GuiDimension){ 10.f, GuiUnit_Pixel };
+	d->data.horizontal_padding = (GuiDimension){ 5.f, GuiUnit_Pixel };
+	d->data.vertical_padding = (GuiDimension){ 5.f, GuiUnit_Pixel };
+	d->data.columns = 5;
+	d->count = 0;
+}
+
+static v4 grid_layout_compute_bounds(GuiParent* parent)
+{
+	GuiLayout* layout = &parent->layout;
+	GuiGridLayoutInternal* d = (GuiGridLayoutInternal*)layout->data;
+
+	f32 row = (f32)(d->count / d->data.columns);
+	f32 column = (f32)(d->count % d->data.columns);
+
+	f32 h_margin = gui_compute_dimension(d->data.horizontal_margin, FALSE, parent->widget_bounds.z);
+	f32 v_margin = gui_compute_dimension(d->data.vertical_margin, TRUE, parent->widget_bounds.w);
+	f32 h_padding = gui_compute_dimension(d->data.horizontal_padding, FALSE, parent->widget_bounds.z);
+	f32 v_padding = gui_compute_dimension(d->data.vertical_padding, TRUE, parent->widget_bounds.w);
+
+	f32 width = (1.f - h_margin * 2.f - (f32)d->data.columns * h_padding) / (f32)d->data.columns;
+	f32 height = gui_compute_dimension(d->data.height, TRUE, parent->widget_bounds.w);
+
+	f32 x = h_margin + column * (width + h_padding) + width * 0.5f;
+	f32 y = 1.f - (v_margin + row * (height + v_padding)) - height * 0.5f;
+
+	d->count++;
+
+	return v4_set(x, y, width, height);
+}
+
+static u8* grid_layout_update(GuiParent* parent, u8* it)
+{
+	GuiLayout* layout = &parent->layout;
+	GuiGridLayoutInternal* d = (GuiGridLayoutInternal*)layout->data;
+
+	u8 update;
+	gui_read(it, update);
+
+	switch (update)
+	{
+	case 0:
+		gui_read(it, d->data);
+		break;
+
+	case 1:
+		gui_read(it, d->data.height);
+		break;
+
+	case 2:
+		gui_read(it, d->data.columns);
+		break;
+
+	}
+
+	return it;
+}
+
 static void register_default_layouts()
 {
 	gui->layout_registers[1].initialize_fn = stack_layout_initialize;
@@ -1038,5 +1171,11 @@ static void register_default_layouts()
 	string_copy(gui->layout_registers[2].name, "free", NAME_SIZE);
 	gui->register_ids.layout_free = 2;
 
-	gui->layout_register_count = 3;
+	gui->layout_registers[3].initialize_fn = grid_layout_initialize;
+	gui->layout_registers[3].compute_bounds_fn = grid_layout_compute_bounds;
+	gui->layout_registers[3].update_fn = grid_layout_update;
+	string_copy(gui->layout_registers[3].name, "grid", NAME_SIZE);
+	gui->register_ids.layout_grid = 3;
+
+	gui->layout_register_count = 4;
 }

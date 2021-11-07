@@ -85,6 +85,11 @@ void gui_draw(GPUImage* image, CommandList cmd);
 void gui_push_id(u64 id);
 void gui_pop_id(u32 count);
 
+inline void gui_push_string_id(const char* str) 
+{
+	gui_push_id((u64)str);
+}
+
 void gui_free_focus();
 void gui_set_focus(GuiWidget* widget, u64 parent_id, u32 action);
 
@@ -146,7 +151,7 @@ typedef void(*GuiDrawableFn)(GuiWidget* widget);
 b8 gui_button(const char* text, u64 flags);
 void gui_drawable(GuiDrawableFn fn, u64 flags);
 
-// Default layouts
+// Stack layout
 
 typedef struct {
 	GuiDimension width;
@@ -158,6 +163,8 @@ typedef struct {
 GuiStackLayoutData gui_stack_layout_get_data();
 void gui_stack_layout_update(GuiStackLayoutData data);
 void gui_stack_layout_update_size(f32 width, GuiUnit width_unit, f32 height, GuiUnit height_unit);
+
+// Free layout
 
 typedef struct {
 
@@ -174,3 +181,19 @@ void gui_free_layout_update_x(f32 value, GuiUnit unit, GuiCoordAlign align);
 void gui_free_layout_update_y(f32 value, GuiUnit unit, GuiCoordAlign align);
 void gui_free_layout_update_width(f32 value, GuiUnit unit);
 void gui_free_layout_update_height(f32 value, GuiUnit unit);
+
+// Grid layout
+
+typedef struct {
+	u32 columns;
+	GuiDimension height;
+	GuiDimension horizontal_margin;
+	GuiDimension vertical_margin;
+	GuiDimension horizontal_padding;
+	GuiDimension vertical_padding;
+} GuiGridLayoutData;
+
+GuiGridLayoutData gui_grid_layout_get_data();
+void gui_grid_layout_update(GuiGridLayoutData data);
+void gui_grid_layout_update_height(f32 height, GuiUnit height_unit);
+void gui_grid_layout_update_columns(u32 columns);
