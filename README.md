@@ -7,8 +7,10 @@ The base of my projects.
 <p>- Immediate Mode Rendering</p>
 <p>- Linear algebra libarary</p>
 <p>- Web Network</p>
+<p>- Task System</p>
 <p>- Data structures</p>
 <p>- Memory management and debugging</p>
+<p>- Event system</p>
 <p>- String utils</p>
 <p>- Random number generator</p>
 <p>- Perlin Noise Function 1D and 2D</p>
@@ -16,9 +18,7 @@ The base of my projects.
 <p>- Serialization</p>
 <p>- 3D model loader</p>
 <p>- Profiler</p>
-<p>- Task System</p>
 
 <h2>Future</h2>
 <p>- Debug console</p>
-<p>- Event system</p>
 <p>- Asset System</p>
