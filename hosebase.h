@@ -3,6 +3,7 @@
 #include "Hosebase/os.h"
 #include "Hosebase/graphics.h"
 #include "Hosebase/input.h"
+#include "Hosebase/event_system.h"
 #include "Hosebase/serialize.h"
 #include "Hosebase/font.h"
 #include "Hosebase/networking.h"
@@ -24,6 +25,10 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 	core.frame_count = 0u;
 	core.delta_time = 0.f;
 	core.time_step = 1.f;
+
+	if (!_event_initialize()) {
+		SV_LOG_ERROR("Can't initialize event system\n");
+	}
 	
 	if (!_os_initialize(&desc->os)) {
 		SV_LOG_ERROR("Can't initialize os layer\n");
@@ -81,6 +86,7 @@ inline void hosebase_close()
 	
 	_input_close();
 	_os_close();
+	_event_close();
 }
 
 inline b8 hosebase_frame_begin()
