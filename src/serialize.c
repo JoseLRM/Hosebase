@@ -918,6 +918,7 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 	}
 
 	// Centralize meshes
+	/*
 	foreach(mi, model_info->meshes.size) {
 
 		MeshInfo* mesh = (MeshInfo*)array_get(&model_info->meshes, mi);
@@ -955,6 +956,7 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 
 		mesh->transform_matrix = mat4_multiply(mat4_translate_v3(center), mat4_scale_f32(dim));
 	}
+	*/
 
 	return TRUE;
 }
