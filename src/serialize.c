@@ -10,6 +10,13 @@
 
 #include "Hosebase/external/stbi_lib.h"
 
+#define MINIZ_USE_UNALIGNED_LOADS_AND_STORES 1
+#define MINIZ_LITTLE_ENDIAN 1
+#define MINIZ_HAS_64BIT_REGISTERS 1
+#define MINIZ_NO_STDIO
+
+#include "Hosebase/external/miniz/miniz.c"
+
 b8 load_image(const char* filepath_, void** pdata, u32* width, u32* height)
 {
 	char filepath[FILE_PATH_SIZE];
@@ -505,11 +512,10 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 							break;
 						}
 					}
-						
+					
 					if (index == u32_max) {
 							
-						SV_LOG_ERROR("Material %s not found, line %u", texpath, line_count + 1);
-						corrupted = TRUE;
+						SV_LOG_ERROR("Material %s not found, line %u\n", texpath, line_count + 1);
 					}
 					else {
 							
@@ -961,6 +967,179 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 	return TRUE;
 }
 
+///////////////////////////////////////////////////////////// FBX FORMAT ///////////////////////////////////////////////////
+
+static void read_fbx_node(Deserializer* s)
+{
+	u32 end_offset;
+	u32 num_properties;
+	u32 property_list_length;
+	u8 name_length;
+	char name[256];
+
+	deserialize_u32(s, &end_offset);
+	deserialize_u32(s, &num_properties);
+	deserialize_u32(s, &property_list_length);
+	deserialize_u8(s, &name_length);
+	deserializer_read(s, name, name_length);
+	name[name_length] = '\0';
+
+	SV_LOG_INFO("Node: %s\n", name);
+
+	// Properties
+	foreach(i, num_properties) {
+
+		char type_code;
+
+		deserialize_char(s, &type_code);
+
+		switch (type_code)
+		{
+		case 'Y':
+		{
+			i16 i;
+			deserialize_i16(s, &i);
+			SV_LOG_INFO("i16: %i\n", (i32)i);
+		}
+		break;
+
+		case 'C':
+		{
+			b8 i;
+			deserialize_b8(s, &i);
+			SV_LOG_INFO("b8: %i\n", (i32)i);
+		}
+		break;
+
+		case 'I':
+		{
+			i32 i;
+			deserialize_i32(s, &i);
+			SV_LOG_INFO("i32: %i\n", i);
+		}
+		break;
+
+		case 'F':
+		{
+			f32 i;
+			deserialize_f32(s, &i);
+			SV_LOG_INFO("f32: %f\n", i);
+		}
+		break;
+
+		case 'D':
+		{
+			f64 i;
+			deserialize_f64(s, &i);
+			SV_LOG_INFO("f64: %f\n", (f32)i);
+		}
+		break;
+
+		case 'L':
+		{
+			i64 i;
+			deserialize_i64(s, &i);
+			SV_LOG_INFO("i64: %f\n", (i32)i);
+		}
+		break;
+
+		case 'R':
+		{
+			u32 size;
+			deserialize_u32(s, &size);
+			char* data = memory_allocate(size);
+			deserializer_read(s, data, size);
+			memory_free(data);
+		}
+		break;
+
+		case 'S':
+		{
+			u32 size;
+			deserialize_u32(s, &size);
+			char* data = memory_allocate(size + 1);
+			deserializer_read(s, data, size);
+			data[size] = '\0';
+			SV_LOG_INFO("String: %s\n", data);
+			memory_free(data);
+		}
+		break;
+
+		case 'f':
+		case 'd':
+		case 'l':
+		case 'i':
+		case 'b':
+		{
+			u32 length;
+			u32 encoding;
+			u32 compressed_length;
+
+			deserialize_u32(s, &length);
+			deserialize_u32(s, &encoding);
+			deserialize_u32(s, &compressed_length);
+
+			if (encoding == 0) {
+				SV_LOG_INFO("Sos re trol\n");
+			}
+			else if (encoding == 1) {
+
+				mz_zip_archive zip;
+				mz_zip_zero_struct(&zip);
+
+				//mz_zip_read_archive_data(mz_zip_archive * pZip, mz_uint64 file_ofs, void* pBuf, size_t n);
+
+				if (mz_zip_reader_init_mem(&zip, s->data + s->cursor, compressed_length, 0)) {
+
+					mz_zip_reader_end(&zip);
+				}
+			}
+
+			s->cursor += compressed_length;
+		}
+		break;
+
+		default:
+			i = num_properties;
+			SV_LOG_ERROR("Node '%s' corrupted\n", name);
+			break;
+
+		}
+	}
+
+	// Nested list
+	while (s->cursor < end_offset) {
+		
+		read_fbx_node(s);
+	}
+}
+
+static b8 model_load_fbx(ModelInfo* model_info, const char* filepath, char* it, u32 file_size)
+{
+	Deserializer s;
+	deserializer_begin_buffer(&s, it, file_size);
+
+	// Header
+	{
+		char magic[21];
+		deserializer_read(&s, magic, 21);
+		SV_LOG_INFO("Magic: %s\n", magic);
+		
+		s.cursor = 23;
+		u32 version;
+		deserialize_u32(&s, &version);
+		SV_LOG_INFO("Version: %u\n", version);
+	}
+
+	while (s.cursor < file_size - 13) {
+
+		read_fbx_node(&s);
+	}
+	
+	deserializer_end_buffer(&s);
+	return TRUE;
+}
+
 b8 model_load(ModelInfo* model_info, const char* filepath)
 {
 	const char* model_extension = filepath_extension(filepath);
@@ -970,9 +1149,26 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 		return FALSE;
 	}
 
-	if (!string_equals(model_extension, ".obj")) {
-		SV_LOG_ERROR("Model format '%s' not supported", model_extension);
-		return FALSE;
+	u32 model_format = u32_max;
+
+	{
+		const char* supported_formats[] = {
+			".obj",
+			".fbx"
+		};
+
+		foreach(i, SV_ARRAY_SIZE(supported_formats)) {
+
+			if (string_equals(model_extension, supported_formats[i])) {
+				model_format = i;
+				break;
+			}
+		}
+
+		if (model_format == u32_max) {
+			SV_LOG_ERROR("Model format '%s' not supported", model_extension);
+			return FALSE;
+		}
 	}
 
 	// Get folder path
@@ -988,12 +1184,20 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 	model_info->meshes = array_init(MeshInfo, 1.3f);
 	model_info->materials = array_init(MaterialInfo, 1.3f);
 	
-	// Load .obj file
+	// Load file
 	u8* file_data = NULL;
 	u32 file_size = 0;
-	if (file_read_text(filepath, &file_data, &file_size)) {
+	if (file_read_binary(filepath, &file_data, &file_size)) {
 		
-		model_load_obj(model_info, filepath, file_data);
+		switch (model_format)
+		{
+		case 0:
+			model_load_obj(model_info, filepath, file_data);
+			break;
+		case 1:
+			model_load_fbx(model_info, filepath, file_data, file_size);
+			break;
+		}
 	}
 	else {
 		SV_LOG_ERROR("Can't load the model '%s', not found", filepath);
