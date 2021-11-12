@@ -1093,7 +1093,7 @@ static void read_fbx_node(Deserializer* s)
 		}
 		break;
 
-		default:
+		deafault:
 			i = num_properties;
 			SV_LOG_ERROR("Node '%s' corrupted\n", name);
 			break;
@@ -1400,7 +1400,89 @@ corrupted:
 
 static b8 xml_next(XMLElement* e)
 {
+	if (e->level == 0)
+		return FALSE;
 
+	const char* c = e->end;
+
+	while (1) {
+
+		while (*c != '\0' && *c != '<' && *c != '/') {
+			++c;
+		}
+
+		if (*c == '\0') {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+		else if (*c == '/') {
+			return FALSE;
+		}
+		else if (*(c + 1) == '/')
+			return FALSE;
+
+		++c;
+
+		const char* begin = c - 1;
+		const char* end = xml_find_end(begin);
+
+		if (end == NULL) {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+
+		if (xml_string_equals(c, e->begin + 1)) {
+
+			e->begin = begin;
+			e->end = end;
+			break;
+		}
+		else {
+
+			c = end;
+		}
+	}
+
+	return TRUE;
+}
+
+static b8 xml_element_content(XMLElement* e, const char** pbegin, const char** pend)
+{
+	// Begin
+	{
+		const char* c = e->begin + 1;
+
+		while (*c != '\0' && *c != '>' && *c != '/') {
+			++c;
+		}
+
+		if (*c == '/')
+			return FALSE;
+		else if (*c == '\0') {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+
+		++c;
+		*pbegin = c;
+	}
+
+	// End
+	{
+		const char* c = e->end - 1;
+		while ((e->data + 4) < c && *c != '/' && *c != '<') {
+			--c;
+		}
+
+		if (*c == '/' && *(c - 1) == '<') {
+			*pend = c - 1;
+			return TRUE;
+		}
+		else {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+	}
 }
 
 static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, u32 file_size)
@@ -1416,6 +1498,33 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 	if (xml_enter_child(&geometries, "library_geometries")) {
 
+		XMLElement geo = geometries;
+
+		if (xml_enter_child(&geo, "geometry")) {
+			do {
+
+				XMLElement e = geo;
+
+				if (xml_enter_child(&e, "mesh") && xml_enter_child(&e, "triangles") && xml_enter_child(&e, "p")) {
+
+					const char* begin;
+					const char* end;
+
+					if (xml_element_content(&e, &begin, &end)) {
+
+						u32 size = end - begin;
+						char* str = memory_allocate(size + 1);
+
+						memory_copy(str, begin, size);
+						str[size] = '\0';
+						SV_LOG_INFO("Floats: %s\n", str);
+
+						memory_free(str);
+					}
+				}
+				
+			} while (xml_next(&geo));
+		}
 	}
 	else {
 		SV_LOG_ERROR("Library geometries not found in .dae\n");
