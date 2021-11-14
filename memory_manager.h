@@ -643,6 +643,44 @@ inline const char* line_read_i32(const char* it, i32* value, const char* delimit
 	return it;
 }
 
+inline const char* line_read_u32(const char* it, u32* value, const char* delimiters, u32 delimiter_count, b8* pres)
+{
+	*value = 0;
+	it = line_jump_spaces(it);
+
+	if (pres)* pres = FALSE;
+	const char* start = it;
+
+	while (*it != '\0' && *it != '\n' && *it != '\r') {
+
+		b8 end = FALSE;
+
+		foreach(i, delimiter_count)
+			if (delimiters[i] == *it) end = TRUE;
+
+		if (end)
+			break;
+
+		if (!char_is_number(*it))
+			return start;
+		++it;
+	}
+
+	if (it == start) return start;
+
+	u32 size = it - start;
+
+	char value_str[20u];
+	memory_copy(value_str, start, size);
+	value_str[size] = '\0';
+
+	string_to_u32(value, value_str);
+	
+	if (pres) *pres = TRUE;
+
+	return it;
+}
+
 inline const char* line_read_v3(const char* it, v3* value, b8* res)
 {
 	it = line_read_f32(it, &value->x, res);

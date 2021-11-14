@@ -68,7 +68,425 @@ b8 bin_write(u64 hash, const void* data, u32 size)
   return serialize_end(serializer, filepath);
   }*/
 
-///////////////////////////////////////////// MESH LOADING /////////////////////////////////////////////
+///////////////////////////////////////////// XML LOADER ////////////////////////////////////////////
+
+inline b8 xml_string_equals(const char* str0, const char* str1)
+{
+	while (*str0 != '\0' && *str1 != '\0') {
+
+		if (*str0 == '>' || *str0 == '/' || *str0 == ' ') {
+			str0 = " ";
+		}
+		if (*str1 == '>' || *str1 == '/' || *str1 == ' ') {
+			str1 = " ";
+		}
+
+		if (*str0 != *str1) {
+			return FALSE;
+		}
+
+		++str0;
+		++str1;
+	}
+
+	return *str0 == *str1;
+}
+
+inline const char* xml_exit_tag(const char* c)
+{
+	while (*c != '\0' && *c != '>') {
+
+		if (*c == '/' && *(c + 1) == '>') {
+			++c;
+			break;
+		}
+
+		++c;
+	}
+
+	if (*c == '\0') return c;
+
+	return c + 1;
+}
+
+inline const char* xml_find_end(const char* begin)
+{
+	const char* c = begin + 1;
+	const char* name_begin = c;
+	i32 level = 0;
+
+	// Exit from tag
+	{
+		while (*c != '\0' && *c != '>') {
+
+			if (*c == '/' && *(c + 1) == '>') {
+				break;
+			}
+
+			++c;
+		}
+
+		if (*c == '\0') return NULL;
+		if (*c == '/') {
+			return c + 2;
+		}
+		else {
+			++c;
+		}
+	}
+
+	// Find close tag
+	{
+		while (1) {
+			while (*c != '\0' && *c != '<') {
+
+				if (*c == '/' && *(c + 1) == '>') {
+					level--;
+					++c;
+				}
+
+				++c;
+			}
+
+			if (*c == '\0')
+				return NULL;
+
+			++c;
+
+			if (*c == '/') {
+
+				++c;
+
+				if (level == 0 && xml_string_equals(name_begin, c)) {
+
+					while (*c != '\0' && *c != '>') {
+						++c;
+					}
+
+					if (*c == '>') {
+
+						return c + 1;
+					}
+					else return NULL;
+				}
+				else {
+					level--;
+				}
+			}
+			else level++;
+		}
+	}
+
+	return begin;
+}
+
+inline b8 xml_string_equals_to_normal(const char* xml_str, const char* normal)
+{
+	while (*xml_str != '\0' && *normal != '\0') {
+
+		if (*xml_str == '/' || *xml_str == '>' || *xml_str == ' ') {
+			xml_str = "";
+		}
+
+		if (*xml_str != *normal) {
+			return FALSE;
+		}
+
+		++xml_str;
+		++normal;
+	}
+	return TRUE;
+}
+
+XMLElement xml_begin(const char* data, u32 size)
+{
+	XMLElement e;
+	e.data = data;
+	e.size = size;
+	e.corrupted = FALSE;
+	e.level = 0;
+
+	const char* c = line_jump_spaces(e.data);
+
+	while (!e.corrupted) {
+
+		if (*c == '<') {
+
+			e.begin = c;
+
+			++c;
+
+			if (*c == '?') {
+
+				while (*c != '>' && *c != '\0')
+					c++;
+
+				if (*c == '>') {
+					++c;
+				}
+				else {
+					e.corrupted = TRUE;
+				}
+			}
+			else {
+
+				const char* end = xml_find_end(e.begin);
+
+				if (end) {
+					e.end = end;
+					break;
+				}
+				else {
+					e.corrupted;
+				}
+			}
+		}
+		else if (*c == '\n' || *c == ' ' || *c == '\r' || *c == '\t') {
+			++c;
+		}
+		else {
+			e.corrupted = TRUE;
+		}
+	}
+
+	return e;
+}
+
+u32 xml_name(const XMLElement* e, char* buffer, u32 buffer_size)
+{
+	const char* begin = e->begin + 1;
+	const char* end = begin;
+
+	while (*end != '\0' && *end != '/' && *end != ' ' && *end != '>') {
+		++end;
+	}
+
+	u32 size = end - begin;
+
+	if (buffer_size == 0)
+		return size;
+
+	u32 copy = SV_MIN(size, buffer_size - 1);
+
+	memory_copy(buffer, begin, copy);
+	buffer[copy] = '\0';
+
+	return size - copy;
+}
+
+b8 xml_enter_child(XMLElement* e, const char* name)
+{
+	const char* c = xml_exit_tag(e->begin);
+
+	while (1) {
+
+		while (*c != '\0' && *c != '<' && *c != '>') {
+			++c;
+		}
+
+		if (*c == '\0') {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+		else if (*c == '>') {
+			return FALSE;
+		}
+		else if (*(c + 1) == '/') {
+			return FALSE;
+		}
+
+		++c;
+
+		const char* begin = c - 1;
+		const char* end = xml_find_end(begin);
+
+		if (end == NULL) {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+
+		if (xml_string_equals_to_normal(c, name)) {
+
+			e->begin = begin;
+			e->end = end;
+			e->level++;
+			break;
+		}
+		else {
+
+			c = end;
+		}
+	}
+
+	return TRUE;
+
+corrupted:
+	e->corrupted = TRUE;
+	return FALSE;
+}
+
+b8 xml_next(XMLElement* e)
+{
+	if (e->level == 0)
+		return FALSE;
+
+	const char* c = e->end;
+
+	while (1) {
+
+		while (*c != '\0' && *c != '<' && *c != '/') {
+			++c;
+		}
+
+		if (*c == '\0') {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+		else if (*c == '/') {
+			return FALSE;
+		}
+		else if (*(c + 1) == '/')
+			return FALSE;
+
+		++c;
+
+		const char* begin = c - 1;
+		const char* end = xml_find_end(begin);
+
+		if (end == NULL) {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+
+		if (xml_string_equals(c, e->begin + 1)) {
+
+			e->begin = begin;
+			e->end = end;
+			break;
+		}
+		else {
+
+			c = end;
+		}
+	}
+
+	return TRUE;
+}
+
+b8 xml_element_content(XMLElement* e, const char** pbegin, const char** pend)
+{
+	// Begin
+	{
+		const char* c = e->begin + 1;
+
+		while (*c != '\0' && *c != '>' && *c != '/') {
+			++c;
+		}
+
+		if (*c == '/')
+			return FALSE;
+		else if (*c == '\0') {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+
+		++c;
+		*pbegin = c;
+	}
+
+	// End
+	{
+		const char* c = e->end - 1;
+		while ((e->data + 4) < c && *c != '/' && *c != '<') {
+			--c;
+		}
+
+		if (*c == '/' && *(c - 1) == '<') {
+			*pend = c - 1;
+			return TRUE;
+		}
+		else {
+			e->corrupted = TRUE;
+			return FALSE;
+		}
+	}
+}
+
+b8 xml_get_attribute(XMLElement* e, char* buffer, u32 buffer_size, const char* att_name)
+{
+	if (buffer_size == 0 || e->corrupted)
+		return FALSE;
+
+	const char* c = e->begin + 1;
+	while (*c != '\0' && *c != '>') {
+
+		if (*c == ' ' || *c == '\n' || *c == '\t') {
+
+			while (*c == ' ' || *c == '\n' || *c == '\t') {
+				++c;
+			}
+
+			if (*c == '\0' || *c == '>' || *c == '/') {
+				return FALSE;
+			}
+
+			const char* start_name = c;
+
+			while (*c != '\0' && *c != '>' && *c != '=')
+				++c;
+
+			if (*c == '\0' || *c == '>' || *c == '/') {
+				return FALSE;
+			}
+
+			if (*c == '=' && xml_string_equals_to_normal(start_name, att_name)) {
+
+				++c;
+				while (*c == ' ')
+					++c;
+
+				const char* begin = c + 1;
+
+				if (*c == '"') {
+
+					++c;
+
+					while (*c != '\0' && *c != '"')
+						++c;
+
+					if (*c == '\0') {
+						e->corrupted = TRUE;
+						return FALSE;
+					}
+
+					const char* end = c;
+
+					u32 size = end - begin;
+					u32 copy = SV_MIN(size, buffer_size - 1);
+					memory_copy(buffer, begin, copy);
+					buffer[copy] = '\0';
+					return TRUE;
+				}
+			}
+		}
+
+		++c;
+	}
+
+	return FALSE;
+}
+
+b8 xml_get_attribute_u32(XMLElement* e, u32* n, const char* att_name)
+{
+	char str[20];
+	if (xml_get_attribute(e, str, 20, att_name)) {
+
+		return string_to_u32(n, str);
+	}
+	return FALSE;
+}
+
+///////////////////////////////////////////// OBJ FORMAT /////////////////////////////////////////////
 
 inline void set_default_material(MaterialInfo* mat)
 {
@@ -86,7 +504,7 @@ inline void read_mtl(const char* filepath, ModelInfo* model_info)
 	u32 file_size;
 	if (file_read_text(filepath, &file_data, &file_size)) {
 
-		MaterialInfo* mat = array_add(&model_info->materials);
+		MaterialInfo* mat = model_info->materials + model_info->material_count++;
 		set_default_material(mat);
 		b8 use_default = TRUE;
 
@@ -272,7 +690,12 @@ inline void read_mtl(const char* filepath, ModelInfo* model_info)
 							use_default = FALSE;
 						}
 						else {
-							mat = array_add(&model_info->materials);
+							if (model_info->material_count == MODEL_INFO_MAX_MATERIALS) {
+								SV_LOG_ERROR("The file '%s' exceeds the material limit\n", filepath);
+								return;
+							}
+
+							mat = model_info->materials + model_info->material_count;
 						}
 
 						string_set(mat->name, it, name_size, NAME_SIZE);
@@ -496,9 +919,9 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 						
 					u32 index = u32_max;
 						
-					foreach(i, model_info->materials.size) {
+					foreach(i, model_info->material_count) {
 							
-						const MaterialInfo* m = (const MaterialInfo*)array_get(&model_info->materials, i);
+						const MaterialInfo* m = model_info->materials + i;
 							
 						if (string_equals(m->name, texpath)) {
 							index = i;
@@ -828,7 +1251,11 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 
 	// Parse obj format to my own format
 	{
-		foreach(i, meshes.size) {
+		if (meshes.size > MODEL_INFO_MAX_MESHES) {
+			SV_LOG_ERROR("The obj '%s' exceeds the mesh limit\n", filepath);
+		}
+
+		foreach(i, SV_MIN(meshes.size, MODEL_INFO_MAX_MESHES)) {
 
 			ObjMesh* obj_mesh = (ObjMesh*)array_get(&meshes, i);
 				
@@ -860,11 +1287,7 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 				}
 			}
 
-			MeshInfo* mesh = array_add(&model_info->meshes);
-			mesh->positions = array_init(v3, 2.f);
-			mesh->normals = array_init(v3, 2.f);
-			mesh->texcoords = array_init(v2, 2.f);
-			mesh->indices = array_init(u32, 2.f);
+			MeshInfo* mesh = model_info->meshes + model_info->mesh_count++;
 
 			if (obj_mesh->name[0])
 				string_copy(mesh->name, obj_mesh->name, NAME_SIZE);
@@ -872,17 +1295,25 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 			mesh->material_index = obj_mesh->material_index;
 
 			u32 elements = max_position_index - min_position_index + 1u;
+			u32 index_count = obj_mesh->triangles.size * 3u;
 
-			array_resize(&mesh->positions, elements);
-			array_resize(&mesh->normals, elements);
-			array_resize(&mesh->texcoords, elements);
+			{
+				u32 memory_size = elements * (sizeof(v3) + sizeof(v3) + sizeof(v2)) + index_count * sizeof(u32);
+				mesh->_memory = memory_allocate(memory_size);
 
-			array_resize(&mesh->indices, obj_mesh->triangles.size * 3u);
+				mesh->positions = (v3*)mesh->_memory;
+				mesh->normals = (v3*)(mesh->_memory + elements * (sizeof(v3)));
+				mesh->texcoords = (v2*)(mesh->_memory + elements * (sizeof(v3) + sizeof(v3)));
+				mesh->indices = (u32*)(mesh->_memory + elements * (sizeof(v3) + sizeof(v3) + sizeof(v2)));
 
-			memory_copy(mesh->positions.data, positions.data + min_position_index, elements * sizeof(v3));
+				mesh->vertex_count = elements;
+				mesh->index_count = index_count;
+			}
+
+			memory_copy(mesh->positions, positions.data + min_position_index, elements * sizeof(v3));
 
 			const ObjTriangle* it0 = (const ObjTriangle*)obj_mesh->triangles.data;
-			u32* it1 = (u32*)mesh->indices.data;
+			u32* it1 = mesh->indices;
 			const ObjTriangle* end = it0 + obj_mesh->triangles.size;
 
 			i32 max = (i32)positions.size;
@@ -898,8 +1329,8 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 
 					// TODO: Handle errors
 
-					v3* normal_dst = (v3*)array_get(&mesh->normals, index);
-					v2* texcoord_dst = (v2*)array_get(&mesh->texcoords, index);
+					v3* normal_dst = mesh->normals + index;
+					v2* texcoord_dst = mesh->texcoords + index;
 
 					v3* normal_src = (v3*)array_get(&normals, normal_index);
 					v2* texcoord_src = (v2*)array_get(&texcoords, texcoord_index);
@@ -1139,361 +1570,128 @@ static b8 model_load_fbx(ModelInfo* model_info, const char* filepath, char* it, 
 
 typedef struct {
 
-	b8 corrupted;
-	const char* data;
-	u32 size;
+	char name[NAME_SIZE];
+	char geometry_id[100];
+	char controller_id[100];
 
-	i32 level;
-	const char* begin;
-	const char* end;
+	u8* _memory;
 
-} XMLElement;
+	v3* positions;
+	v3* normals;
+	v2* texcoords;
 
-inline b8 xml_string_equals(const char* str0, const char* str1)
+	u32 position_count;
+	u32 normal_count;
+	u32 texcoord_count;
+
+	u32* indices;
+	u32 index_count; // Thats the real mesh index count. xml_index_count = index_count * index_stride
+	u32 index_stride;
+
+	Mat4 local_matrix;
+	Mat4 global_matrix;
+	Mat4 bind_matrix;
+	u32 material_index;
+
+} DaeMeshInfo;
+
+typedef struct {
+	DaeMeshInfo meshes[MODEL_INFO_MAX_MESHES];
+	u32 mesh_count;
+} DaeModelInfo;
+
+inline const char* dae_read_f32(const char* it, f32* value, b8* res)
 {
-	while (*str0 != '\0' && *str1 != '\0') {
+	*value = 0.f;
+	it = line_jump_spaces(it);
 
-		if (*str0 == '>' || *str0 == '/' || *str0 == ' ') {
-			str0 = " ";
-		}
-		if (*str1 == '>' || *str1 == '/' || *str1 == ' ') {
-			str1 = " ";
-		}
+	if (res)* res = FALSE;
+	const char* start = it;
 
-		if (*str0 != *str1) {
-			return FALSE;
-		}
+	if (*it == '-') ++it;
 
-		++str0;
-		++str1;
+	u32 dots = 0u;
+
+	while (*it != '\0' && *it != ' ' && *it != '\n' && *it != '\r' && *it != '<' && *it != 'e') {
+		if (!char_is_number(*it) && *it != '.')
+			return start;
+
+		if (*it == '.')
+			++dots;
+
+		++it;
 	}
 
-	return *str0 == *str1;
+	if (it == start || dots > 1) return start;
+
+	u32 size = it - start;
+
+	char value_str[20u];
+	memory_copy(value_str, start, size);
+	value_str[size] = '\0';
+	// TODO: Use my own function
+	*value = (f32)atof(value_str);
+
+	if (*it == 'e') {
+		++it;
+		i32 v;
+
+		const char* delimiters = " >";
+
+		b8 r;
+		it = line_read_i32(it, &v, delimiters, string_size(delimiters), &r);
+		if (r) {
+
+			*value *= pow(10.f, v);
+		}
+		else return start;
+	}
+
+	if (res) *res = TRUE;
+
+	return it;
 }
 
-inline const char* xml_exit_tag(const char* c)
+inline b8 dae_read_float_buffer(const char* begin, const char* end, f32* dst, u32 count, u32 stride)
 {
-	while (*c != '\0' && *c != '>') {
+	b8 res = TRUE;
+	u32 i = 0;
+	const char* c = begin;
+	while (i < count && c < end && res) {
 
-		if (*c == '/' && *(c + 1) == '>') {
-			++c;
-			break;
-		}
+		u32 j = 0;
 
-		++c;
+		do {
+			c = dae_read_f32(c, dst++, &res);
+		} while (++j < stride && res);
+
+		++i;
 	}
 
-	if (*c == '\0') return c;
-	
-	return c + 1;
+	return res;
 }
 
-inline const char* xml_find_end(const char* begin)
+b8 dae_read_uint_buffer(const char* begin, const char* end, u32* dst, u32 count)
 {
-	const char* c = begin + 1;
-	const char* name_begin = c;
-	i32 level = 0;
+	char delimiters[] = {
+		'<', ' '
+	};
 
-	// Exit from tag
-	{
-		while (*c != '\0' && *c != '>') {
+	b8 res = TRUE;
+	u32 i = 0;
+	const char* c = begin;
+	while (i < count && c < end && res) {
 
-			if (*c == '/' && *(c + 1) == '>') {
-				break;
-			}
-
-			++c;
-		}
-
-		if (*c == '\0') return NULL;
-		if (*c == '/') {
-			return c + 2;
-		}
-		else {
-			++c;
-		}
+		u32 j = 0;
+		c = line_read_u32(c, dst++, delimiters, SV_ARRAY_SIZE(delimiters), &res);
+		++i;
 	}
 
-	// Find close tag
-	{
-		while (1) {
-			while (*c != '\0' && *c != '<') {
-
-				if (*c == '/' && *(c + 1) == '>') {
-					level--;
-					++c;
-				}
-
-				++c;
-			}
-
-			if (*c == '\0') 
-				return NULL;
-
-			++c;
-
-			if (*c == '/') {
-
-				++c;
-
-				if (level == 0 && xml_string_equals(name_begin, c)) {
-
-					while (*c != '\0' && *c != '>') {
-						++c;
-					}
-
-					if (*c == '>') {
-
-						return c + 1;
-					}
-					else return NULL;
-				}
-				else {
-					level--;
-				}
-			}
-			else level++;
-		}
-	}
-
-	return begin;
+	return res;
 }
 
-static XMLElement xml_begin(const char* data, u32 size)
+static b8 dae_load_geometry(DaeModelInfo* model_info, XMLElement root, const char* filepath)
 {
-	XMLElement e;
-	e.data = data;
-	e.size = size;
-	e.corrupted = FALSE;
-	e.level = 0;
-
-	const char*c = line_jump_spaces(e.data);
-
-	while (!e.corrupted) {
-
-		if (*c== '<') {
-
-			e.begin = c;
-
-			++c;
-
-			if (*c == '?') {
-
-				while (*c != '>' && *c != '\0')
-					c++;
-
-				if (*c == '>') {
-					++c;
-				}
-				else {
-					e.corrupted = TRUE;
-				}
-			}
-			else {
-
-				const char* end = xml_find_end(e.begin);
-
-				if (end) {
-					e.end = end;
-					break;
-				}
-				else {
-					e.corrupted;
-				}
-			}
-		}
-		else if (*c == '\n' || *c == ' ' || *c == '\r' || *c == '\t') {
-			++c;
-		}
-		else {
-			e.corrupted = TRUE;
-		}
-	}
-
-	return e;
-}
-
-static u32 xml_name(const XMLElement* e, char* buffer, u32 buffer_size)
-{
-	const char* begin = e->begin + 1;
-	const char* end = begin;
-
-	while (*end != '\0' && *end != '/' && *end != ' ' && *end != '>') {
-		++end;
-	}
-
-	u32 size = end - begin;
-
-	if (buffer_size == 0)
-		return size;
-
-	u32 copy = SV_MIN(size, buffer_size - 1);
-
-	memory_copy(buffer, begin, copy);
-	buffer[copy] = '\0';
-
-	return size - copy;
-}
-
-inline b8 xml_string_equals_to_normal(const char* xml_str, const char* normal)
-{
-	while (*xml_str != '\0' && *normal != '\0') {
-
-		if (*xml_str == '/' || *xml_str == '>' || *xml_str == ' ') {
-			xml_str = "";
-		}
-
-		if (*xml_str != *normal) {
-			return FALSE;
-		}
-
-		++xml_str;
-		++normal;
-	}
-	return TRUE;
-}
-
-static b8 xml_enter_child(XMLElement* e, const char* name)
-{
-	const char* c = xml_exit_tag(e->begin);
-
-	while (1) {
-
-		while (*c != '\0' && *c != '<') {
-			++c;
-		}
-
-		if (*c == '\0') {
-			e->corrupted = TRUE;
-			return FALSE;
-		}
-
-		++c;
-
-		const char* begin = c - 1;
-		const char* end = xml_find_end(begin);
-
-		if (end == NULL) {
-			e->corrupted = TRUE;
-			return FALSE;
-		}
-
-		if (xml_string_equals_to_normal(c, name)) {
-
-			e->begin = begin;
-			e->end = end;
-			e->level++;
-			break;
-		}
-		else {
-
-			c = end;
-		}
-	}
-
-	return TRUE;
-
-corrupted:
-	e->corrupted = TRUE;
-	return FALSE;
-}
-
-static b8 xml_next(XMLElement* e)
-{
-	if (e->level == 0)
-		return FALSE;
-
-	const char* c = e->end;
-
-	while (1) {
-
-		while (*c != '\0' && *c != '<' && *c != '/') {
-			++c;
-		}
-
-		if (*c == '\0') {
-			e->corrupted = TRUE;
-			return FALSE;
-		}
-		else if (*c == '/') {
-			return FALSE;
-		}
-		else if (*(c + 1) == '/')
-			return FALSE;
-
-		++c;
-
-		const char* begin = c - 1;
-		const char* end = xml_find_end(begin);
-
-		if (end == NULL) {
-			e->corrupted = TRUE;
-			return FALSE;
-		}
-
-		if (xml_string_equals(c, e->begin + 1)) {
-
-			e->begin = begin;
-			e->end = end;
-			break;
-		}
-		else {
-
-			c = end;
-		}
-	}
-
-	return TRUE;
-}
-
-static b8 xml_element_content(XMLElement* e, const char** pbegin, const char** pend)
-{
-	// Begin
-	{
-		const char* c = e->begin + 1;
-
-		while (*c != '\0' && *c != '>' && *c != '/') {
-			++c;
-		}
-
-		if (*c == '/')
-			return FALSE;
-		else if (*c == '\0') {
-			e->corrupted = TRUE;
-			return FALSE;
-		}
-
-		++c;
-		*pbegin = c;
-	}
-
-	// End
-	{
-		const char* c = e->end - 1;
-		while ((e->data + 4) < c && *c != '/' && *c != '<') {
-			--c;
-		}
-
-		if (*c == '/' && *(c - 1) == '<') {
-			*pend = c - 1;
-			return TRUE;
-		}
-		else {
-			e->corrupted = TRUE;
-			return FALSE;
-		}
-	}
-}
-
-static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, u32 file_size)
-{
-	XMLElement root = xml_begin(it, file_size);
-
-	if (root.corrupted) {
-		SV_LOG_ERROR("Corrupted .dae\n");
-		return FALSE;
-	}
-
 	XMLElement geometries = root;
 
 	if (xml_enter_child(&geometries, "library_geometries")) {
@@ -1503,26 +1701,198 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 		if (xml_enter_child(&geo, "geometry")) {
 			do {
 
-				XMLElement e = geo;
+				DaeMeshInfo* mesh;
+				{
+					if (model_info->mesh_count >= MODEL_INFO_MAX_MESHES) {
+						SV_LOG_ERROR("The dae file '%s' exceeds the mesh limit\n", filepath);
+						break;
+					}
+					
+					mesh = model_info->meshes + model_info->mesh_count++;
+				}
 
-				if (xml_enter_child(&e, "mesh") && xml_enter_child(&e, "triangles") && xml_enter_child(&e, "p")) {
+				if (!xml_get_attribute(&geo, mesh->name, NAME_SIZE, "name")) {
+					SV_LOG_ERROR("A geometry element haven't name\n");
+					continue;
+				}
+				if (!xml_get_attribute(&geo, mesh->geometry_id, 100, "id")) {
+					SV_LOG_ERROR("A geometry element haven't id\n");
+					continue;
+				}
+				u32 mesh_name_size = string_size(mesh->name);
 
-					const char* begin;
-					const char* end;
+				SV_LOG_INFO("Mesh: %s\n", mesh->name);
 
-					if (xml_element_content(&e, &begin, &end)) {
+				mesh->material_index = u32_max;
+				mesh->local_matrix = mat4_identity();
+				mesh->global_matrix = mat4_identity();
+				mesh->bind_matrix = mat4_identity();
 
-						u32 size = end - begin;
-						char* str = memory_allocate(size + 1);
+				XMLElement xml_mesh = geo;
 
-						memory_copy(str, begin, size);
-						str[size] = '\0';
-						SV_LOG_INFO("Floats: %s\n", str);
+				if (xml_enter_child(&xml_mesh, "mesh")) {
 
-						memory_free(str);
+					XMLElement src = xml_mesh;
+
+					const char* begin_position = NULL;
+					const char* begin_normal = NULL;
+					const char* begin_texcoord = NULL;
+					const char* begin_index = NULL;
+
+					const char* end_position = NULL;
+					const char* end_normal = NULL;
+					const char* end_texcoord = NULL;
+					const char* end_index = NULL;
+
+					u32 position_count = 0;
+					u32 normal_count = 0;
+					u32 texcoord_count = 0;
+					u32 index_count = 0;
+
+					// TODO: Should compute this value from xml
+					u32 index_stride = 3;
+
+					if (xml_enter_child(&src, "source")) {
+
+						do {
+
+							char src_name[100];
+							if (xml_get_attribute(&src, src_name, 100, "id")) {
+
+								u32 src_name_size = string_size(src_name);
+								if (src_name_size <= mesh_name_size) {
+									SV_LOG_ERROR("Some geometry naming is wrong\n");
+									continue;
+								}
+
+								const char* n = src_name + mesh_name_size;
+
+								// Positions
+								if (string_equals(n, "-mesh-positions")) {
+
+									XMLElement floats = src;
+									if (xml_enter_child(&floats, "float_array")) {
+
+										u32 count;
+										if (xml_get_attribute_u32(&floats, &count, "count")) {
+
+											if (xml_element_content(&floats, &begin_position, &end_position)) {
+												position_count = count / 3;
+											}
+										}
+									}
+								}
+
+								// Normals
+								if (string_equals(n, "-mesh-normals")) {
+
+									XMLElement floats = src;
+									if (xml_enter_child(&floats, "float_array")) {
+
+										u32 count;
+										if (xml_get_attribute_u32(&floats, &count, "count")) {
+
+											if (xml_element_content(&floats, &begin_normal, &end_normal)) {
+												normal_count = count / 3;
+											}
+										}
+									}
+								}
+
+								// Texcoord
+								if (string_equals(n, "-mesh-map-0")) {
+
+									XMLElement floats = src;
+									if (xml_enter_child(&floats, "float_array")) {
+
+										u32 count;
+										if (xml_get_attribute_u32(&floats, &count, "count")) {
+
+											if (xml_element_content(&floats, &begin_texcoord, &end_texcoord)) {
+												texcoord_count = count / 2;
+											}
+										}
+									}
+								}
+							}
+
+						} while (xml_next(&src));
+					}
+
+					// Indices
+					{
+						XMLElement xml_indices = xml_mesh;
+						if (xml_enter_child(&xml_indices, "triangles")) {
+
+							u32 count;
+							if (xml_get_attribute_u32(&xml_indices, &count, "count")) {
+
+								if (xml_enter_child(&xml_indices, "p")) {
+
+									if (xml_element_content(&xml_indices, &begin_index, &end_index)) {
+										index_count = count * 3;
+									}
+								}
+							}
+						}
+					}
+
+					// Construct mesh
+					if (position_count && normal_count && texcoord_count && index_count) {
+
+						// Allocate dae memory
+						{
+							u32 size = position_count * sizeof(v3);
+							size += normal_count * sizeof(v3);
+							size += texcoord_count * sizeof(v2);
+							size += index_count * index_stride * sizeof(u32);
+
+							mesh->_memory = memory_allocate(size);
+
+							mesh->positions = (v3*)mesh->_memory;
+							mesh->normals = (v3*)(mesh->_memory + position_count * sizeof(v3));
+							mesh->texcoords = (v2*)(mesh->_memory + position_count * sizeof(v3) + normal_count * sizeof(v3));
+							mesh->indices = (u32*)(mesh->_memory + position_count * sizeof(v3) + normal_count * sizeof(v3) + texcoord_count * sizeof(v2));
+
+							mesh->position_count = position_count;
+							mesh->normal_count = normal_count;
+							mesh->texcoord_count = texcoord_count;
+							mesh->index_count = index_count;
+							mesh->index_stride = index_stride;
+						}
+
+						// Fill xml vertex data
+						{
+							b8 res = dae_read_float_buffer(begin_position, end_position, (f32*)mesh->positions, position_count, 3);
+
+							if (!res) {
+								SV_LOG_ERROR("Can't read position data properly\n");
+							}
+
+							res = dae_read_float_buffer(begin_normal, end_normal, (f32*)mesh->normals, normal_count, 3);
+
+							if (!res) {
+								SV_LOG_ERROR("Can't read normal data properly\n");
+							}
+
+							res = dae_read_float_buffer(begin_texcoord, end_texcoord, (f32*)mesh->texcoords, texcoord_count, 2);
+
+							if (!res) {
+								SV_LOG_ERROR("Can't read texcoord data properly\n");
+							}
+
+							res = dae_read_uint_buffer(begin_index, end_index, (u32*)mesh->indices, index_count * index_stride);
+
+							if (!res) {
+								SV_LOG_ERROR("Can't read index data properly\n");
+							}
+						}
+					}
+					else {
+						SV_LOG_ERROR("Can't load the mesh '%s'\n", mesh->name);
 					}
 				}
-				
+
 			} while (xml_next(&geo));
 		}
 	}
@@ -1534,7 +1904,379 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 	return TRUE;
 }
 
-b8 model_load(ModelInfo* model_info, const char* filepath)
+static void dae_load_node(DaeModelInfo* model_info, XMLElement node, Mat4 parent_matrix)
+{
+	char type_name[NAME_SIZE];
+	if (!xml_get_attribute(&node, type_name, NAME_SIZE, "type")) {
+		SV_LOG_ERROR("Can't read the type of a node\n");
+		return;
+	}
+
+	Mat4 matrix = mat4_identity();
+	Mat4 global_matrix = parent_matrix;
+
+	{
+		XMLElement xml_matrix = node;
+		if (xml_enter_child(&xml_matrix, "matrix")) {
+
+			const char* begin;
+			const char* end;
+
+			if (xml_element_content(&xml_matrix, &begin, &end)) {
+
+				if (!dae_read_float_buffer(begin, end, (f32*)& matrix, 16, 1)) {
+					SV_LOG_ERROR("Can't read matrix info\n");
+				}
+			}
+		}
+	}
+
+
+	if (string_equals("NODE", type_name)) {
+
+		DaeMeshInfo* mesh = NULL;
+
+		{
+			char id[100];
+			u32 type = 0;
+			XMLElement xml = node;
+
+			if (xml_enter_child(&xml, "instance_geometry")) {
+
+				if (!xml_get_attribute(&xml, id, 100, "url")) {
+					SV_LOG_ERROR("Can't read geometry id\n");
+				}
+				else type = 1;
+			}
+			else if (xml_enter_child(&xml, "instance_controller")) {
+
+				if (!xml_get_attribute(&xml, id, 100, "url")) {
+					SV_LOG_ERROR("Can't read controller id\n");
+				}
+				else type = 2;
+			}
+
+			const char* c = id;
+
+			if (type != 0 && *c == '#') {
+				++c;
+			}
+
+			if (type == 1) {
+
+				foreach(i, model_info->mesh_count) {
+
+					DaeMeshInfo* m = model_info->meshes + i;
+
+					if (string_equals(m->geometry_id, c)) {
+
+						mesh = m;
+						break;
+					}
+				}
+			}
+			else if (type == 2) {
+
+				foreach(i, model_info->mesh_count) {
+
+					DaeMeshInfo* m = model_info->meshes + i;
+
+					if (string_equals(m->controller_id, c)) {
+
+						mesh = m;
+						break;
+					}
+				}
+			}
+
+			if (mesh) {
+				mesh->local_matrix = matrix;
+				mesh->global_matrix = global_matrix;
+			}
+		}
+	}
+	else SV_LOG_ERROR("Unknown node type '%s'\n", type_name);
+
+	// Childs
+	XMLElement child = node;
+	if (xml_enter_child(&child, "node")) {
+		do {
+			dae_load_node(model_info, child, mat4_multiply(global_matrix, matrix));
+		} while (xml_next(&child));
+	}
+}
+
+static b8 dae_load_nodes(DaeModelInfo* model_info, XMLElement root)
+{
+	XMLElement scene = root;
+
+	if (xml_enter_child(&scene, "library_visual_scenes") && xml_enter_child(&scene, "visual_scene")) {
+
+		XMLElement node = scene;
+
+		if (xml_enter_child(&node, "node")) {
+			do {
+
+				dae_load_node(model_info, node, mat4_identity());
+			} 
+			while (xml_next(&node));
+		}
+	}
+	else {
+		SV_LOG_ERROR("Visual scenes tag not found\n");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
+{
+	XMLElement controller = root;
+
+	if (xml_enter_child(&controller, "library_controllers") && xml_enter_child(&controller, "controller")) {
+		do {
+
+			char controller_id[100];
+			if (!xml_get_attribute(&controller, controller_id, 100, "id")) {
+				SV_LOG_ERROR("Can't find the controller id\n");
+				continue;
+			}
+			
+			XMLElement skin = controller;
+
+			if (xml_enter_child(&skin, "skin")) {
+				do {
+
+					char source_str[100];
+					if (!xml_get_attribute(&skin, source_str, 100, "source")) {
+						SV_LOG_ERROR("Can't read source of an skin\n");
+						continue;
+					}
+
+					DaeMeshInfo* mesh = NULL;
+
+					// Find mesh
+					{
+						char* mesh_id = source_str;
+
+						if (*mesh_id == '#')
+							++mesh_id;
+
+						foreach(i, model_info->mesh_count) {
+
+							DaeMeshInfo* m = model_info->meshes + i;
+							if (string_equals(m->geometry_id, mesh_id)) {
+								mesh = m;
+								break;
+							}
+						}
+
+						if (mesh == NULL) {
+							SV_LOG_ERROR("Skin source not found '%s'\n", source_str);
+							continue;
+						}
+					}
+
+					// Set controller id
+					string_copy(mesh->controller_id, controller_id, 100);
+
+					// bind_shape_matrix 
+					Mat4 bind_shape_matrix = mat4_identity();
+					{
+						XMLElement xml = skin;
+						if (xml_enter_child(&xml, "bind_shape_matrix")) {
+
+							const char* begin;
+							const char* end;
+
+							if (xml_element_content(&xml, &begin, &end)) {
+								dae_read_float_buffer(begin, end, (f32*)& bind_shape_matrix, 16, 1);
+							}
+						}
+					}
+
+					if (mesh) {
+						mesh->bind_matrix = bind_shape_matrix;
+					}
+
+				} while (xml_next(&skin));
+			}
+
+		} while (xml_next(&controller));
+	}
+
+	return TRUE;
+}
+
+static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, u32 file_size)
+{
+	DaeModelInfo dae_model_info;
+	SV_ZERO(dae_model_info);
+
+	XMLElement root = xml_begin(it, file_size);
+
+	if (root.corrupted) {
+		SV_LOG_ERROR("Corrupted .dae\n");
+		return FALSE;
+	}
+
+	if (!dae_load_geometry(&dae_model_info, root, filepath)) {
+		SV_LOG_ERROR("Can't load dae geometry '%s'\n", filepath);
+		return FALSE;
+	}
+
+	if (!dae_load_controllers(&dae_model_info, root)) {
+		SV_LOG_ERROR("Can't load dae controllers '%s'\n", filepath);
+		return FALSE;
+	}
+
+	if (!dae_load_nodes(&dae_model_info, root)) {
+		SV_LOG_ERROR("Can't load dae nodes '%s'\n", filepath);
+		return FALSE;
+	}
+
+	// Parse dae info to general info
+	{
+		typedef struct DaeIndex DaeIndex;
+		struct DaeIndex {
+			u64 hash;
+			u32 position;
+			u32 normal;
+			u32 texcoord;
+			u32 index;
+		};
+
+		model_info->mesh_count = dae_model_info.mesh_count;
+
+		foreach(i, dae_model_info.mesh_count) {
+			
+			DaeMeshInfo* dae = dae_model_info.meshes + i;
+			MeshInfo* mesh = model_info->meshes + i;
+
+			mesh->material_index = dae->material_index;
+
+			// TODO: Reuse memory in diferent meshes
+			u32 table_size = (u32)((f32)dae->index_count * 1.5f);
+			DaeIndex* index_table = memory_allocate(table_size * sizeof(DaeIndex));
+
+			foreach(i, dae->index_count) {
+
+				DaeIndex index;
+				index.position = dae->indices[i * dae->index_stride + 0];
+				index.normal = dae->indices[i * dae->index_stride + 1];
+				index.texcoord = dae->indices[i * dae->index_stride + 2];
+
+				index.hash = (u64)index.position | ((u64)index.normal << 32);
+				index.hash = hash_combine(index.hash, index.texcoord);
+
+				DaeIndex* p;
+
+				// Find in table
+				{
+					u32 table_index = index.hash % table_size;
+
+					foreach(i, table_size) {
+
+						u32 index0 = (table_index + i) % table_size;
+						p = index_table + index0;
+
+						if (p->hash == 0 || p->hash == index.hash) {
+							break;
+						}
+					}
+
+					assert_title(p != NULL, "Can't find a space in the dae vertex table");
+
+					if (p != NULL && p->hash == 0) {
+
+						*p = index;
+						p->index = mesh->vertex_count++;
+					}
+				}
+
+				if (p != NULL)
+					dae->indices[i] = p->index;
+			}
+
+			// TODO: Not use indices if is necesary
+			if (mesh->vertex_count == dae->index_count) {
+				SV_LOG_WARNING("The mesh '%s' in model '%s' shouldn't use indexed rendering\n", dae->name, filepath);
+			}
+
+			// Reserve memory
+			{
+				mesh->_memory = memory_allocate(mesh->vertex_count * (sizeof(v3) + sizeof(v3) + sizeof(v2)) + dae->index_count * sizeof(u32));
+
+				u8* it = mesh->_memory;
+
+				mesh->positions = (v3*)it;
+				it += sizeof(v3) * mesh->vertex_count;
+				mesh->normals = (v3*)it;
+				it += sizeof(v3) * mesh->vertex_count;
+				mesh->texcoords = (v2*)it;
+				it += sizeof(v2) * mesh->vertex_count;
+
+				mesh->indices = (u32*)it;
+			}
+
+			// Set index data
+			{
+				memory_copy(mesh->indices, dae->indices, dae->index_count * sizeof(u32));
+				mesh->index_count = dae->index_count;
+			}
+
+			// Set vertex data
+			{
+				// Update positions
+				{
+					Mat4 matrix = mat4_multiply(dae->global_matrix, dae->local_matrix);
+
+					foreach(i, dae->position_count) {
+						v4 p = v3_to_v4(dae->positions[i], 1.f);
+						p = v4_transform(p, matrix);
+						dae->positions[i] = v4_to_v3(p);
+					}
+				}
+				// Positions
+				foreach(i, table_size) {
+
+					DaeIndex* index =  index_table + i;
+					mesh->positions[index->index] = dae->positions[index->position];
+				}
+				// Normals
+				foreach(i, table_size) {
+
+					DaeIndex* index = index_table + i;
+					mesh->normals[index->index] = dae->normals[index->normal];
+				}
+				// Texcoord
+				foreach(i, table_size) {
+
+					DaeIndex* index = index_table + i;
+					mesh->texcoords[index->index] = dae->texcoords[index->texcoord];
+				}
+			}
+
+			memory_free(index_table);
+		}
+	}
+
+	// Free dae data
+	{
+		foreach(i, dae_model_info.mesh_count) {
+
+			DaeMeshInfo* mesh = dae_model_info.meshes + i;
+
+			if (mesh->_memory)
+				memory_free(mesh->_memory);
+		}
+	}
+
+	return TRUE;
+}
+
+b8 import_model(ModelInfo* model_info, const char* filepath)
 {
 	const char* model_extension = filepath_extension(filepath);
 
@@ -1565,6 +2307,8 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 		}
 	}
 
+	memory_zero(model_info, sizeof(ModelInfo));
+
 	// Get folder path
 	{
 		const char* name = filepath_name(filepath);
@@ -1574,9 +2318,6 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 	}
 
 	b8 res = TRUE;
-
-	model_info->meshes = array_init(MeshInfo, 1.3f);
-	model_info->materials = array_init(MaterialInfo, 1.3f);
 	
 	// Load file
 	u8* file_data = NULL;
@@ -1586,10 +2327,10 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 		switch (model_format)
 		{
 		case 0:
-			model_load_obj(model_info, filepath, file_data);
+			res = model_load_obj(model_info, filepath, file_data);
 			break;
 		case 1:
-			model_load_dae(model_info, filepath, file_data, file_size);
+			res = model_load_dae(model_info, filepath, file_data, file_size);
 			break;
 		}
 	}
@@ -1603,13 +2344,20 @@ b8 model_load(ModelInfo* model_info, const char* filepath)
 	}
 
 	if (!res) {
-		model_free(model_info);
+		free_model_info(model_info);
 	}
 
 	return res;
 }
 
-void model_free(ModelInfo* model_info)
+void free_model_info(ModelInfo* model_info)
 {
-	// TODO
+	foreach(i, model_info->mesh_count) {
+		MeshInfo* mesh = model_info->meshes + i;
+
+		if (mesh->_memory)
+			memory_free(mesh->_memory);
+	}
+
+	memory_zero(model_info, sizeof(ModelInfo));
 }

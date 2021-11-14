@@ -12,22 +12,45 @@ b8 bin_read(u64 hash, Buffer* data);
 b8 bin_write(u64 hash, const void* data, u32 size);
 //b8 bin_write(u64 hash, Serializer& serializer, b8 system); // Ends the serializer
 
+// XML PARSER
+
+typedef struct {
+
+	b8 corrupted;
+	const char* data;
+	u32 size;
+
+	i32 level;
+	const char* begin;
+	const char* end;
+
+} XMLElement;
+
+XMLElement xml_begin(const char* data, u32 size);
+u32        xml_name(const XMLElement* e, char* buffer, u32 buffer_size);
+b8         xml_enter_child(XMLElement* e, const char* name);
+b8         xml_next(XMLElement* e);
+b8         xml_element_content(XMLElement* e, const char** pbegin, const char** pend);
+b8         xml_get_attribute(XMLElement* e, char* buffer, u32 buffer_size, const char* att_name);
+b8         xml_get_attribute_u32(XMLElement* e, u32* n, const char* att_name);
+
 // MESH LOADING
 
 typedef struct {
 
 	char name[NAME_SIZE];
 
-	DynamicArray(v3) positions;
-	DynamicArray(v3) normals;
-	DynamicArray(v2) texcoords;
+	u8* _memory;
 
-	DynamicArray(u32) indices;
+	v3* positions;
+	v3* normals;
+	v2* texcoords;
+	u32 vertex_count;
 
-	Mat4 transform_matrix;
+	u32* indices;
+	u32 index_count;
+
 	u32 material_index;
-
-	b8 import;
 
 } MeshInfo;
 
@@ -54,17 +77,23 @@ typedef struct {
 	char specular_map_path[FILE_PATH_SIZE];
 	char emissive_map_path[FILE_PATH_SIZE];
 
-	b8 import;
 } MaterialInfo;
+
+#define MODEL_INFO_MAX_MESHES 50
+#define MODEL_INFO_MAX_MATERIALS 50
 
 typedef struct {
 	char folderpath[FILE_PATH_SIZE];
-	DynamicArray(MeshInfo) meshes;
-	DynamicArray(MaterialInfo) materials;
+
+	MeshInfo meshes[MODEL_INFO_MAX_MESHES];
+	u32 mesh_count;
+
+	MaterialInfo materials[MODEL_INFO_MAX_MATERIALS];
+	u32 material_count;
 } ModelInfo;
 
-b8 model_load(ModelInfo* model_info, const char* filepath);
-void model_free(ModelInfo* model_info);
+b8 import_model(ModelInfo* model_info, const char* filepath);
+void free_model_info(ModelInfo* model_info);
 
 // Serializer
 
