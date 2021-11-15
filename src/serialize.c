@@ -2228,10 +2228,10 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			// Set vertex data
 			{
+				Mat4 matrix = mat4_multiply(dae->global_matrix, dae->local_matrix);
+
 				// Update positions
 				{
-					Mat4 matrix = mat4_multiply(dae->global_matrix, dae->local_matrix);
-
 					foreach(i, dae->position_count) {
 						v4 p = v3_to_v4(dae->positions[i], 1.f);
 						p = v4_transform(p, matrix);
@@ -2243,6 +2243,23 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 					DaeIndex* index =  index_table + i;
 					mesh->positions[index->index] = dae->positions[index->position];
+				}
+				// Update normals
+				{
+					Mat4 m = matrix;
+					m.v[0][3] = 0.f;
+					m.v[1][3] = 0.f;
+					m.v[2][3] = 0.f;
+					m.v[3][3] = 1.f;
+
+					m = mat4_inverse(m);
+					m = mat4_transpose(m);
+
+					foreach(i, dae->normal_count) {
+						v4 p = v3_to_v4(dae->normals[i], 0.f);
+						p = v4_transform(p, m);
+						dae->normals[i] = v3_normalize(v4_to_v3(p));
+					}
 				}
 				// Normals
 				foreach(i, table_size) {
