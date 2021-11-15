@@ -15,8 +15,9 @@ The base of my projects.
 <p>- Random number generator</p>
 <p>- Perlin Noise Function 1D and 2D</p>
 <p>- Hash algorithms</p>
-<p>- Serialization</p>
-<p>- 3D model loader</p>
+<p>- Serialization utils</p>
+<p>- 3D model loader(.obj and .dae)</p>
+<p>- XML loader</p>
 <p>- Profiler</p>
 
 <h2>Future</h2>
