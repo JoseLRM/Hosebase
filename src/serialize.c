@@ -184,7 +184,7 @@ inline b8 xml_string_equals_to_normal(const char* xml_str, const char* normal)
 {
 	while (*xml_str != '\0' && *normal != '\0') {
 
-		if (*xml_str == '/' || *xml_str == '>' || *xml_str == ' ') {
+		if (*xml_str == '/' || *xml_str == '>' || *xml_str == ' ' || *xml_str == '=') {
 			xml_str = "";
 		}
 
@@ -195,7 +195,12 @@ inline b8 xml_string_equals_to_normal(const char* xml_str, const char* normal)
 		++xml_str;
 		++normal;
 	}
-	return TRUE;
+
+	if (*xml_str == '/' || *xml_str == '>' || *xml_str == ' ' || *xml_str == '=') {
+		xml_str = "";
+	}
+
+	return *xml_str == *normal;
 }
 
 XMLElement xml_begin(const char* data, u32 size)
@@ -1568,6 +1573,20 @@ static b8 model_load_fbx(ModelInfo* model_info, const char* filepath, char* it, 
 
 ////////////////////////////////////////// DAE FORMAT /////////////////////////////////////
 
+#define MODEL_INFO_MAX_WEIGHTS 7
+#define MODEL_INFO_MAX_ARMATURES 10
+#define MODEL_INFO_MAX_JOINTS 100
+
+typedef struct {
+	u32 joint_indices[MODEL_INFO_MAX_WEIGHTS];
+	f32 weights[MODEL_INFO_MAX_WEIGHTS];
+	u32 count;
+} WeightInfo;
+
+typedef struct {
+	char name[NAME_SIZE];
+} JointInfo;
+
 typedef struct {
 
 	char name[NAME_SIZE];
@@ -1587,6 +1606,13 @@ typedef struct {
 	u32* indices;
 	u32 index_count; // Thats the real mesh index count. xml_index_count = index_count * index_stride
 	u32 index_stride;
+
+	u8* _animation_memory;
+
+	WeightInfo* weights; // Length of position_count
+	
+	JointInfo joints[MODEL_INFO_MAX_JOINTS];
+	u32 joint_count;
 
 	Mat4 local_matrix;
 	Mat4 global_matrix;
@@ -1666,6 +1692,10 @@ inline b8 dae_read_float_buffer(const char* begin, const char* end, f32* dst, u3
 		} while (++j < stride && res);
 
 		++i;
+	}
+
+	if (i != count) {
+		res = FALSE;
 	}
 
 	return res;
@@ -2042,6 +2072,8 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 				SV_LOG_ERROR("Can't find the controller id\n");
 				continue;
 			}
+
+			u32 controller_id_size = string_size(controller_id);
 			
 			XMLElement skin = controller;
 
@@ -2055,6 +2087,15 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 					}
 
 					DaeMeshInfo* mesh = NULL;
+
+					u32 weight_count;
+					const char* begin_weights;
+					const char* end_weights;
+					u32 vcount;
+					const char* begin_vcount;
+					const char* end_vcount;
+					const char* begin_v;
+					const char* end_v;
 
 					// Find mesh
 					{
@@ -2082,22 +2123,233 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 					string_copy(mesh->controller_id, controller_id, 100);
 
 					// bind_shape_matrix 
-					Mat4 bind_shape_matrix = mat4_identity();
 					{
-						XMLElement xml = skin;
-						if (xml_enter_child(&xml, "bind_shape_matrix")) {
+						Mat4 bind_shape_matrix = mat4_identity();
+						{
+							XMLElement xml = skin;
+							if (xml_enter_child(&xml, "bind_shape_matrix")) {
 
-							const char* begin;
-							const char* end;
+								const char* begin;
+								const char* end;
 
-							if (xml_element_content(&xml, &begin, &end)) {
-								dae_read_float_buffer(begin, end, (f32*)& bind_shape_matrix, 16, 1);
+								if (xml_element_content(&xml, &begin, &end)) {
+									dae_read_float_buffer(begin, end, (f32*)& bind_shape_matrix, 16, 1);
+								}
 							}
+						}
+
+						mesh->bind_matrix = bind_shape_matrix;
+					}
+
+					{
+						XMLElement src = skin;
+						if (xml_enter_child(&src, "source")) {
+							do {
+								char id[100];
+								if (!xml_get_attribute(&src, id, 100, "id")) {
+									SV_LOG_ERROR("Can't get the source id in the controller\n");
+									continue;
+								}
+
+								if (controller_id_size > string_size(id) + 3) {
+									SV_LOG_ERROR("The source id in the controller is wrong\n");
+									continue;
+								}
+
+								const char* c = id + controller_id_size;
+
+								if (string_equals(c, "-weights")) {
+
+									XMLElement xml = src;
+									if (xml_enter_child(&xml, "float_array")) {
+
+										u32 count;
+										if (!xml_get_attribute_u32(&xml, &count, "count")) {
+											SV_LOG_ERROR("Can't get the weight count\n");
+										}
+										else {
+
+											if (!xml_element_content(&xml, &begin_weights, &end_weights)) {
+												SV_LOG_ERROR("Can't get the weights content\n");
+											}
+											else {
+												weight_count = count;
+											}
+										}
+									}
+									else {
+										SV_LOG_ERROR("Can't find the weights data\n");
+									}
+								}
+								else if (string_equals(c, "-joints")) {
+
+									XMLElement xml = src;
+									if (xml_enter_child(&xml, "Name_array")) {
+
+										u32 count;
+										if (!xml_get_attribute_u32(&xml, &count, "count")) {
+											SV_LOG_ERROR("Can't get the joint count\n");
+										}
+										else {
+
+											const char* begin;
+											const char* end;
+
+											if (!xml_element_content(&xml, &begin, &end)) {
+												SV_LOG_ERROR("Can't get the joint name content\n");
+											}
+											else {
+												
+												u32 i = 0;
+												const char* c = begin;
+
+												if (count > MODEL_INFO_MAX_JOINTS) {
+													SV_LOG_ERROR("The joint count limit is %u\n", MODEL_INFO_MAX_JOINTS);
+													count = MODEL_INFO_MAX_JOINTS;
+												}
+
+												while (i < count && c < end) {
+
+													u32 size = string_split(c, " <", 2);
+													
+													u32 name_size = SV_MIN(size, NAME_SIZE);
+
+													if (size != name_size) {
+														SV_LOG_ERROR("The joint name limit is %u\n", NAME_SIZE);
+													}
+													
+													JointInfo* joint = mesh->joints + mesh->joint_count++;
+													string_set(joint->name, c, name_size, NAME_SIZE);
+
+													c += size;
+													c = line_jump_spaces(c);
+												}
+											}
+										}
+									}
+									else {
+										SV_LOG_ERROR("Can't find the weights data\n");
+									}
+								}
+
+							} while (xml_next(&src));
 						}
 					}
 
-					if (mesh) {
-						mesh->bind_matrix = bind_shape_matrix;
+					// Vertex weights
+					{
+						XMLElement xml = skin;
+						if (xml_enter_child(&xml, "vertex_weights")) {
+
+							if (xml_get_attribute_u32(&xml, &vcount, "count")) {
+
+								XMLElement e = xml;
+								if (!(xml_enter_child(&e, "vcount") && xml_element_content(&e, &begin_vcount, &end_vcount))) {
+									SV_LOG_ERROR("Can't get vertex weights in skin '%s'\n", mesh->name);
+								}
+								e = xml;
+								if (!(xml_enter_child(&e, "v") && xml_element_content(&e, &begin_v, &end_v))) {
+									SV_LOG_ERROR("Can't get vertex weights in skin '%s'\n", mesh->name);
+								}
+							}
+							else {
+								SV_LOG_ERROR("Can't get the vertex weight count in skin '%s'\n", mesh->name);
+							}
+						}
+						else {
+							SV_LOG_ERROR("Vertex weights in skin '%s' not found\n", mesh->name);
+						}
+					}
+
+					b8 has_animation_data = weight_count > 0 && vcount > 0 && vcount == mesh->position_count;
+
+					if (has_animation_data) {
+
+						f32* weights = NULL;
+
+						// Store animation memory
+						{
+							u32 size = vcount * sizeof(WeightInfo);
+							size += weight_count * sizeof(f32);
+
+							mesh->_animation_memory = memory_allocate(size);
+							u8* it = mesh->_animation_memory;
+
+							mesh->weights = (WeightInfo*)it;
+							it += vcount * sizeof(WeightInfo);
+
+							weights = (f32*)it;
+						}
+
+						// Read animation data
+						{
+							// Weights
+							if (!dae_read_float_buffer(begin_weights, end_weights, weights, weight_count, 1)) {
+								SV_LOG_ERROR("Can't read weight data properly\n");
+							}
+
+							if (vcount > 0 && vcount == mesh->position_count) {
+
+								const char* count_it = begin_vcount;
+								const char* it = begin_v;
+
+								b8 res = TRUE;
+
+								u32 index = 0;
+
+								while (count_it < end_vcount && it < end_v) {
+
+									u32 count;
+									count_it = line_read_u32(count_it, &count, " <", 2, &res);
+									if (res == FALSE)
+										break;
+
+									WeightInfo* info = mesh->weights + index;
+									info->count = SV_MIN(count, MODEL_INFO_MAX_WEIGHTS);
+
+									foreach(i, count) {
+
+										u32 joint, weight;
+										it = line_read_u32(it, &joint, " <", 2, &res);
+										if (res == FALSE)
+											break;
+
+										it = line_read_u32(it, &weight, " <", 2, &res);
+										if (res == FALSE)
+											break;
+
+										if (i < MODEL_INFO_MAX_WEIGHTS) {
+											info->joint_indices[i] = joint;
+											if (weight >= weight_count) info->weights[i] = 0.f;
+											else info->weights[i] = weights[weight];
+										}
+									}
+
+									if (res == FALSE)
+										break;
+
+									// TODO: Normalize it later
+									// Normalize vertex
+									{
+										f32 len = 0.f;
+										foreach(i, info->count) {
+											len += info->weights[i];
+										}
+
+										f32 mul = 1.f / len;
+										foreach(i, info->count) {
+											info->weights[i] *= mul;
+										}
+									}
+
+									++index;
+								}
+
+								if (res == FALSE) {
+									SV_LOG_ERROR("Error parsing vertex weights in '%s' at index '%u'\n", mesh->name, index + 1);
+								}
+							}
+						}
 					}
 
 				} while (xml_next(&skin));
@@ -2287,6 +2539,9 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			if (mesh->_memory)
 				memory_free(mesh->_memory);
+
+			if (mesh->_animation_memory)
+				memory_free(mesh->_animation_memory);
 		}
 	}
 
