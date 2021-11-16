@@ -676,7 +676,7 @@ void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment)
 	desc.font_size = 1.f;
 	desc.alignment = alignment;
 	desc.aspect = bounds.z / bounds.w * window_aspect();
-	desc.transform_matrix = mat4_multiply(mat4_translate(bounds.x - bounds.z * 0.5f, bounds.y - bounds.w * 0.5f, 0.f), mat4_scale(bounds.z, bounds.w, 1.f));
+	desc.transform_matrix = m4_mul(m4_translate(bounds.x - bounds.z * 0.5f, bounds.y - bounds.w * 0.5f, 0.f), m4_scale(bounds.z, bounds.w, 1.f));
 	desc.max_lines = 1;
 	desc.context = &ctx;
 	desc.text_default_color = color_white();

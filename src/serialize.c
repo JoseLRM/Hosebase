@@ -1389,7 +1389,7 @@ static b8 model_load_obj(ModelInfo* model_info, const char* filepath, const char
 			*pos = v3_div_scalar(*pos, dim);
 		}
 
-		mesh->transform_matrix = mat4_multiply(mat4_translate_v3(center), mat4_scale_f32(dim));
+		mesh->transform_matrix = m4_mul(m4_translate_v3(center), m4_scale_f32(dim));
 	}
 	*/
 
@@ -1573,9 +1573,28 @@ static b8 model_load_fbx(ModelInfo* model_info, const char* filepath, char* it, 
 
 ////////////////////////////////////////// DAE FORMAT /////////////////////////////////////
 
+#define DAE_MAX_NODES 200
+
+typedef struct DaeNode DaeNode;
+
+typedef enum {
+	DaeNodeType_Unknown,
+	DaeNodeType_Mesh,
+	DaeNodeType_Joint
+} DaeNodeType;
+
+struct DaeNode {
+	DaeNodeType type;
+	m4 local_matrix;
+	m4 global_matrix; // It's not transformed by the local matrix
+	DaeNode* parent;
+};
+
 #define MODEL_INFO_MAX_WEIGHTS 7
 #define MODEL_INFO_MAX_ARMATURES 10
 #define MODEL_INFO_MAX_JOINTS 100
+#define MODEL_INFO_MAX_KEYFRAMES 200
+#define MODEL_INFO_MAX_ANIMATIONS 50
 
 typedef struct {
 	u32 joint_indices[MODEL_INFO_MAX_WEIGHTS];
@@ -1584,10 +1603,32 @@ typedef struct {
 } WeightInfo;
 
 typedef struct {
+	DaeNode node;
 	char name[NAME_SIZE];
-} JointInfo;
+} DaeJointInfo;
 
 typedef struct {
+	v3 position;
+	v4 rotation;
+	u32 joint;
+} JointPoseInfo;
+
+typedef struct {
+	f32 time_stamp;
+	JointPoseInfo* poses;
+	u32 pose_count;
+	u32 pose_size;
+} KeyFrameInfo;
+
+typedef struct {
+	char name[NAME_SIZE];
+	KeyFrameInfo keyframes[MODEL_INFO_MAX_KEYFRAMES];
+	u32 keyframe_count;
+} DaeAnimation;
+
+typedef struct {
+
+	DaeNode node;
 
 	char name[NAME_SIZE];
 	char geometry_id[100];
@@ -1610,13 +1651,8 @@ typedef struct {
 	u8* _animation_memory;
 
 	WeightInfo* weights; // Length of position_count
-	
-	JointInfo joints[MODEL_INFO_MAX_JOINTS];
-	u32 joint_count;
 
-	Mat4 local_matrix;
-	Mat4 global_matrix;
-	Mat4 bind_matrix;
+	m4 bind_matrix;
 	u32 material_index;
 
 } DaeMeshInfo;
@@ -1624,6 +1660,12 @@ typedef struct {
 typedef struct {
 	DaeMeshInfo meshes[MODEL_INFO_MAX_MESHES];
 	u32 mesh_count;
+
+	DaeJointInfo joints[MODEL_INFO_MAX_JOINTS];
+	u32 joint_count;
+
+	DaeAnimation animations[MODEL_INFO_MAX_ANIMATIONS];
+	u32 animation_count;
 } DaeModelInfo;
 
 inline const char* dae_read_f32(const char* it, f32* value, b8* res)
@@ -1753,10 +1795,11 @@ static b8 dae_load_geometry(DaeModelInfo* model_info, XMLElement root, const cha
 
 				SV_LOG_INFO("Mesh: %s\n", mesh->name);
 
+				mesh->node.type = DaeNodeType_Mesh;
+				mesh->node.local_matrix = m4_identity();
+				mesh->node.global_matrix = m4_identity();
+				mesh->bind_matrix = m4_identity();
 				mesh->material_index = u32_max;
-				mesh->local_matrix = mat4_identity();
-				mesh->global_matrix = mat4_identity();
-				mesh->bind_matrix = mat4_identity();
 
 				XMLElement xml_mesh = geo;
 
@@ -1934,7 +1977,7 @@ static b8 dae_load_geometry(DaeModelInfo* model_info, XMLElement root, const cha
 	return TRUE;
 }
 
-static void dae_load_node(DaeModelInfo* model_info, XMLElement node, Mat4 parent_matrix)
+static void dae_load_node(DaeModelInfo* model_info, XMLElement node, DaeNode* parent, m4 parent_matrix)
 {
 	char type_name[NAME_SIZE];
 	if (!xml_get_attribute(&node, type_name, NAME_SIZE, "type")) {
@@ -1942,8 +1985,10 @@ static void dae_load_node(DaeModelInfo* model_info, XMLElement node, Mat4 parent
 		return;
 	}
 
-	Mat4 matrix = mat4_identity();
-	Mat4 global_matrix = parent_matrix;
+	DaeNode* current = NULL;
+
+	m4 matrix = m4_identity();
+	m4 global_matrix = parent_matrix;
 
 	{
 		XMLElement xml_matrix = node;
@@ -1960,7 +2005,6 @@ static void dae_load_node(DaeModelInfo* model_info, XMLElement node, Mat4 parent
 			}
 		}
 	}
-
 
 	if (string_equals("NODE", type_name)) {
 
@@ -2020,18 +2064,49 @@ static void dae_load_node(DaeModelInfo* model_info, XMLElement node, Mat4 parent
 			}
 
 			if (mesh) {
-				mesh->local_matrix = matrix;
-				mesh->global_matrix = global_matrix;
+				current = &mesh->node;
+			}
+		}
+	}
+	else if (string_equals("JOINT", type_name)) {
+
+		char name[NAME_SIZE];
+		if (!xml_get_attribute(&node, name, NAME_SIZE, "sid")) {
+			SV_LOG_ERROR("Can't get the join name\n");
+		}
+		else {
+
+			DaeJointInfo* joint = NULL;
+
+			foreach(i, model_info->joint_count) {
+
+				DaeJointInfo* j = model_info->joints + i;
+				if (string_equals(j->name, name)) {
+					joint = j;
+					break;
+				}
+			}
+
+			if (joint == NULL) {
+				SV_LOG_ERROR("Joint '%s' not found in controller\n", name);
+			}
+			else {
+				current = &joint->node;
 			}
 		}
 	}
 	else SV_LOG_ERROR("Unknown node type '%s'\n", type_name);
 
+	if (current) {
+		current->local_matrix = matrix;
+		current->global_matrix = global_matrix;
+	}
+
 	// Childs
 	XMLElement child = node;
 	if (xml_enter_child(&child, "node")) {
 		do {
-			dae_load_node(model_info, child, mat4_multiply(global_matrix, matrix));
+			dae_load_node(model_info, child, current, m4_mul(global_matrix, matrix));
 		} while (xml_next(&child));
 	}
 }
@@ -2047,7 +2122,7 @@ static b8 dae_load_nodes(DaeModelInfo* model_info, XMLElement root)
 		if (xml_enter_child(&node, "node")) {
 			do {
 
-				dae_load_node(model_info, node, mat4_identity());
+				dae_load_node(model_info, node, NULL, m4_identity());
 			} 
 			while (xml_next(&node));
 		}
@@ -2124,7 +2199,7 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 
 					// bind_shape_matrix 
 					{
-						Mat4 bind_shape_matrix = mat4_identity();
+						m4 bind_shape_matrix = m4_identity();
 						{
 							XMLElement xml = skin;
 							if (xml_enter_child(&xml, "bind_shape_matrix")) {
@@ -2203,9 +2278,9 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 												u32 i = 0;
 												const char* c = begin;
 
-												if (count > MODEL_INFO_MAX_JOINTS) {
+												if (model_info->joint_count + count > MODEL_INFO_MAX_JOINTS) {
 													SV_LOG_ERROR("The joint count limit is %u\n", MODEL_INFO_MAX_JOINTS);
-													count = MODEL_INFO_MAX_JOINTS;
+													count = MODEL_INFO_MAX_JOINTS - model_info->joint_count;
 												}
 
 												while (i < count && c < end) {
@@ -2218,8 +2293,27 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 														SV_LOG_ERROR("The joint name limit is %u\n", NAME_SIZE);
 													}
 													
-													JointInfo* joint = mesh->joints + mesh->joint_count++;
-													string_set(joint->name, c, name_size, NAME_SIZE);
+													DaeJointInfo joint;
+													string_set(joint.name, c, name_size, NAME_SIZE);
+
+													// Try to add
+													{
+														b8 repeated = FALSE;
+														foreach(i, model_info->joint_count) {
+															if (string_equals(model_info->joints[i].name, joint.name)) {
+																repeated = TRUE;
+															}
+														}
+
+														if (!repeated) {
+
+															joint.node.type = DaeNodeType_Joint;
+															joint.node.local_matrix = m4_identity();
+															joint.node.global_matrix = m4_identity();
+
+															model_info->joints[model_info->joint_count++] = joint;
+														}
+													}
 
 													c += size;
 													c = line_jump_spaces(c);
@@ -2361,10 +2455,305 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 	return TRUE;
 }
 
+static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const char* filepath)
+{
+	XMLElement animations = root;
+
+	if (xml_enter_child(&animations, "library_animations") && xml_enter_child(&animations, "animation")) {
+		do {
+
+			char name[NAME_SIZE];
+			if (!xml_get_attribute(&animations, name, NAME_SIZE, "name")) {
+				SV_LOG_ERROR("Can't get an animation name\n");
+				continue;
+			}
+
+			if (model_info->animation_count >= MODEL_INFO_MAX_ANIMATIONS) {
+				SV_LOG_ERROR("The model '%s' exceeds the animation limit\n", filepath);
+				return TRUE;
+			}
+
+			DaeAnimation* animation = model_info->animations + model_info->animation_count++;
+			string_copy(animation->name, name, NAME_SIZE);
+
+			XMLElement xml = animations;
+
+			u32 name_offset = string_size(animation->name) + string_size("_ArmatureAction_001_");
+			u32 name_final_offset = string_size("_pose_matrix");
+
+			if (xml_enter_child(&xml, "animation")) {
+				do {
+
+					char id[100];
+					if (!xml_get_attribute(&xml, id, 100, "id")) {
+						SV_LOG_ERROR("Can't get an animation id\n");
+						continue;
+					}
+
+					u32 id_size = string_size(id);
+
+					if (id_size <= name_offset + name_final_offset) {
+						SV_LOG_ERROR("The id is invalid '%s'\n", id);
+					}
+					else {
+
+						char joint_name[NAME_SIZE];
+						{
+							u32 size = id_size - name_offset - name_final_offset;
+							string_set(joint_name, id + name_offset, size, NAME_SIZE);
+						}
+
+						DaeJointInfo* joint = NULL;
+						u32 joint_index;
+
+						foreach(i, model_info->joint_count) {
+							DaeJointInfo* j = model_info->joints + i;
+							if (string_equals(j->name, joint_name)) {
+								joint = j;
+								joint_index = i;
+								break;
+							}
+						}
+
+						if (joint == NULL) {
+							SV_LOG_ERROR("Joint '%s' not found in '%s'\n", joint_name, filepath);
+						}
+						else {
+
+							u32 count = 0;
+
+							const char* begin_times = NULL;
+							const char* end_times = NULL;
+
+							const char* begin_matrices = NULL;
+							const char* end_matrices = NULL;
+
+							{
+								XMLElement e = xml;
+								if (xml_enter_child(&e, "source")) {
+									do {
+
+										char id[100];
+										if (!xml_get_attribute(&e, id, 100, "id")) {
+											SV_LOG_ERROR("Can't get the id source in joint '%s' from '%s'\n", joint->name, filepath);
+										}
+										else {
+
+											u32 size = string_size(id);
+
+											if (size <= 5) {
+												SV_LOG_ERROR("Invalid id source in joint '%s' from '%s'\n", joint->name, filepath);
+											}
+											else {
+
+												u32 type = 0;
+
+												{
+													const char* c = id + size - 5;
+													if (string_equals(c, "input"))
+														type = 1;
+													else if (string_equals(c, "utput"))
+														type = 2;
+												}
+
+												// Input
+												if (type == 1) {
+													XMLElement floats = e;
+													if (xml_enter_child(&floats, "float_array")) {
+
+														if (!xml_get_attribute_u32(&floats, &count, "count")) {
+															SV_LOG_ERROR("Can't get the number of keyframes of joint '%s' in '%s'\n", joint->name, filepath);
+															count = 0;
+														}
+														else {
+
+															if (!xml_element_content(&floats, &begin_times, &end_times)) {
+																SV_LOG_ERROR("Can't get the keyframes of joint '%s' in '%s'\n", joint->name, filepath);
+															}
+														}
+													}
+												}
+												// Output
+												else if (type == 2) {
+													XMLElement floats = e;
+													if (xml_enter_child(&floats, "float_array")) {
+
+														u32 mcount = 0;
+
+														if (!xml_get_attribute_u32(&floats, &mcount, "count")) {
+															SV_LOG_ERROR("Can't get the number of keyframes matrices of joint '%s' in '%s'\n", joint->name, filepath);
+														}
+														else if (mcount / 16 != count) {
+															SV_LOG_ERROR("Invalid keyframe matrix count in joint '%s' of '%s'\n", joint->name, filepath);
+														}
+														else {
+
+															if (!xml_element_content(&floats, &begin_matrices, &end_matrices)) {
+																SV_LOG_ERROR("Can't get the keyframes matrices of joint '%s' in '%s'\n", joint->name, filepath);
+															}
+														}
+													}
+												}
+											}
+										}
+
+									} while (xml_next(&e));
+								}
+							}
+
+							if (count && begin_times != NULL && begin_matrices != NULL) {
+
+								b8 res;
+								u32 i = 0;
+								const char* c0 = begin_times;
+								const char* c1 = begin_matrices;
+
+								while (i < count && c0 < end_times && c1 < end_matrices) {
+
+									f32 time;
+									c0 = dae_read_f32(c0, &time, &res);
+									if (!res)
+										break;
+
+									m4 matrix;
+									foreach(i, 16) {
+										c1 = dae_read_f32(c1, matrix.a + i, &res);
+										if (!res)
+											break;
+									}
+
+									// Register keyframe
+									{
+										// Find keyframe position
+										u32 insert_index = animation->keyframe_count;
+										b8 insert = TRUE;
+										{
+											foreach(i, animation->keyframe_count) {
+
+												KeyFrameInfo* key = animation->keyframes + i;
+
+												if (fabs(key->time_stamp - time) < 0.00001f) {
+													insert_index = i;
+													insert = FALSE;
+													break;
+												}
+												else if (key->time_stamp > time) {
+													insert_index = i;
+													break;
+												}
+											}
+										}
+
+										// Get keyframe memory
+										KeyFrameInfo* key;
+										{
+											if (insert) {
+
+												if (animation->keyframe_count >= MODEL_INFO_MAX_KEYFRAMES) {
+													SV_LOG_ERROR("The animation '%s' exceeds the keyframe count in '%s'\n", animation->name, filepath);
+													key = animation->keyframes + MODEL_INFO_MAX_KEYFRAMES - 1;
+												}
+												else {
+													if (insert_index == animation->keyframe_count) {
+
+														key = animation->keyframes + animation->keyframe_count++;
+													}
+													else {
+
+														for (i32 i = animation->keyframe_count; i > insert_index; --i) {
+															animation->keyframes[i] = animation->keyframes[i - 1];
+														}
+
+														animation->keyframe_count++;
+														key = animation->keyframes + insert_index;
+														memory_zero(key, sizeof(KeyFrameInfo));
+													}
+												}
+
+												key->time_stamp = time;
+											}
+											else {
+												key = animation->keyframes + insert_index;
+											}
+										}
+
+										// Insert pose
+										{
+											JointPoseInfo* pose = NULL;
+
+											// Dynamic reserve poses
+											{
+												if (key->pose_count >= key->pose_size) {
+
+													u32 new_size = key->pose_size + 10;
+													JointPoseInfo* new = memory_allocate(new_size * sizeof(JointPoseInfo));
+
+													if (key->pose_count) {
+														memory_copy(new, key->poses, key->pose_count * sizeof(JointPoseInfo));
+														memory_free(key->poses);
+													}
+
+													key->poses = new;
+													key->pose_size = new_size;
+												}
+
+												pose = key->poses + key->pose_count++;
+											}
+
+											pose->joint = joint_index;
+											pose->position = m4_decompose_position(matrix);
+											pose->rotation = m4_decompose_rotation(matrix);
+										}
+									}
+
+									if (!res)
+										break;
+
+									++i;
+								}
+
+								if (!res) {
+									SV_LOG_ERROR("Can't parse properly the animation data of '%s' in '%s'\n", joint->name, filepath);
+								}
+							}
+						}
+					}
+
+				} while (xml_next(&xml));
+			}
+
+			// DEBUG: Print animation data
+			{
+				SV_LOG_INFO("Animation %s\n", animation->name);
+
+				foreach(i, animation->keyframe_count) {
+					KeyFrameInfo* key = animation->keyframes + i;
+
+					SV_LOG_INFO("\tKeyframe %u: %f\n", i + 1, key->time_stamp);
+
+					foreach(j, key->pose_count) {
+
+						v3 p = key->poses[j].position;
+						v4 r = key->poses[j].rotation;
+
+						SV_LOG_INFO("\t\tJoint: %u\n", key->poses[j].joint);
+						SV_LOG_INFO("\t\tPosition: %f, %f, %f\n", p.x, p.y, p.z);
+						SV_LOG_INFO("\t\tRotation: %f, %f, %f, %f\n", r.x, r.y, r.z, r.w);
+					}
+
+					SV_LOG_INFO("\n");
+				}
+			}
+
+		} while (xml_next(&animations));
+	}
+
+	return TRUE;
+}
+
 static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, u32 file_size)
 {
-	DaeModelInfo dae_model_info;
-	SV_ZERO(dae_model_info);
+	DaeModelInfo* dae_model_info = memory_allocate(sizeof(DaeModelInfo));
 
 	XMLElement root = xml_begin(it, file_size);
 
@@ -2373,18 +2762,23 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 		return FALSE;
 	}
 
-	if (!dae_load_geometry(&dae_model_info, root, filepath)) {
+	if (!dae_load_geometry(dae_model_info, root, filepath)) {
 		SV_LOG_ERROR("Can't load dae geometry '%s'\n", filepath);
 		return FALSE;
 	}
 
-	if (!dae_load_controllers(&dae_model_info, root)) {
+	if (!dae_load_controllers(dae_model_info, root)) {
 		SV_LOG_ERROR("Can't load dae controllers '%s'\n", filepath);
 		return FALSE;
 	}
 
-	if (!dae_load_nodes(&dae_model_info, root)) {
+	if (!dae_load_nodes(dae_model_info, root)) {
 		SV_LOG_ERROR("Can't load dae nodes '%s'\n", filepath);
+		return FALSE;
+	}
+
+	if (!dae_load_animations(dae_model_info, root, filepath)) {
+		SV_LOG_ERROR("Can't load dae animations '%s'\n", filepath);
 		return FALSE;
 	}
 
@@ -2399,11 +2793,11 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			u32 index;
 		};
 
-		model_info->mesh_count = dae_model_info.mesh_count;
+		model_info->mesh_count = dae_model_info->mesh_count;
 
-		foreach(i, dae_model_info.mesh_count) {
+		foreach(i, dae_model_info->mesh_count) {
 			
-			DaeMeshInfo* dae = dae_model_info.meshes + i;
+			DaeMeshInfo* dae = dae_model_info->meshes + i;
 			MeshInfo* mesh = model_info->meshes + i;
 
 			mesh->material_index = dae->material_index;
@@ -2480,7 +2874,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			// Set vertex data
 			{
-				Mat4 matrix = mat4_multiply(dae->global_matrix, dae->local_matrix);
+				m4 matrix = m4_mul(dae->node.global_matrix, dae->node.local_matrix);
 
 				// Update positions
 				{
@@ -2498,14 +2892,14 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 				}
 				// Update normals
 				{
-					Mat4 m = matrix;
+					m4 m = matrix;
 					m.v[0][3] = 0.f;
 					m.v[1][3] = 0.f;
 					m.v[2][3] = 0.f;
 					m.v[3][3] = 1.f;
 
-					m = mat4_inverse(m);
-					m = mat4_transpose(m);
+					m = m4_inverse(m);
+					m = m4_transpose(m);
 
 					foreach(i, dae->normal_count) {
 						v4 p = v3_to_v4(dae->normals[i], 0.f);
@@ -2533,16 +2927,20 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 	// Free dae data
 	{
-		foreach(i, dae_model_info.mesh_count) {
+		foreach(i, dae_model_info->mesh_count) {
 
-			DaeMeshInfo* mesh = dae_model_info.meshes + i;
+			DaeMeshInfo* mesh = dae_model_info->meshes + i;
 
 			if (mesh->_memory)
 				memory_free(mesh->_memory);
 
 			if (mesh->_animation_memory)
 				memory_free(mesh->_animation_memory);
+
+			// TODO: Free poses
 		}
+
+		memory_free(dae_model_info);
 	}
 
 	return TRUE;

@@ -475,7 +475,7 @@ inline f32 v4_distance(v4 from, v4 to)
 	return v4_length(v4_sub(from, to));
 }
 
-inline v4 v4_transform(v4 v, Mat4 m)
+inline v4 v4_transform(v4 v, m4 m)
 {
 	v4 r;
 	r.x = m.v[0][0] * v.x + m.v[0][1] * v.y + m.v[0][2] * v.z + m.v[0][3] * v.w;
@@ -541,9 +541,9 @@ inline v3 v4_to_v3(v4 v)
 
 // Matrix
 
-inline Mat4 mat4_identity()
+inline m4 m4_identity()
 {
-	Mat4 m;
+	m4 m;
 	m.v[0][0] = 1.f;
 	m.v[0][1] = 0.f;
 	m.v[0][2] = 0.f;
@@ -567,17 +567,17 @@ inline Mat4 mat4_identity()
 	return m;
 }
 
-inline Mat4 mat4_zero()
+inline m4 m4_zero()
 {
-	Mat4 m;
+	m4 m;
 	foreach(i, 16)
 		m.a[i] = 0.f;
 	return m;
 }
 
-inline Mat4 mat4_transpose(Mat4 s)
+inline m4 m4_transpose(m4 s)
 {
-	Mat4 m;
+	m4 m;
 	m.v[0][0] = s.v[0][0];
 	m.v[0][1] = s.v[1][0];
 	m.v[0][2] = s.v[2][0];
@@ -601,11 +601,11 @@ inline Mat4 mat4_transpose(Mat4 s)
 	return m;
 }
 
-inline Mat4 mat4_inverse(Mat4 m)
+inline m4 m4_inverse(m4 m)
 {
 	// From: https://stackoverflow.com/a/1148405
 	
-	Mat4 inv;
+	m4 inv;
 	f32 det;
     i32 i;
 
@@ -724,11 +724,11 @@ inline Mat4 mat4_inverse(Mat4 m)
     det = m.a[0] * inv.a[0] + m.a[1] * inv.a[4] + m.a[2] * inv.a[8] + m.a[3] * inv.a[12];
 
     if (det == 0.f)
-        return mat4_zero();
+        return m4_zero();
 
     det = 1.0 / det;
 
-	Mat4 r;
+	m4 r;
 
     for (i = 0; i < 16; i++)
         r.a[i] = inv.a[i] * det;
@@ -736,9 +736,9 @@ inline Mat4 mat4_inverse(Mat4 m)
 	return r;
 }
 
-inline Mat4 mat4_multiply(Mat4 m0, Mat4 m1)
+inline m4 m4_mul(m4 m0, m4 m1)
 {
-	Mat4 r;
+	m4 r;
 	r.v[0][0] = m0.v[0][0] * m1.v[0][0] + m0.v[0][1] * m1.v[1][0] + m0.v[0][2] * m1.v[2][0] + m0.v[0][3] * m1.v[3][0];
 	r.v[0][1] = m0.v[0][0] * m1.v[0][1] + m0.v[0][1] * m1.v[1][1] + m0.v[0][2] * m1.v[2][1] + m0.v[0][3] * m1.v[3][1];
 	r.v[0][2] = m0.v[0][0] * m1.v[0][2] + m0.v[0][1] * m1.v[1][2] + m0.v[0][2] * m1.v[2][2] + m0.v[0][3] * m1.v[3][2];
@@ -762,23 +762,23 @@ inline Mat4 mat4_multiply(Mat4 m0, Mat4 m1)
 	return r;
 }
 
-inline Mat4 mat4_translate(f32 x, f32 y, f32 z)
+inline m4 m4_translate(f32 x, f32 y, f32 z)
 {
-	Mat4 m = mat4_identity();
+	m4 m = m4_identity();
 	m.v[0][3] = x;
 	m.v[1][3] = y;
 	m.v[2][3] = z;
 	return m;
 }
 
-inline Mat4 mat4_translate_v3(v3 position)
+inline m4 m4_translate_v3(v3 position)
 {
-	return mat4_translate(position.x, position.y, position.z);
+	return m4_translate(position.x, position.y, position.z);
 }
 
-inline Mat4 mat4_scale(f32 x, f32 y, f32 z)
+inline m4 m4_scale(f32 x, f32 y, f32 z)
 {
-	Mat4 m = mat4_zero();
+	m4 m = m4_zero();
 	m.v[0][0] = x;
 	m.v[1][1] = y;
 	m.v[2][2] = z;
@@ -786,22 +786,22 @@ inline Mat4 mat4_scale(f32 x, f32 y, f32 z)
 	return m;
 }
 
-inline Mat4 mat4_scale_v3(v3 scale)
+inline m4 m4_scale_v3(v3 scale)
 {
-	return mat4_scale(scale.x, scale.y, scale.z);
+	return m4_scale(scale.x, scale.y, scale.z);
 }
 
-inline Mat4 mat4_scale_f32(f32 scale)
+inline m4 m4_scale_f32(f32 scale)
 {
-	return mat4_scale(scale, scale, scale);
+	return m4_scale(scale, scale, scale);
 }
 
-inline Mat4 mat4_rotate_roll(f32 roll)
+inline m4 m4_rotate_roll(f32 roll)
 {
 	f32 s = sin(roll);
 	f32 c = cos(roll);
 	
-	Mat4 m = mat4_identity();
+	m4 m = m4_identity();
 	m.v[0][0] = c;
 	m.v[0][1] = -s;
 	m.v[1][0] = s;
@@ -809,12 +809,12 @@ inline Mat4 mat4_rotate_roll(f32 roll)
 	return m;
 }
 
-inline Mat4 mat4_rotate_pitch(f32 pitch)
+inline m4 m4_rotate_pitch(f32 pitch)
 {
 	f32 s = sin(pitch);
 	f32 c = cos(pitch);
 	
-	Mat4 m = mat4_identity();
+	m4 m = m4_identity();
 	m.v[1][1] = c;
 	m.v[1][2] = -s;
 	m.v[2][1] = s;
@@ -823,12 +823,12 @@ inline Mat4 mat4_rotate_pitch(f32 pitch)
 	return m;
 }
 
-inline Mat4 mat4_rotate_yaw(f32 yaw)
+inline m4 m4_rotate_yaw(f32 yaw)
 {
 	f32 s = sin(yaw);
 	f32 c = cos(yaw);
 	
-	Mat4 m = mat4_identity();
+	m4 m = m4_identity();
 	m.v[0][0] = c;
 	m.v[0][2] = s;
 	m.v[2][0] = -s;
@@ -837,38 +837,38 @@ inline Mat4 mat4_rotate_yaw(f32 yaw)
 	return m;
 }
 
-inline Mat4 mat4_rotate_euler(f32 roll, f32 pitch, f32 yaw)
+inline m4 m4_rotate_euler(f32 roll, f32 pitch, f32 yaw)
 {
-	Mat4 roll_matrix = mat4_rotate_roll(roll);
-	Mat4 pitch_matrix = mat4_rotate_pitch(pitch);
-	Mat4 yaw_matrix = mat4_rotate_yaw(yaw);
+	m4 roll_matrix = m4_rotate_roll(roll);
+	m4 pitch_matrix = m4_rotate_pitch(pitch);
+	m4 yaw_matrix = m4_rotate_yaw(yaw);
 	
-	return mat4_multiply(mat4_multiply(yaw_matrix, pitch_matrix), roll_matrix);
+	return m4_mul(m4_mul(yaw_matrix, pitch_matrix), roll_matrix);
 }
 
-inline Mat4 mat4_rotate_x(f32 x)
+inline m4 m4_rotate_x(f32 x)
 {
-	return mat4_rotate_pitch(x);
+	return m4_rotate_pitch(x);
 }
 
-inline Mat4 mat4_rotate_y(f32 y)
+inline m4 m4_rotate_y(f32 y)
 {
-	return mat4_rotate_yaw(y);
+	return m4_rotate_yaw(y);
 }
 
-inline Mat4 mat4_rotate_z(f32 z)
+inline m4 m4_rotate_z(f32 z)
 {
-	return mat4_rotate_roll(z);
+	return m4_rotate_roll(z);
 }
 
-inline Mat4 mat4_rotate_xyz(f32 x, f32 y, f32 z)
+inline m4 m4_rotate_xyz(f32 x, f32 y, f32 z)
 {
-	return mat4_rotate_euler(z, x, y);
+	return m4_rotate_euler(z, x, y);
 }
 
-inline Mat4 mat4_projection_orthographic(f32 right, f32 left, f32 top, f32 bottom, f32 near, f32 far)
+inline m4 m4_projection_orthographic(f32 right, f32 left, f32 top, f32 bottom, f32 near, f32 far)
 {
-	Mat4 m = mat4_zero();
+	m4 m = m4_zero();
 	m.v[0][0] = 2.f / (right - left);
 	m.v[0][3] = - ((right + left) / (right - left));
 	m.v[1][1] = 2.f / (top - bottom);
@@ -880,9 +880,9 @@ inline Mat4 mat4_projection_orthographic(f32 right, f32 left, f32 top, f32 botto
 }
 
 // Left handed perspective matrix
-inline Mat4 mat4_projection_perspective_lh(f32 aspect, f32 fov, f32 near, f32 far)
+inline m4 m4_projection_perspective_lh(f32 aspect, f32 fov, f32 near, f32 far)
 {
-	Mat4 m = mat4_zero();
+	m4 m = m4_zero();
 
 	m.v[0][0] = 1.f / (aspect * tan(fov * 0.5f));
 	m.v[1][1] = 1.f / tan(fov * 0.5f);
@@ -893,9 +893,56 @@ inline Mat4 mat4_projection_perspective_lh(f32 aspect, f32 fov, f32 near, f32 fa
 	return m;
 }
 
+inline v3 m4_decompose_position(m4 m)
+{
+	v3 position;
+	position.x = m.v[0][3];
+	position.y = m.v[1][3];
+	position.z = m.v[2][3];
+	return position;
+}
+
+// This code is stolen from ThinMatrix skeletal animation tutorial.
+// I don't know wtf is going on here, but I should
+// TODO: Understand this
+inline v4 m4_decompose_rotation(m4 matrix)
+{
+	v4 q;
+	f32 diagonal = matrix.m00 + matrix.m11 + matrix.m22;
+	if (diagonal > 0) {
+		f32 w4 = math_sqrt(diagonal + 1.f) * 2.f;
+		q.w = w4 / 4.f;
+		q.x = (matrix.m21 - matrix.m12) / w4;
+		q.y = (matrix.m02 - matrix.m20) / w4;
+		q.z = (matrix.m10 - matrix.m01) / w4;
+	}
+	else if ((matrix.m00 > matrix.m11) && (matrix.m00 > matrix.m22)) {
+		f32 x4 = math_sqrt(1.f + matrix.m00 - matrix.m11 - matrix.m22) * 2.f;
+		q.w = (matrix.m21 - matrix.m12) / x4;
+		q.x = x4 / 4.f;
+		q.y = (matrix.m01 + matrix.m10) / x4;
+		q.z = (matrix.m02 + matrix.m20) / x4;
+	}
+	else if (matrix.m11 > matrix.m22) {
+		f32 y4 = math_sqrt(1.f + matrix.m11 - matrix.m00 - matrix.m22) * 2.f;
+		q.w = (matrix.m02 - matrix.m20) / y4;
+		q.x = (matrix.m01 + matrix.m10) / y4;
+		q.y = y4 / 4.f;
+		q.z = (matrix.m12 + matrix.m21) / y4;
+	}
+	else {
+		f32 z4 = math_sqrt(1.f + matrix.m22 - matrix.m00 - matrix.m11) * 2.f;
+		q.w = (matrix.m10 - matrix.m01) / z4;
+		q.x = (matrix.m02 + matrix.m20) / z4;
+		q.y = (matrix.m12 + matrix.m21) / z4;
+		q.z = z4 / 4.f;
+	}
+	return q;
+}
+
 // Ray
 
-inline Ray ray_mouse_picking_perspective(v2 mouse_position, v3 camera_position, Mat4 inverse_view_matrix, Mat4 inverse_projection_matrix)
+inline Ray ray_mouse_picking_perspective(v2 mouse_position, v3 camera_position, m4 inverse_view_matrix, m4 inverse_projection_matrix)
 {
 	Ray ray;
 	
@@ -914,7 +961,7 @@ inline Ray ray_mouse_picking_perspective(v2 mouse_position, v3 camera_position, 
 	return ray;
 }
 
-inline Ray ray_transform(Ray ray, Mat4 matrix)
+inline Ray ray_transform(Ray ray, m4 matrix)
 {
 	v4 origin = v4_transform(v3_to_v4(ray.origin, 1.f), matrix);
 	v4 direction = v4_transform(v3_to_v4(ray.direction, 0.f), matrix);

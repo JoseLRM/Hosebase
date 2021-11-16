@@ -86,16 +86,16 @@ typedef struct {
 	Buffer buffer;
 	GPUImage* render_target;
 	
-	DynamicArray(Mat4) matrix_stack;
+	DynamicArray(m4) matrix_stack;
 	DynamicArray(ImRendScissor) scissor_stack;
 	
-	Mat4 current_matrix;
+	m4 current_matrix;
 	
 	struct {
 		ImRendCamera current;
 		b8 is_custom;
-		Mat4 view_matrix;
-		Mat4 projection_matrix;
+		m4 view_matrix;
+		m4 projection_matrix;
 	} camera;
 		
 	struct {
@@ -240,7 +240,7 @@ b8 imrend_initialize()
 		ImRendState* s = &imrend->state[i];
 
 		s->buffer = buffer_init(2.f);
-		s->matrix_stack = array_init(Mat4, 1.2f);
+		s->matrix_stack = array_init(m4, 1.2f);
 		s->scissor_stack = array_init(ImRendScissor, 1.2f);
 
 		// Buffers
@@ -258,7 +258,7 @@ b8 imrend_initialize()
 			desc.buffer_type = GPUBufferType_Constant;
 			desc.usage = ResourceUsage_Dynamic;
 			desc.cpu_access = CPUAccess_Write;
-			desc.size = sizeof(Mat4) + sizeof(v4);
+			desc.size = sizeof(m4) + sizeof(v4);
 			desc.data = NULL;
 
 			SV_CHECK(graphics_buffer_create(&s->gfx.cbuffer_mesh, &desc));
@@ -309,27 +309,27 @@ void* _imrend_read(u8** it, u32 size)
 
 inline void update_current_matrix(ImRendState* state)
 {
-	Mat4 matrix = mat4_identity();
+	m4 matrix = m4_identity();
 
 	foreach(i, state->matrix_stack.size) {
 
-		Mat4 m = *(Mat4*)array_get(&state->matrix_stack, i);
+		m4 m = *(m4*)array_get(&state->matrix_stack, i);
 		
-		matrix = mat4_multiply(matrix, m);
+		matrix = m4_mul(matrix, m);
 	}
 
-	Mat4 vpm;
+	m4 vpm;
 
 	if (state->camera.is_custom) {
 
-		vpm = mat4_multiply(state->camera.projection_matrix, state->camera.view_matrix);
+		vpm = m4_mul(state->camera.projection_matrix, state->camera.view_matrix);
 	}
 	else {
 			
 		switch (state->camera.current)
 		{
 		case ImRendCamera_Normal:
-			vpm = mat4_multiply(mat4_translate(-1.f, -1.f, 0.f), mat4_scale(2.f, 2.f, 1.f));
+			vpm = m4_mul(m4_translate(-1.f, -1.f, 0.f), m4_scale(2.f, 2.f, 1.f));
 			break;
 
 #if SV_EDITOR
@@ -340,12 +340,12 @@ inline void update_current_matrix(ImRendState* state)
 
 		case ImRendCamera_Clip:
 		default:
-			vpm = mat4_identity();
+			vpm = m4_identity();
 	    
 		}
 	}
 
-	state->current_matrix = mat4_multiply(vpm, matrix);
+	state->current_matrix = m4_mul(vpm, matrix);
 }
 
 inline void update_current_scissor(ImRendState* state, CommandList cmd)
@@ -441,7 +441,7 @@ void imrend_flush(CommandList cmd)
 
 	graphics_renderpass_begin(gfx->render_pass, att, NULL, 1.f, 0u, cmd);
 
-	state->current_matrix = mat4_identity();
+	state->current_matrix = m4_identity();
 	array_reset(&state->matrix_stack);
 	array_reset(&state->scissor_stack);
 	state->camera.current = ImRendCamera_Clip;
@@ -458,7 +458,7 @@ void imrend_flush(CommandList cmd)
 
 		case ImRendHeader_PushMatrix:
 		{
-			Mat4 m = imrend_read(Mat4, it);
+			m4 m = imrend_read(m4, it);
 			array_push(&state->matrix_stack, m);
 			update_current_matrix(state);
 		}
@@ -499,8 +499,8 @@ void imrend_flush(CommandList cmd)
 
 		case ImRendHeader_CustomCamera:
 		{
-			state->camera.view_matrix = imrend_read(Mat4, it);
-			state->camera.projection_matrix = imrend_read(Mat4, it);
+			state->camera.view_matrix = imrend_read(m4, it);
+			state->camera.projection_matrix = imrend_read(m4, it);
 			state->camera.is_custom = TRUE;
 			update_current_matrix(state);
 		}
@@ -560,9 +560,9 @@ void imrend_flush(CommandList cmd)
 						}
 					}
 
-					Mat4 m = mat4_multiply(mat4_translate(position.x, position.y, position.z), mat4_scale(size.x, size.y, 1.f));
+					m4 m = m4_mul(m4_translate(position.x, position.y, position.z), m4_scale(size.x, size.y, 1.f));
 
-					m = mat4_multiply(state->current_matrix, m);
+					m = m4_mul(state->current_matrix, m);
 
 					v4 p0 = v4_transform(v4_set(-0.5f, 0.5f, 0.f, 1.f), m);
 					v4 p1 = v4_transform(v4_set(0.5f, 0.5f, 0.f, 1.f), m);
@@ -598,7 +598,7 @@ void imrend_flush(CommandList cmd)
 					v3 p2 = imrend_read(v3, it);
 					Color color = imrend_read(Color, it);
 
-					Mat4 m = state->current_matrix;
+					m4 m = state->current_matrix;
 
 					v4 c0 = v4_transform(v3_to_v4(p0, 1.f), m);
 					v4 c1 = v4_transform(v3_to_v4(p1, 1.f), m);
@@ -623,7 +623,7 @@ void imrend_flush(CommandList cmd)
 					v3 p1 = imrend_read(v3, it);
 					Color color = imrend_read(Color, it);
 
-					Mat4 m = state->current_matrix;
+					m4 m = state->current_matrix;
 
 					v4 c0 = v4_transform(v3_to_v4(p0, 1.f), m);
 					v4 c1 = v4_transform(v3_to_v4(p1, 1.f), m);
@@ -707,7 +707,7 @@ void imrend_flush(CommandList cmd)
 				desc.alignment = imrend_read(TextAlignment, it);
 				desc.aspect = imrend_read(f32, it);
 				desc.font_size = imrend_read(f32, it);
-				desc.transform_matrix = mat4_multiply(state->current_matrix, imrend_read(Mat4, it));
+				desc.transform_matrix = m4_mul(state->current_matrix, imrend_read(m4, it));
 				TextContext ctx = imrend_read(TextContext, it);
 				desc.context = &ctx;
 				desc.text_default_color = imrend_read(Color, it);
@@ -738,7 +738,7 @@ void imrend_flush(CommandList cmd)
 	graphics_event_end(cmd);
 }
 
-void imrend_push_matrix(Mat4 matrix, CommandList cmd)
+void imrend_push_matrix(m4 matrix, CommandList cmd)
 {
 	SV_IMREND();
 
@@ -783,7 +783,7 @@ void imrend_camera(ImRendCamera camera, CommandList cmd)
 	imrend_write(state, camera);
 }
 
-void imrend_camera_custom(Mat4 view_matrix, Mat4 projection_matrix, CommandList cmd)
+void imrend_camera_custom(m4 view_matrix, m4 projection_matrix, CommandList cmd)
 {
 	SV_IMREND();
 

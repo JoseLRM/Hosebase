@@ -238,9 +238,9 @@ inline void serialize_color(Serializer* s, Color n)
 	serializer_write(s, &n, sizeof(Color));
 }
 
-inline void serialize_mat4(Serializer* s, Mat4 matrix)
+inline void serialize_m4(Serializer* s, m4 matrix)
 {
-	serializer_write(s, &matrix, sizeof(Mat4));
+	serializer_write(s, &matrix, sizeof(m4));
 }
 
 inline void serialize_string(Serializer* s, const char* str)
@@ -417,9 +417,9 @@ inline void deserialize_color(Deserializer* s, Color* n)
 	deserializer_read(s, n, sizeof(Color));
 }
 
-inline void deserialize_mat4(Deserializer* s, Mat4* matrix)
+inline void deserialize_m4(Deserializer* s, m4* matrix)
 {
-	deserializer_read(s, matrix, sizeof(Mat4));
+	deserializer_read(s, matrix, sizeof(m4));
 }
 
 inline void deserialize_string(Deserializer* s, char* str, u32 buffer_size)

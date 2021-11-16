@@ -188,8 +188,14 @@ typedef struct {
 	union {
 		f32 v[4][4];
 		f32 a[16];
+		struct {
+			f32 m00, m01, m02, m03;
+			f32 m10, m11, m12, m13;
+			f32 m20, m21, m22, m23;
+			f32 m30, m31, m32, m33;
+		};
 	};
-} Mat4;	
+} m4;
 
 typedef struct {
 	u8 r, g, b, a;

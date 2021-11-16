@@ -110,7 +110,7 @@ b8 render_utils_initialize()
 		desc.buffer_type = GPUBufferType_Constant;
 		desc.usage = ResourceUsage_Default;
 		desc.cpu_access = CPUAccess_Write;
-		desc.size = sizeof(Mat4);
+		desc.size = sizeof(m4);
 		desc.data = NULL;
 
 		SV_CHECK(graphics_buffer_create(&render->cbuffer_text, &desc));
@@ -469,7 +469,7 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd)
 		graphics_depthstencilstate_unbind(cmd);
 
 		graphics_constant_buffer_bind(render->cbuffer_text, 0u, ShaderType_Vertex, cmd);
-		graphics_buffer_update(render->cbuffer_text, GPUBufferState_Constant, &desc->transform_matrix, sizeof(Mat4), 0, cmd);
+		graphics_buffer_update(render->cbuffer_text, GPUBufferState_Constant, &desc->transform_matrix, sizeof(m4), 0, cmd);
 
 		graphics_shader_resource_bind_image(font->image, 0u, ShaderType_Pixel, cmd);
 		graphics_sampler_bind(render->sampler_text, 0u, ShaderType_Pixel, cmd);
