@@ -114,73 +114,118 @@ extern CoreData core;
 
 typedef struct {
 		
-	f32 x;
-	f32 y;
+	union {
+		struct {
+			f32 x;
+			f32 y;
+		};
+		f32 v[2];
+	};
 	
 } v2;
 
 typedef struct {
 
-	f32 x;
-	f32 y;
-	f32 z;
+	union {
+		struct {
+			f32 x;
+			f32 y;
+			f32 z;
+		};
+		f32 v[3];
+	};
 
 } v3;
 
 typedef struct {
 
-	f32 x;
-	f32 y;
-	f32 z;
-	f32 w;
+	union {
+		struct {
+			f32 x;
+			f32 y;
+			f32 z;
+			f32 w;
+		};
+		f32 v[4];
+	};
 
 } v4;
 
 typedef struct {
 		
-	u32 x;
-	u32 y;
+	union {
+		struct {
+			u32 x;
+			u32 y;
+		};
+		u32 v[2];
+	};
 	
 } v2_u32;
 
 typedef struct {
 
-	u32 x;
-	u32 y;
-	u32 z;
+	union {
+		struct {
+			u32 x;
+			u32 y;
+			u32 z;
+		};
+		u32 v[3];
+	};
 
 } v3_u32;
 
 typedef struct {
 
-	u32 x;
-	u32 y;
-	u32 z;
-	u32 w;
+	union {
+		struct {
+			u32 x;
+			u32 y;
+			u32 z;
+			u32 w;
+		};
+		u32 v[4];
+	};
 
 } v4_u32;
 
 typedef struct {
 		
-	i32 x;
-	i32 y;
+	union {
+		struct {
+			i32 x;
+			i32 y;
+		};
+		i32 v[2];
+	};
 	
 } v2_i32;
 
 typedef struct {
 
-	i32 x;
-	i32 y;
-	i32 z;
+	union {
+		struct {
+			i32 x;
+			i32 y;
+			i32 z;
+		};
+		i32 v[3];
+	};
 
 } v3_i32;
 
 typedef struct {
 
-	i32 x;
-	i32 y;
-	i32 z;
-	i32 w;
+	union {
+		struct {
+			i32 x;
+			i32 y;
+			i32 z;
+			i32 w;
+		};
+		i32 v[4];
+	};
 
 } v4_i32;
 

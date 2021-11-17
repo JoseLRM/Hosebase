@@ -2884,7 +2884,8 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			// Set vertex data
 			{
-				m4 matrix = m4_mul(dae->node.global_matrix, dae->node.local_matrix);
+				m4 matrix = m4_mul(dae->node.local_matrix, dae->bind_matrix);
+				matrix = m4_mul(dae->node.global_matrix, matrix);
 
 				// Update positions
 				{
@@ -2972,12 +2973,16 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			DaeAnimationInfo* dae = dae_model_info->animations + i;
 			AnimationInfo* anim = model_info->animations + i;
 
+			string_copy(anim->name, dae->name, NAME_SIZE);
+
 			// Compute pose buffer size
 			u32 pose_size = 0;
 			foreach(j, dae->keyframe_count) {
 				DaeKeyFrameInfo* key = dae->keyframes + j;
 				pose_size += key->pose_count;
 			}
+
+			anim->pose_memory_size = pose_size;
 
 			if (pose_size == 0)
 				continue;

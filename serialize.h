@@ -89,6 +89,7 @@ typedef struct {
 
 typedef struct {
 	u8* _pose_memory;
+	u32 pose_memory_size;
 
 	char name[NAME_SIZE];
 	KeyFrameInfo keyframes[MODEL_INFO_MAX_KEYFRAMES];
