@@ -36,8 +36,32 @@ b8         xml_get_attribute_u32(XMLElement* e, u32* n, const char* att_name);
 
 // MESH LOADING
 
+#define MODEL_INFO_MAX_MESHES 50
+#define MODEL_INFO_MAX_JOINTS 100
+#define MODEL_INFO_MAX_MATERIALS 50
+#define MODEL_INFO_MAX_WEIGHTS 7
+#define MODEL_INFO_MAX_ARMATURES 10
+#define MODEL_INFO_MAX_KEYFRAMES 200
+#define MODEL_INFO_MAX_ANIMATIONS 50
+
+typedef struct {
+	u32 joint_indices[MODEL_INFO_MAX_WEIGHTS];
+	f32 weights[MODEL_INFO_MAX_WEIGHTS];
+	u32 count;
+} WeightInfo;
+
+#define ModelNodeType_None 0
+#define ModelNodeType_Mesh 1
+#define ModelNodeType_Joint 2
+
+typedef struct {
+	u8 type;
+	u8 child_count;
+} ModelNode;
+
 typedef struct {
 
+	ModelNode node;
 	char name[NAME_SIZE];
 
 	u8* _memory;
@@ -45,6 +69,7 @@ typedef struct {
 	v3* positions;
 	v3* normals;
 	v2* texcoords;
+	WeightInfo* weights;
 	u32 vertex_count;
 
 	u32* indices;
@@ -53,6 +78,32 @@ typedef struct {
 	u32 material_index;
 
 } MeshInfo;
+
+typedef struct {
+	ModelNode node;
+	char name[NAME_SIZE];
+	m4 matrix; // Local space
+} JointInfo;
+
+typedef struct {
+	v3 position;
+	v4 rotation;
+	u32 joint;
+} JointPoseInfo;
+
+typedef struct {
+	f32 time_stamp;
+	JointPoseInfo* poses;
+	u32 pose_count;
+} KeyFrameInfo;
+
+typedef struct {
+	u8* _pose_memory;
+
+	char name[NAME_SIZE];
+	KeyFrameInfo keyframes[MODEL_INFO_MAX_KEYFRAMES];
+	u32 keyframe_count;
+} AnimationInfo;
 
 typedef struct {
 
@@ -79,9 +130,6 @@ typedef struct {
 
 } MaterialInfo;
 
-#define MODEL_INFO_MAX_MESHES 50
-#define MODEL_INFO_MAX_MATERIALS 50
-
 typedef struct {
 	char folderpath[FILE_PATH_SIZE];
 
@@ -90,6 +138,15 @@ typedef struct {
 
 	MaterialInfo materials[MODEL_INFO_MAX_MATERIALS];
 	u32 material_count;
+
+	AnimationInfo animations[MODEL_INFO_MAX_ANIMATIONS];
+	u32 animation_count;
+
+	JointInfo joints[MODEL_INFO_MAX_JOINTS];
+	u32 joint_count;
+
+	ModelNode* hierarchy[MODEL_INFO_MAX_MESHES + MODEL_INFO_MAX_JOINTS];
+	u32 hierarchy_count;
 } ModelInfo;
 
 b8 import_model(ModelInfo* model_info, const char* filepath);

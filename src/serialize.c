@@ -1590,41 +1590,23 @@ struct DaeNode {
 	DaeNode* parent;
 };
 
-#define MODEL_INFO_MAX_WEIGHTS 7
-#define MODEL_INFO_MAX_ARMATURES 10
-#define MODEL_INFO_MAX_JOINTS 100
-#define MODEL_INFO_MAX_KEYFRAMES 200
-#define MODEL_INFO_MAX_ANIMATIONS 50
-
-typedef struct {
-	u32 joint_indices[MODEL_INFO_MAX_WEIGHTS];
-	f32 weights[MODEL_INFO_MAX_WEIGHTS];
-	u32 count;
-} WeightInfo;
-
 typedef struct {
 	DaeNode node;
 	char name[NAME_SIZE];
 } DaeJointInfo;
 
 typedef struct {
-	v3 position;
-	v4 rotation;
-	u32 joint;
-} JointPoseInfo;
-
-typedef struct {
 	f32 time_stamp;
 	JointPoseInfo* poses;
 	u32 pose_count;
 	u32 pose_size;
-} KeyFrameInfo;
+} DaeKeyFrameInfo;
 
 typedef struct {
 	char name[NAME_SIZE];
-	KeyFrameInfo keyframes[MODEL_INFO_MAX_KEYFRAMES];
+	DaeKeyFrameInfo keyframes[MODEL_INFO_MAX_KEYFRAMES];
 	u32 keyframe_count;
-} DaeAnimation;
+} DaeAnimationInfo;
 
 typedef struct {
 
@@ -1664,7 +1646,7 @@ typedef struct {
 	DaeJointInfo joints[MODEL_INFO_MAX_JOINTS];
 	u32 joint_count;
 
-	DaeAnimation animations[MODEL_INFO_MAX_ANIMATIONS];
+	DaeAnimationInfo animations[MODEL_INFO_MAX_ANIMATIONS];
 	u32 animation_count;
 } DaeModelInfo;
 
@@ -2100,6 +2082,7 @@ static void dae_load_node(DaeModelInfo* model_info, XMLElement node, DaeNode* pa
 	if (current) {
 		current->local_matrix = matrix;
 		current->global_matrix = global_matrix;
+		current->parent = parent;
 	}
 
 	// Childs
@@ -2310,6 +2293,7 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 															joint.node.type = DaeNodeType_Joint;
 															joint.node.local_matrix = m4_identity();
 															joint.node.global_matrix = m4_identity();
+															joint.node.parent = NULL;
 
 															model_info->joints[model_info->joint_count++] = joint;
 														}
@@ -2473,7 +2457,7 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 				return TRUE;
 			}
 
-			DaeAnimation* animation = model_info->animations + model_info->animation_count++;
+			DaeAnimationInfo* animation = model_info->animations + model_info->animation_count++;
 			string_copy(animation->name, name, NAME_SIZE);
 
 			XMLElement xml = animations;
@@ -2630,7 +2614,7 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 										{
 											foreach(i, animation->keyframe_count) {
 
-												KeyFrameInfo* key = animation->keyframes + i;
+												DaeKeyFrameInfo* key = animation->keyframes + i;
 
 												if (fabs(key->time_stamp - time) < 0.00001f) {
 													insert_index = i;
@@ -2645,7 +2629,7 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 										}
 
 										// Get keyframe memory
-										KeyFrameInfo* key;
+										DaeKeyFrameInfo* key;
 										{
 											if (insert) {
 
@@ -2666,7 +2650,7 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 
 														animation->keyframe_count++;
 														key = animation->keyframes + insert_index;
-														memory_zero(key, sizeof(KeyFrameInfo));
+														memory_zero(key, sizeof(DaeKeyFrameInfo));
 													}
 												}
 
@@ -2722,33 +2706,67 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 				} while (xml_next(&xml));
 			}
 
-			// DEBUG: Print animation data
-			{
-				SV_LOG_INFO("Animation %s\n", animation->name);
-
-				foreach(i, animation->keyframe_count) {
-					KeyFrameInfo* key = animation->keyframes + i;
-
-					SV_LOG_INFO("\tKeyframe %u: %f\n", i + 1, key->time_stamp);
-
-					foreach(j, key->pose_count) {
-
-						v3 p = key->poses[j].position;
-						v4 r = key->poses[j].rotation;
-
-						SV_LOG_INFO("\t\tJoint: %u\n", key->poses[j].joint);
-						SV_LOG_INFO("\t\tPosition: %f, %f, %f\n", p.x, p.y, p.z);
-						SV_LOG_INFO("\t\tRotation: %f, %f, %f, %f\n", r.x, r.y, r.z, r.w);
-					}
-
-					SV_LOG_INFO("\n");
-				}
-			}
-
 		} while (xml_next(&animations));
 	}
 
 	return TRUE;
+}
+
+inline ModelNode* dae_add_to_hierarchy(ModelInfo* model_info, DaeModelInfo* dae_model_info, DaeNode* node)
+{
+	ModelNode* n = NULL;
+
+	if (node->type == DaeNodeType_Mesh) {
+		
+		DaeMeshInfo* mesh = (DaeMeshInfo*)node;
+
+		u32 index = mesh - dae_model_info->meshes;
+		n = (ModelNode*)(model_info->meshes + index);
+	}
+	else if (node->type == DaeNodeType_Joint) {
+		
+		DaeJointInfo* joint = (DaeJointInfo*)node;
+
+		u32 index = joint - dae_model_info->joints;
+		n = (ModelNode*)(model_info->joints + index);
+	}
+
+	assert(n != NULL);
+
+	model_info->hierarchy[model_info->hierarchy_count++] = n;
+
+	return n;
+}
+
+static dae_add_in_hierarchy_nodes_with_parent(ModelInfo* model_info, DaeModelInfo* dae_model_info, DaeNode* node0, ModelNode* node1)
+{
+	u32 child_count = 0;
+
+	foreach(i, dae_model_info->mesh_count) {
+
+		DaeMeshInfo* mesh = dae_model_info->meshes + i;
+		
+		if (mesh->node.parent == node0) {
+			ModelNode* n = dae_add_to_hierarchy(model_info, dae_model_info, &mesh->node);
+			dae_add_in_hierarchy_nodes_with_parent(model_info, dae_model_info, &mesh->node, n);
+			child_count += n->child_count + 1;
+		}
+	}
+
+	foreach(i, dae_model_info->joint_count) {
+
+		DaeJointInfo* joint = dae_model_info->joints + i;
+
+		if (joint->node.parent == node0) {
+			ModelNode* n = dae_add_to_hierarchy(model_info, dae_model_info, &joint->node);
+			dae_add_in_hierarchy_nodes_with_parent(model_info, dae_model_info, &joint->node, n);
+			child_count += n->child_count + 1;
+		}
+	}
+
+	if (node0) {
+		node1->child_count = child_count;
+	}
 }
 
 static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, u32 file_size)
@@ -2794,13 +2812,18 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 		};
 
 		model_info->mesh_count = dae_model_info->mesh_count;
+		model_info->joint_count = dae_model_info->joint_count;
+		model_info->animation_count = dae_model_info->animation_count;
 
+		// Meshes
 		foreach(i, dae_model_info->mesh_count) {
 			
 			DaeMeshInfo* dae = dae_model_info->meshes + i;
 			MeshInfo* mesh = model_info->meshes + i;
 
+			mesh->node.type = ModelNodeType_Mesh;
 			mesh->material_index = dae->material_index;
+			string_copy(mesh->name, dae->name, NAME_SIZE);
 
 			// TODO: Reuse memory in diferent meshes
 			u32 table_size = (u32)((f32)dae->index_count * 1.5f);
@@ -2852,16 +2875,30 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			// Reserve memory
 			{
-				mesh->_memory = memory_allocate(mesh->vertex_count * (sizeof(v3) + sizeof(v3) + sizeof(v2)) + dae->index_count * sizeof(u32));
+				u32 size = mesh->vertex_count * sizeof(v3) + dae->index_count * sizeof(u32);
+				if (dae->normal_count) size += mesh->vertex_count * sizeof(v3);
+				if (dae->texcoord_count) size += mesh->vertex_count * sizeof(v2);
+				if (dae->weights) size += mesh->vertex_count * sizeof(WeightInfo);
+
+				mesh->_memory = memory_allocate(size);
 
 				u8* it = mesh->_memory;
 
 				mesh->positions = (v3*)it;
 				it += sizeof(v3) * mesh->vertex_count;
-				mesh->normals = (v3*)it;
-				it += sizeof(v3) * mesh->vertex_count;
-				mesh->texcoords = (v2*)it;
-				it += sizeof(v2) * mesh->vertex_count;
+
+				if (dae->normal_count) {
+					mesh->normals = (v3*)it;
+					it += sizeof(v3) * mesh->vertex_count;
+				}
+				if (dae->texcoord_count) {
+					mesh->texcoords = (v2*)it;
+					it += sizeof(v2) * mesh->vertex_count;
+				}
+				if (dae->weights) {
+					mesh->weights = (WeightInfo*)it;
+					it += sizeof(WeightInfo) * mesh->vertex_count;
+				}
 
 				mesh->indices = (u32*)it;
 			}
@@ -2888,40 +2925,116 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 				foreach(i, table_size) {
 
 					DaeIndex* index =  index_table + i;
-					mesh->positions[index->index] = dae->positions[index->position];
+					if (index->hash != 0)
+						mesh->positions[index->index] = dae->positions[index->position];
 				}
-				// Update normals
-				{
-					m4 m = matrix;
-					m.v[0][3] = 0.f;
-					m.v[1][3] = 0.f;
-					m.v[2][3] = 0.f;
-					m.v[3][3] = 1.f;
 
-					m = m4_inverse(m);
-					m = m4_transpose(m);
+				// Normals
+				if (dae->normal_count) {
 
-					foreach(i, dae->normal_count) {
-						v4 p = v3_to_v4(dae->normals[i], 0.f);
-						p = v4_transform(p, m);
-						dae->normals[i] = v3_normalize(v4_to_v3(p));
+					// Update normals
+					{
+						m4 m = matrix;
+						m.v[0][3] = 0.f;
+						m.v[1][3] = 0.f;
+						m.v[2][3] = 0.f;
+						m.v[3][3] = 1.f;
+
+						m = m4_inverse(m);
+						m = m4_transpose(m);
+
+						foreach(i, dae->normal_count) {
+							v4 p = v3_to_v4(dae->normals[i], 0.f);
+							p = v4_transform(p, m);
+							dae->normals[i] = v3_normalize(v4_to_v3(p));
+						}
+					}
+					
+					foreach(i, table_size) {
+
+						DaeIndex* index = index_table + i;
+						if (index->hash != 0)
+							mesh->normals[index->index] = dae->normals[index->normal];
 					}
 				}
-				// Normals
-				foreach(i, table_size) {
 
-					DaeIndex* index = index_table + i;
-					mesh->normals[index->index] = dae->normals[index->normal];
-				}
 				// Texcoord
-				foreach(i, table_size) {
+				if (dae->texcoord_count) {
 
-					DaeIndex* index = index_table + i;
-					mesh->texcoords[index->index] = dae->texcoords[index->texcoord];
+					foreach(i, table_size) {
+
+						DaeIndex* index = index_table + i;
+						if (index->hash != 0)
+							mesh->texcoords[index->index] = dae->texcoords[index->texcoord];
+					}
+				}
+
+				// Weights
+				if (dae->weights) {
+					foreach(i, table_size) {
+
+						DaeIndex* index = index_table + i;
+						if (index->hash != 0)
+							mesh->weights[index->index] = dae->weights[index->position];
+					}
 				}
 			}
 
 			memory_free(index_table);
+		}
+
+		// Joints
+		foreach(i, dae_model_info->joint_count) {
+
+			DaeJointInfo* dae = dae_model_info->joints + i;
+			JointInfo* joint = model_info->joints + i;
+
+			joint->node.type = ModelNodeType_Joint;
+
+			joint->matrix = dae->node.local_matrix;
+			string_copy(joint->name, dae->name, NAME_SIZE);
+		}
+
+		// Animations
+		foreach(i, dae_model_info->animation_count) {
+
+			DaeAnimationInfo* dae = dae_model_info->animations + i;
+			AnimationInfo* anim = model_info->animations + i;
+
+			// Compute pose buffer size
+			u32 pose_size = 0;
+			foreach(j, dae->keyframe_count) {
+				DaeKeyFrameInfo* key = dae->keyframes + j;
+				pose_size += key->pose_count;
+			}
+
+			if (pose_size == 0)
+				continue;
+
+			anim->_pose_memory = memory_allocate(pose_size * sizeof(JointPoseInfo));
+			u8* it = anim->_pose_memory;
+
+			// Set pose and keyframe data
+			anim->keyframe_count = dae->keyframe_count;
+			foreach(j, dae->keyframe_count) {
+				DaeKeyFrameInfo* key0 = dae->keyframes + j;
+				KeyFrameInfo* key1 = anim->keyframes + j;
+
+				key1->time_stamp = key0->time_stamp;
+				key1->pose_count = key0->pose_count;
+
+				key1->poses = (JointPoseInfo*)it;
+				it += key1->pose_count * sizeof(JointPoseInfo);
+
+				foreach(w, key0->pose_count) {
+					key1->poses[w] = key0->poses[w];
+				}
+			}
+		}
+
+		// Hierarchy
+		{
+			dae_add_in_hierarchy_nodes_with_parent(model_info, dae_model_info, NULL, NULL);
 		}
 	}
 
@@ -2936,8 +3049,17 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			if (mesh->_animation_memory)
 				memory_free(mesh->_animation_memory);
+		}
 
-			// TODO: Free poses
+		foreach(i, dae_model_info->animation_count) {
+
+			DaeAnimationInfo* anim = dae_model_info->animations + i;
+
+			foreach(j, anim->keyframe_count) {
+				DaeKeyFrameInfo* key = anim->keyframes + j;
+				if (key->poses)
+					memory_free(key->poses);
+			}
 		}
 
 		memory_free(dae_model_info);
@@ -3013,6 +3135,55 @@ b8 import_model(ModelInfo* model_info, const char* filepath)
 		memory_free(file_data);
 	}
 
+	// DEBUG: Print animation data
+	{
+		foreach(a, model_info->animation_count) {
+
+			AnimationInfo* animation = model_info->animations + a;
+
+			SV_LOG_INFO("Animation %s\n", animation->name);
+
+			foreach(i, animation->keyframe_count) {
+				KeyFrameInfo* key = animation->keyframes + i;
+
+				SV_LOG_INFO("\tKeyframe %u: %f\n", i + 1, key->time_stamp);
+
+				foreach(j, key->pose_count) {
+
+					v3 p = key->poses[j].position;
+					v4 r = key->poses[j].rotation;
+
+					SV_LOG_INFO("\t\tJoint: %u\n", key->poses[j].joint);
+					SV_LOG_INFO("\t\tPosition: %f, %f, %f\n", p.x, p.y, p.z);
+					SV_LOG_INFO("\t\tRotation: %f, %f, %f, %f\n", r.x, r.y, r.z, r.w);
+				}
+
+				SV_LOG_INFO("\n");
+			}
+		}
+	}
+
+	// DEBUG: Print hierarchy data
+	{
+		i32 level = 0;
+		foreach(i, model_info->hierarchy_count) {
+
+			ModelNode* node = model_info->hierarchy[i];
+
+			if (node->type == ModelNodeType_Mesh) {
+				MeshInfo* mesh = (MeshInfo*)node;
+				SV_LOG_INFO("Mesh %u: %s\n", node->child_count, mesh->name);
+			}
+			else if (node->type == ModelNodeType_Joint) {
+				JointInfo* joint = (JointInfo*)node;
+				SV_LOG_INFO("Joint %u: %s\n", node->child_count, joint->name);
+			}
+			else {
+				assert_title(FALSE, "Invalid node type");
+			}
+		}
+	}
+
 	if (!res) {
 		free_model_info(model_info);
 	}
@@ -3027,6 +3198,13 @@ void free_model_info(ModelInfo* model_info)
 
 		if (mesh->_memory)
 			memory_free(mesh->_memory);
+	}
+
+	foreach(i, model_info->animation_count) {
+		AnimationInfo* anim = model_info->animations + i;
+
+		if (anim->_pose_memory)
+			memory_free(anim->_pose_memory);
 	}
 
 	memory_zero(model_info, sizeof(ModelInfo));
