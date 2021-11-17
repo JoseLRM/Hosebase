@@ -50,18 +50,8 @@ typedef struct {
 	u32 count;
 } WeightInfo;
 
-#define ModelNodeType_None 0
-#define ModelNodeType_Mesh 1
-#define ModelNodeType_Joint 2
-
-typedef struct {
-	u8 type;
-	u8 child_count;
-} ModelNode;
-
 typedef struct {
 
-	ModelNode node;
 	char name[NAME_SIZE];
 
 	u8* _memory;
@@ -80,9 +70,9 @@ typedef struct {
 } MeshInfo;
 
 typedef struct {
-	ModelNode node;
 	char name[NAME_SIZE];
 	m4 matrix; // Local space
+	u8 child_count;
 } JointInfo;
 
 typedef struct {
@@ -145,7 +135,7 @@ typedef struct {
 	JointInfo joints[MODEL_INFO_MAX_JOINTS];
 	u32 joint_count;
 
-	ModelNode* hierarchy[MODEL_INFO_MAX_MESHES + MODEL_INFO_MAX_JOINTS];
+	JointInfo* hierarchy[MODEL_INFO_MAX_JOINTS];
 	u32 hierarchy_count;
 } ModelInfo;
 

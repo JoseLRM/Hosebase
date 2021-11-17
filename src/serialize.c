@@ -2712,54 +2712,28 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 	return TRUE;
 }
 
-inline ModelNode* dae_add_to_hierarchy(ModelInfo* model_info, DaeModelInfo* dae_model_info, DaeNode* node)
+inline JointInfo* dae_add_to_hierarchy(ModelInfo* model_info, DaeModelInfo* dae_model_info, DaeJointInfo* joint)
 {
-	ModelNode* n = NULL;
-
-	if (node->type == DaeNodeType_Mesh) {
-		
-		DaeMeshInfo* mesh = (DaeMeshInfo*)node;
-
-		u32 index = mesh - dae_model_info->meshes;
-		n = (ModelNode*)(model_info->meshes + index);
-	}
-	else if (node->type == DaeNodeType_Joint) {
-		
-		DaeJointInfo* joint = (DaeJointInfo*)node;
-
-		u32 index = joint - dae_model_info->joints;
-		n = (ModelNode*)(model_info->joints + index);
-	}
-
-	assert(n != NULL);
+	u32 index = joint - dae_model_info->joints;
+	JointInfo* n = model_info->joints + index;
 
 	model_info->hierarchy[model_info->hierarchy_count++] = n;
 
 	return n;
 }
 
-static dae_add_in_hierarchy_nodes_with_parent(ModelInfo* model_info, DaeModelInfo* dae_model_info, DaeNode* node0, ModelNode* node1)
+static dae_add_in_hierarchy_nodes_with_parent(ModelInfo* model_info, DaeModelInfo* dae_model_info, DaeJointInfo* node0, JointInfo* node1)
 {
 	u32 child_count = 0;
-
-	foreach(i, dae_model_info->mesh_count) {
-
-		DaeMeshInfo* mesh = dae_model_info->meshes + i;
-		
-		if (mesh->node.parent == node0) {
-			ModelNode* n = dae_add_to_hierarchy(model_info, dae_model_info, &mesh->node);
-			dae_add_in_hierarchy_nodes_with_parent(model_info, dae_model_info, &mesh->node, n);
-			child_count += n->child_count + 1;
-		}
-	}
 
 	foreach(i, dae_model_info->joint_count) {
 
 		DaeJointInfo* joint = dae_model_info->joints + i;
 
-		if (joint->node.parent == node0) {
-			ModelNode* n = dae_add_to_hierarchy(model_info, dae_model_info, &joint->node);
-			dae_add_in_hierarchy_nodes_with_parent(model_info, dae_model_info, &joint->node, n);
+		if ((DaeJointInfo*)(joint->node.parent) == node0) {
+
+			JointInfo* n = dae_add_to_hierarchy(model_info, dae_model_info, joint);
+			dae_add_in_hierarchy_nodes_with_parent(model_info, dae_model_info, joint, n);
 			child_count += n->child_count + 1;
 		}
 	}
@@ -2821,7 +2795,6 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			DaeMeshInfo* dae = dae_model_info->meshes + i;
 			MeshInfo* mesh = model_info->meshes + i;
 
-			mesh->node.type = ModelNodeType_Mesh;
 			mesh->material_index = dae->material_index;
 			string_copy(mesh->name, dae->name, NAME_SIZE);
 
@@ -2988,8 +2961,6 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			DaeJointInfo* dae = dae_model_info->joints + i;
 			JointInfo* joint = model_info->joints + i;
-
-			joint->node.type = ModelNodeType_Joint;
 
 			joint->matrix = dae->node.local_matrix;
 			string_copy(joint->name, dae->name, NAME_SIZE);
@@ -3168,19 +3139,8 @@ b8 import_model(ModelInfo* model_info, const char* filepath)
 		i32 level = 0;
 		foreach(i, model_info->hierarchy_count) {
 
-			ModelNode* node = model_info->hierarchy[i];
-
-			if (node->type == ModelNodeType_Mesh) {
-				MeshInfo* mesh = (MeshInfo*)node;
-				SV_LOG_INFO("Mesh %u: %s\n", node->child_count, mesh->name);
-			}
-			else if (node->type == ModelNodeType_Joint) {
-				JointInfo* joint = (JointInfo*)node;
-				SV_LOG_INFO("Joint %u: %s\n", node->child_count, joint->name);
-			}
-			else {
-				assert_title(FALSE, "Invalid node type");
-			}
+			JointInfo* joint = model_info->hierarchy[i];
+			SV_LOG_INFO("Joint %u: %s\n", joint->child_count, joint->name);
 		}
 	}
 
