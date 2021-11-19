@@ -866,6 +866,40 @@ inline m4 m4_rotate_xyz(f32 x, f32 y, f32 z)
 	return m4_rotate_euler(z, x, y);
 }
 
+// This code is stolen from ThinMatrix skeletal animation tutorial.
+// I don't know wtf is going on here, but I should
+// TODO: Understand this
+inline m4 m4_rotate_quaternion(v4 quaternion)
+{
+	m4 matrix;
+	const f32 xy = quaternion.x * quaternion.y;
+	const f32 xz = quaternion.x * quaternion.z;
+	const f32 xw = quaternion.x * quaternion.w;
+	const f32 yz = quaternion.y * quaternion.z;
+	const f32 yw = quaternion.y * quaternion.w;
+	const f32 zw = quaternion.z * quaternion.w;
+	const f32 xSquared = quaternion.x * quaternion.x;
+	const f32 ySquared = quaternion.y * quaternion.y;
+	const f32 zSquared = quaternion.z * quaternion.z;
+	matrix.m00 = 1.f - 2.f * (ySquared + zSquared);
+	matrix.m01 = 2.f * (xy - zw);
+	matrix.m02 = 2.f * (xz + yw);
+	matrix.m03 = 0.f;
+	matrix.m10 = 2.f * (xy + zw);
+	matrix.m11 = 1.f - 2.f * (xSquared + zSquared);
+	matrix.m12 = 2.f * (yz - xw);
+	matrix.m13 = 0.f;
+	matrix.m20 = 2.f * (xz - yw);
+	matrix.m21 = 2.f * (yz + xw);
+	matrix.m22 = 1.f - 2.f * (xSquared + ySquared);
+	matrix.m23 = 0.f;
+	matrix.m30 = 0.f;
+	matrix.m31 = 0.f;
+	matrix.m32 = 0.f;
+	matrix.m33 = 1.f;
+	return matrix;
+}
+
 inline m4 m4_projection_orthographic(f32 right, f32 left, f32 top, f32 bottom, f32 near, f32 far)
 {
 	m4 m = m4_zero();
@@ -937,6 +971,32 @@ inline v4 m4_decompose_rotation(m4 matrix)
 		q.y = (matrix.m12 + matrix.m21) / z4;
 		q.z = z4 / 4.f;
 	}
+	return q;
+}
+
+// Quaternion
+
+// This code is stolen from ThinMatrix skeletal animation tutorial.
+// I don't know wtf is going on here, but I should
+// TODO: Understand this
+inline v4 quaternion_interpolate(v4 a, v4 b, f32 n)
+{
+	v4 q = v4_set(0.f, 0.f, 0.f, 1.f);
+	f32 dot = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z;
+	f32 blendI = 1.f - n;
+	if (dot < 0) {
+		q.w = blendI * a.w + n * -b.w;
+		q.x = blendI * a.x + n * -b.x;
+		q.y = blendI * a.y + n * -b.y;
+		q.z = blendI * a.z + n * -b.z;
+	}
+	else {
+		q.w = blendI * a.w + n * b.w;
+		q.x = blendI * a.x + n * b.x;
+		q.y = blendI * a.y + n * b.y;
+		q.z = blendI * a.z + n * b.z;
+	}
+	q = v4_normalize(q);
 	return q;
 }
 

@@ -71,7 +71,8 @@ typedef struct {
 
 typedef struct {
 	char name[NAME_SIZE];
-	m4 matrix; // Local space
+	m4 local_matrix;
+	m4 inverse_bind_matrix;
 	u8 child_count;
 } JointInfo;
 

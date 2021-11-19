@@ -2963,8 +2963,15 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			DaeJointInfo* dae = dae_model_info->joints + i;
 			JointInfo* joint = model_info->joints + i;
 
-			joint->matrix = dae->node.local_matrix;
+			joint->local_matrix = dae->node.local_matrix;
+			joint->inverse_bind_matrix = m4_inverse(m4_mul(dae->node.global_matrix, dae->node.local_matrix));
 			string_copy(joint->name, dae->name, NAME_SIZE);
+
+			// DEBUG
+			SV_LOG_INFO("%s:\n", joint->name);
+			m4 m = joint->inverse_bind_matrix;
+			foreach(i, 4)
+				SV_LOG_INFO("%f / %f / %f / %f\n", m.v[i][0], m.v[i][1], m.v[i][2], m.v[i][3]);
 		}
 
 		// Animations
