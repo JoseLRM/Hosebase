@@ -2685,6 +2685,10 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 											}
 
 											pose->joint = joint_index;
+											
+											// Blender exports the joint information in his coordinate system
+											//matrix = m4_mul(m4_rotate_x(-PI * 0.5f), matrix);
+
 											pose->position = m4_decompose_position(matrix);
 											pose->rotation = m4_decompose_rotation(matrix);
 										}
