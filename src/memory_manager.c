@@ -39,7 +39,8 @@ void* memory_allocate(size_t size)
 
 void memory_free(void* ptr)
 {
-	free(ptr);
+	if (ptr)
+		free(ptr);
 }
 
 void memory_copy(void* dst, const void* src, size_t size)

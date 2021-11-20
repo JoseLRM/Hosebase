@@ -66,11 +66,13 @@ typedef struct {
 	u32 index_count;
 
 	u32 material_index;
+	m4 skin_bind_matrix;
 
 } MeshInfo;
 
 typedef struct {
 	char name[NAME_SIZE];
+	// TODO: Remove unnecesary matrices
 	m4 local_matrix;
 	m4 inverse_bind_matrix;
 	u8 child_count;

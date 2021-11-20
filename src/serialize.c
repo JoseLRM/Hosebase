@@ -1634,6 +1634,10 @@ typedef struct {
 
 	WeightInfo* weights; // Length of position_count
 
+	struct {
+		char name[NAME_SIZE];
+	}joint_names[MODEL_INFO_MAX_JOINTS];
+
 	m4 bind_matrix;
 	u32 material_index;
 
@@ -2261,11 +2265,6 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 												u32 i = 0;
 												const char* c = begin;
 
-												if (model_info->joint_count + count > MODEL_INFO_MAX_JOINTS) {
-													SV_LOG_ERROR("The joint count limit is %u\n", MODEL_INFO_MAX_JOINTS);
-													count = MODEL_INFO_MAX_JOINTS - model_info->joint_count;
-												}
-
 												while (i < count && c < end) {
 
 													u32 size = string_split(c, " <", 2);
@@ -2290,17 +2289,25 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 
 														if (!repeated) {
 
-															joint.node.type = DaeNodeType_Joint;
-															joint.node.local_matrix = m4_identity();
-															joint.node.global_matrix = m4_identity();
-															joint.node.parent = NULL;
+															if (model_info->joint_count >= MODEL_INFO_MAX_JOINTS) {
+																SV_LOG_ERROR("The joint count limit is %u\n", MODEL_INFO_MAX_JOINTS);
+															}
+															else {
+																joint.node.type = DaeNodeType_Joint;
+																joint.node.local_matrix = m4_identity();
+																joint.node.global_matrix = m4_identity();
+																joint.node.parent = NULL;
 
-															model_info->joints[model_info->joint_count++] = joint;
+																model_info->joints[model_info->joint_count++] = joint;
+															}
 														}
+
+														string_copy(mesh->joint_names[i].name, joint.name, NAME_SIZE);
 													}
 
 													c += size;
 													c = line_jump_spaces(c);
+													++i;
 												}
 											}
 										}
@@ -2397,6 +2404,19 @@ static b8 dae_load_controllers(DaeModelInfo* model_info, XMLElement root)
 											break;
 
 										if (i < MODEL_INFO_MAX_WEIGHTS) {
+
+											// Find real joint
+											{
+												const char* name = mesh->joint_names[joint].name;
+												// TODO: litle optimization
+												foreach(i, model_info->joint_count) {
+													if (string_equals(model_info->joints[i].name, name)) {
+														joint = i;
+														break;
+													}
+												}
+											}
+
 											info->joint_indices[i] = joint;
 											if (weight >= weight_count) info->weights[i] = 0.f;
 											else info->weights[i] = weights[weight];
@@ -2462,30 +2482,34 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 
 			XMLElement xml = animations;
 
-			u32 name_offset = string_size(animation->name) + string_size("_ArmatureAction_001_");
-			u32 name_final_offset = string_size("_pose_matrix");
-
 			if (xml_enter_child(&xml, "animation")) {
 				do {
 
-					char id[100];
-					if (!xml_get_attribute(&xml, id, 100, "id")) {
-						SV_LOG_ERROR("Can't get an animation id\n");
-						continue;
-					}
+					// Get jont name
+					char joint_name[NAME_SIZE] = "";
+					{
+						XMLElement e = xml;
+						if (xml_enter_child(&e, "channel")) {
 
-					u32 id_size = string_size(id);
+							char target[100];
+							if (xml_get_attribute(&e, target, 100, "target")) {
 
-					if (id_size <= name_offset + name_final_offset) {
-						SV_LOG_ERROR("The id is invalid '%s'\n", id);
-					}
-					else {
+								u32 target_size = string_size(target);
+								u32 animation_size = string_size(animation->name);
 
-						char joint_name[NAME_SIZE];
-						{
-							u32 size = id_size - name_offset - name_final_offset;
-							string_set(joint_name, id + name_offset, size, NAME_SIZE);
+								if (animation_size + 1 < target_size) {
+
+									const char* name = target + animation_size + 1;
+									i32 name_size = target_size - animation_size - 1;
+									name_size -= (i32)string_size("/transform");
+
+									string_set(joint_name, name, SV_MAX(name_size, 0), NAME_SIZE);
+								}
+							}
 						}
+					}
+
+					{
 
 						DaeJointInfo* joint = NULL;
 						u32 joint_index;
@@ -2690,7 +2714,7 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 											//matrix = m4_mul(m4_rotate_x(-PI * 0.5f), matrix);
 
 											pose->position = m4_decompose_position(matrix);
-											pose->rotation = m4_decompose_rotation(matrix);
+											pose->rotation = v4_normalize(m4_decompose_rotation(matrix));
 										}
 									}
 
@@ -2799,6 +2823,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			DaeMeshInfo* dae = dae_model_info->meshes + i;
 			MeshInfo* mesh = model_info->meshes + i;
 
+			mesh->skin_bind_matrix = dae->bind_matrix;
 			mesh->material_index = dae->material_index;
 			string_copy(mesh->name, dae->name, NAME_SIZE);
 
@@ -2888,8 +2913,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			// Set vertex data
 			{
-				m4 matrix = m4_mul(dae->node.local_matrix, dae->bind_matrix);
-				matrix = m4_mul(dae->node.global_matrix, matrix);
+				m4 matrix = m4_mul(dae->node.global_matrix, dae->node.local_matrix);
 
 				// Update positions
 				{
@@ -2970,12 +2994,6 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			joint->local_matrix = dae->node.local_matrix;
 			joint->inverse_bind_matrix = m4_inverse(m4_mul(dae->node.global_matrix, dae->node.local_matrix));
 			string_copy(joint->name, dae->name, NAME_SIZE);
-
-			// DEBUG
-			SV_LOG_INFO("%s:\n", joint->name);
-			m4 m = joint->inverse_bind_matrix;
-			foreach(i, 4)
-				SV_LOG_INFO("%f / %f / %f / %f\n", m.v[i][0], m.v[i][1], m.v[i][2], m.v[i][3]);
 		}
 
 		// Animations
