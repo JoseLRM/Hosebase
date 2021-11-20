@@ -229,15 +229,16 @@ typedef struct {
 
 } v4_i32;
 
+// Row major matrix: [column][row] 
 typedef struct {
 	union {
 		f32 v[4][4];
 		f32 a[16];
 		struct {
-			f32 m00, m01, m02, m03;
-			f32 m10, m11, m12, m13;
-			f32 m20, m21, m22, m23;
-			f32 m30, m31, m32, m33;
+			f32 m00, m10, m20, m30;
+			f32 m01, m11, m21, m31;
+			f32 m02, m12, m22, m32;
+			f32 m03, m13, m23, m33;
 		};
 	};
 } m4;

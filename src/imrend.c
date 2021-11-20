@@ -322,14 +322,14 @@ inline void update_current_matrix(ImRendState* state)
 
 	if (state->camera.is_custom) {
 
-		vpm = m4_mul(state->camera.projection_matrix, state->camera.view_matrix);
+		vpm = m4_mul(state->camera.view_matrix, state->camera.projection_matrix);
 	}
 	else {
 			
 		switch (state->camera.current)
 		{
 		case ImRendCamera_Normal:
-			vpm = m4_mul(m4_translate(-1.f, -1.f, 0.f), m4_scale(2.f, 2.f, 1.f));
+			vpm = m4_mul(m4_scale(2.f, 2.f, 1.f), m4_translate(-1.f, -1.f, 0.f));
 			break;
 
 #if SV_EDITOR
@@ -345,7 +345,7 @@ inline void update_current_matrix(ImRendState* state)
 		}
 	}
 
-	state->current_matrix = m4_mul(vpm, matrix);
+	state->current_matrix = m4_mul(matrix, vpm);
 }
 
 inline void update_current_scissor(ImRendState* state, CommandList cmd)
@@ -560,9 +560,9 @@ void imrend_flush(CommandList cmd)
 						}
 					}
 
-					m4 m = m4_mul(m4_translate(position.x, position.y, position.z), m4_scale(size.x, size.y, 1.f));
+					m4 m = m4_mul(m4_scale(size.x, size.y, 1.f), m4_translate(position.x, position.y, position.z));
 
-					m = m4_mul(state->current_matrix, m);
+					m = m4_mul(m, state->current_matrix);
 
 					v4 p0 = v4_transform(v4_set(-0.5f, 0.5f, 0.f, 1.f), m);
 					v4 p1 = v4_transform(v4_set(0.5f, 0.5f, 0.f, 1.f), m);
@@ -707,7 +707,7 @@ void imrend_flush(CommandList cmd)
 				desc.alignment = imrend_read(TextAlignment, it);
 				desc.aspect = imrend_read(f32, it);
 				desc.font_size = imrend_read(f32, it);
-				desc.transform_matrix = m4_mul(state->current_matrix, imrend_read(m4, it));
+				desc.transform_matrix = m4_mul(imrend_read(m4, it), state->current_matrix);
 				TextContext ctx = imrend_read(TextContext, it);
 				desc.context = &ctx;
 				desc.text_default_color = imrend_read(Color, it);

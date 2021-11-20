@@ -2093,7 +2093,7 @@ static void dae_load_node(DaeModelInfo* model_info, XMLElement node, DaeNode* pa
 	XMLElement child = node;
 	if (xml_enter_child(&child, "node")) {
 		do {
-			dae_load_node(model_info, child, current, m4_mul(global_matrix, matrix));
+			dae_load_node(model_info, child, current, m4_mul(matrix, global_matrix));
 		} while (xml_next(&child));
 	}
 }
@@ -2712,7 +2712,6 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 											
 											// Blender exports the joint information in his coordinate system
 											//matrix = m4_mul(m4_rotate_x(-PI * 0.5f), matrix);
-
 											pose->position = m4_decompose_position(matrix);
 											pose->rotation = v4_normalize(m4_decompose_rotation(matrix));
 										}
@@ -2913,7 +2912,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			// Set vertex data
 			{
-				m4 matrix = m4_mul(dae->node.global_matrix, dae->node.local_matrix);
+				m4 matrix = m4_mul(dae->node.local_matrix, dae->node.global_matrix);
 
 				// Update positions
 				{
@@ -2992,7 +2991,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			JointInfo* joint = model_info->joints + i;
 
 			joint->local_matrix = dae->node.local_matrix;
-			joint->inverse_bind_matrix = m4_inverse(m4_mul(dae->node.global_matrix, dae->node.local_matrix));
+			joint->inverse_bind_matrix = m4_inverse(m4_mul(dae->node.local_matrix, dae->node.global_matrix));
 			string_copy(joint->name, dae->name, NAME_SIZE);
 		}
 

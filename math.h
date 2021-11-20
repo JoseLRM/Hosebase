@@ -736,7 +736,8 @@ inline m4 m4_inverse(m4 m)
 	return r;
 }
 
-inline m4 m4_mul(m4 m0, m4 m1)
+// TODO
+inline m4 m4_mul(m4 m1, m4 m0)
 {
 	m4 r;
 	r.v[0][0] = m0.v[0][0] * m1.v[0][0] + m0.v[0][1] * m1.v[1][0] + m0.v[0][2] * m1.v[2][0] + m0.v[0][3] * m1.v[3][0];
@@ -843,7 +844,7 @@ inline m4 m4_rotate_euler(f32 roll, f32 pitch, f32 yaw)
 	m4 pitch_matrix = m4_rotate_pitch(pitch);
 	m4 yaw_matrix = m4_rotate_yaw(yaw);
 	
-	return m4_mul(m4_mul(yaw_matrix, pitch_matrix), roll_matrix);
+	return m4_mul(m4_mul(roll_matrix, pitch_matrix), yaw_matrix);
 }
 
 inline m4 m4_rotate_x(f32 x)
