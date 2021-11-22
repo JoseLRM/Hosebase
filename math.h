@@ -763,12 +763,17 @@ inline m4 m4_mul(m4 m1, m4 m0)
 	return r;
 }
 
+inline void m4_set_translation(m4* m, f32 x, f32 y, f32 z)
+{
+	m->v[0][3] = x;
+	m->v[1][3] = y;
+	m->v[2][3] = z;
+}
+
 inline m4 m4_translate(f32 x, f32 y, f32 z)
 {
 	m4 m = m4_identity();
-	m.v[0][3] = x;
-	m.v[1][3] = y;
-	m.v[2][3] = z;
+	m4_set_translation(&m, x, y, z);
 	return m;
 }
 
