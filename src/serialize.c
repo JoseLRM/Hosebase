@@ -1779,8 +1779,6 @@ static b8 dae_load_geometry(DaeModelInfo* model_info, XMLElement root, const cha
 				}
 				u32 mesh_name_size = string_size(mesh->name);
 
-				SV_LOG_INFO("Mesh: %s\n", mesh->name);
-
 				mesh->node.type = DaeNodeType_Mesh;
 				mesh->node.local_matrix = m4_identity();
 				mesh->node.global_matrix = m4_identity();
@@ -2109,7 +2107,7 @@ static b8 dae_load_nodes(DaeModelInfo* model_info, XMLElement root)
 		if (xml_enter_child(&node, "node")) {
 			do {
 
-				dae_load_node(model_info, node, NULL, m4_identity());
+				dae_load_node(model_info, node, NULL, m4_rotate_x(-PI * 0.5f));
 			} 
 			while (xml_next(&node));
 		}
@@ -2710,8 +2708,6 @@ static b8 dae_load_animations(DaeModelInfo* model_info, XMLElement root, const c
 
 											pose->joint = joint_index;
 											
-											// Blender exports the joint information in his coordinate system
-											//matrix = m4_mul(m4_rotate_x(-PI * 0.5f), matrix);
 											pose->position = m4_decompose_position(matrix);
 											pose->rotation = v4_normalize(m4_decompose_rotation(matrix));
 										}
@@ -2913,6 +2909,18 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			// Set vertex data
 			{
 				m4 matrix = m4_mul(dae->node.local_matrix, dae->node.global_matrix);
+				matrix = m4_mul(dae->bind_matrix, matrix);
+
+				// DEBUG: Print bind matrix
+				{
+					m4 m = dae->bind_matrix;
+					SV_LOG_INFO("%s (Decompose Bind Matrix): \n", dae->name);
+					v3 position = m4_decompose_position(m);
+					v4 rotation = m4_decompose_rotation(m);
+					
+					SV_LOG_INFO("Position: %f, %f, %f\n", position.x, position.y, position.z);
+					SV_LOG_INFO("Rotation: %f, %f, %f, %f\n", rotation.x, rotation.y, rotation.z, rotation.w);
+				}
 
 				// Update positions
 				{
@@ -2996,6 +3004,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 		}
 
 		// Animations
+		model_info->animation_matrix = m4_rotate_x(-PI * 0.5f);
 		foreach(i, dae_model_info->animation_count) {
 
 			DaeAnimationInfo* dae = dae_model_info->animations + i;
@@ -3138,7 +3147,8 @@ b8 import_model(ModelInfo* model_info, const char* filepath)
 	if (file_data) {
 		memory_free(file_data);
 	}
-
+	
+	/*
 	// DEBUG: Print animation data
 	{
 		foreach(a, model_info->animation_count) {
@@ -3176,6 +3186,7 @@ b8 import_model(ModelInfo* model_info, const char* filepath)
 			SV_LOG_INFO("Joint %u: %s\n", joint->child_count, joint->name);
 		}
 	}
+	*/
 
 	if (!res) {
 		free_model_info(model_info);

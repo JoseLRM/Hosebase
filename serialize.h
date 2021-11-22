@@ -135,6 +135,7 @@ typedef struct {
 
 	AnimationInfo animations[MODEL_INFO_MAX_ANIMATIONS];
 	u32 animation_count;
+	m4 animation_matrix; // Transform the roots by this matrix to be in the right coordinate system
 
 	JointInfo joints[MODEL_INFO_MAX_JOINTS];
 	u32 joint_count;
