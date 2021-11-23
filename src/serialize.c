@@ -1609,6 +1609,21 @@ typedef struct {
 } DaeAnimationInfo;
 
 typedef struct {
+	Color diffuse_color;
+	Color emissive_color;
+	Color specular_color;
+	Color ambient_color;
+} DaeEffectInfo;
+
+typedef struct {
+	char name[NAME_SIZE];
+	char id[100];
+	char effect_id[100];
+
+	DaeEffectInfo effect;
+} DaeMaterialInfo;
+
+typedef struct {
 
 	DaeNode node;
 
@@ -1646,6 +1661,9 @@ typedef struct {
 typedef struct {
 	DaeMeshInfo meshes[MODEL_INFO_MAX_MESHES];
 	u32 mesh_count;
+
+	DaeMaterialInfo materials[MODEL_INFO_MAX_MATERIALS];
+	u32 material_count;
 
 	DaeJointInfo joints[MODEL_INFO_MAX_JOINTS];
 	u32 joint_count;
@@ -1702,6 +1720,34 @@ inline const char* dae_read_f32(const char* it, f32* value, b8* res)
 	}
 
 	if (res) *res = TRUE;
+
+	return it;
+}
+
+inline const char* dae_read_color(const char* it, Color* value, b8* pres)
+{
+	char delimiters[] = {
+		'<', ' '
+	};
+
+	b8 res = TRUE;
+
+	f32 r, g, b, a;
+
+	it = dae_read_f32(it, &r, &res);
+	if (res) {
+		it = dae_read_f32(it, &g, &res);
+		if (res) {
+			it = dae_read_f32(it, &b, &res);
+			if (res) {
+				it = dae_read_f32(it, &a, &res);
+			}
+		}
+	}
+
+	if (pres) *pres = res;
+
+	*value = color_rgba_f32(r, g, b, a);
 
 	return it;
 }
@@ -1884,10 +1930,23 @@ static b8 dae_load_geometry(DaeModelInfo* model_info, XMLElement root, const cha
 							u32 count;
 							if (xml_get_attribute_u32(&xml_indices, &count, "count")) {
 
-								if (xml_enter_child(&xml_indices, "p")) {
+								XMLElement p = xml_indices;
+								if (xml_enter_child(&p, "p")) {
 
-									if (xml_element_content(&xml_indices, &begin_index, &end_index)) {
+									if (xml_element_content(&p, &begin_index, &end_index)) {
 										index_count = count * 3;
+									}
+								}
+							}
+
+							char material_id[100];
+							if (xml_get_attribute(&xml_indices, material_id, 100, "material")) {
+
+								foreach(i, model_info->material_count) {
+									DaeMaterialInfo* mat = model_info->materials + i;
+									if (string_equals(mat->id, material_id)) {
+										mesh->material_index = i;
+										break;
 									}
 								}
 							}
@@ -2766,6 +2825,163 @@ static dae_add_in_hierarchy_nodes_with_parent(ModelInfo* model_info, DaeModelInf
 	}
 }
 
+static b8 dae_load_materials(DaeModelInfo* model_info, XMLElement root, const char* filepath)
+{
+	XMLElement materials = root;
+	if (xml_enter_child(&materials, "library_materials")) {
+
+		XMLElement xml = materials;
+
+		if (xml_enter_child(&xml, "material")) {
+			do {
+
+				if (model_info->material_count >= MODEL_INFO_MAX_MATERIALS) {
+					SV_LOG_ERROR("The file '%s' exceeds the material limit of %u\n", filepath, MODEL_INFO_MAX_MATERIALS);
+					break;
+				}
+
+				DaeMaterialInfo mat;
+
+				if (!xml_get_attribute(&xml, mat.id, 100, "id")) {
+					SV_LOG_ERROR("Can't read the material id in '%s'\n", filepath);
+					continue;
+				}
+				if (!xml_get_attribute(&xml, mat.name, NAME_SIZE, "name")) {
+					SV_LOG_ERROR("Can't read the material name in '%s'\n", filepath);
+					continue;
+				}
+
+				// Read effect id
+				{
+					XMLElement e = xml;
+					if (xml_enter_child(&e, "instance_effect")) {
+
+						char id[100];
+
+						if (!xml_get_attribute(&e, id, 100, "url")) {
+							SV_LOG_ERROR("Can't read the material effect url '%s' in '%s'\n", mat.name, filepath);
+							continue;
+						}
+						else {
+
+							const char* _id = id;
+							if (_id[0] == '#') {
+								_id++;
+							}
+							memory_copy(mat.effect_id, _id, 100);
+						}
+					}
+					else {
+						SV_LOG_ERROR("Can't read the material effect if of material '%s' in file '%s'\n", mat.name, filepath);
+						continue;
+					}
+				}
+
+				// DEBUG
+				{
+					//SV_LOG_INFO("Material: %s, %s, %s\n", mat.name, mat.id, mat.effect_id);
+				}
+
+				model_info->materials[model_info->material_count++] = mat;
+
+			} while (xml_next(&xml));
+		}
+	}
+
+	return TRUE;
+}
+
+static b8 dae_load_effects(DaeModelInfo* model_info, XMLElement root, const char* filepath)
+{
+	XMLElement effects = root;
+	if (xml_enter_child(&effects, "library_effects")) {
+
+		XMLElement effect_xml = effects;
+		if (xml_enter_child(&effect_xml, "effect")) {
+			do {
+
+				char id[100];
+				if (!xml_get_attribute(&effect_xml, id, 100, "id")) {
+					SV_LOG_ERROR("Can't read the effect id in '%s'\n", filepath);
+					continue;
+				}
+
+				DaeEffectInfo effect;
+
+				// Default values
+				effect.diffuse_color = color_white();
+				effect.emissive_color = color_black();
+				effect.specular_color = color_gray(100);
+				effect.ambient_color = color_black();
+
+				XMLElement xml = effect_xml;
+				if (xml_enter_child(&xml, "profile_COMMON") && 
+					xml_enter_child(&xml, "technique") &&
+					xml_enter_child(&xml, "lambert")) {
+
+					// Emission
+					{
+						XMLElement emission = xml;
+
+						if (xml_enter_child(&emission, "emission")) {
+
+							b8 res = FALSE;
+
+							XMLElement color = emission;
+							if (xml_enter_child(&color, "color")) {
+								
+								const char* begin;
+								const char* end;
+
+								if (xml_element_content(&color, &begin, &end)) {
+
+									dae_read_color(begin, &effect.emissive_color, &res);
+								}
+							}
+						}
+					}
+
+					// Diffuse
+					{
+						XMLElement diffuse = xml;
+
+						if (xml_enter_child(&diffuse, "diffuse")) {
+
+							b8 res = FALSE;
+
+							XMLElement color = diffuse;
+							if (xml_enter_child(&color, "color")) {
+
+								const char* begin;
+								const char* end;
+
+								if (xml_element_content(&color, &begin, &end)) {
+
+									dae_read_color(begin, &effect.diffuse_color, &res);
+								}
+							}
+						}
+					}
+				}
+
+				// Set effect values to materials
+				foreach(i, model_info->material_count) {
+
+					DaeMaterialInfo* mat = model_info->materials + i;
+
+					if (string_equals(mat->effect_id, id)) {
+
+						mat->effect = effect;
+					}
+				}
+
+			} while(xml_next(&effect_xml));
+		}
+	}
+
+	return TRUE;
+}
+
 static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, u32 file_size)
 {
 	DaeModelInfo* dae_model_info = memory_allocate(sizeof(DaeModelInfo));
@@ -2774,6 +2990,16 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 	if (root.corrupted) {
 		SV_LOG_ERROR("Corrupted .dae\n");
+		return FALSE;
+	}
+
+	if (!dae_load_materials(dae_model_info, root, filepath)) {
+		SV_LOG_ERROR("Can't load dae materials '%s'\n", filepath);
+		return FALSE;
+	}
+
+	if (!dae_load_effects(dae_model_info, root, filepath)) {
+		SV_LOG_ERROR("Can't load dae effects '%s'\n", filepath);
 		return FALSE;
 	}
 
@@ -2913,6 +3139,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 				// DEBUG: Print bind matrix
 				{
+					/*
 					m4 m = dae->bind_matrix;
 					SV_LOG_INFO("%s (Decompose Bind Matrix): \n", dae->name);
 					v3 position = m4_decompose_position(m);
@@ -2920,6 +3147,7 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 					
 					SV_LOG_INFO("Position: %f, %f, %f\n", position.x, position.y, position.z);
 					SV_LOG_INFO("Rotation: %f, %f, %f, %f\n", rotation.x, rotation.y, rotation.z, rotation.w);
+					*/
 				}
 
 				// Update positions
@@ -2991,6 +3219,21 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 			memory_free(index_table);
 		}
+
+		// Materials
+		foreach(i, dae_model_info->material_count) {
+			
+			DaeMaterialInfo* m0 = dae_model_info->materials + i;
+			MaterialInfo* m1 = model_info->materials + i;
+
+			string_copy(m1->name, m0->name, NAME_SIZE);
+
+			m1->diffuse_color = m0->effect.diffuse_color;
+			m1->specular_color = m0->effect.specular_color;
+			m1->ambient_color = m0->effect.ambient_color;
+			m1->emissive_color = m0->effect.emissive_color;
+		}
+		model_info->material_count = dae_model_info->material_count;
 
 		// Joints
 		foreach(i, dae_model_info->joint_count) {
