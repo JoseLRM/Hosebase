@@ -1069,6 +1069,60 @@ inline b8 ray_intersect_triangle(Ray ray, const v3 p0, const v3 p1, const v3 p2,
 		return TRUE;
 }
 
+// From: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+// TODO: Optimize
+inline b8 ray_intersect_aabb(Ray ray, const v3 min, const v3 max, f32* dist)
+{
+	float tmin = (min.x - ray.origin.x) / ray.direction.x;
+	float tmax = (max.x - ray.origin.x) / ray.direction.x;
+
+	if (tmin > tmax) {
+		f32 aux = tmin;
+		tmin = tmax;
+		tmax = aux;
+	}
+
+	float tymin = (min.y - ray.origin.y) / ray.direction.y;
+	float tymax = (max.y - ray.origin.y) / ray.direction.y;
+
+	if (tymin > tymax) {
+		f32 aux = tymin;
+		tymin = tymax;
+		tymax = aux;
+	}
+
+	if ((tmin > tymax) || (tymin > tmax))
+		return FALSE;
+
+	if (tymin > tmin)
+		tmin = tymin;
+
+	if (tymax < tmax)
+		tmax = tymax;
+
+	float tzmin = (min.z - ray.origin.z) / ray.direction.z;
+	float tzmax = (max.z - ray.origin.z) / ray.direction.z;
+
+	if (tzmin > tzmax) {
+		f32 aux = tzmin;
+		tzmin = tzmax;
+		tzmax = aux;
+	}
+
+	if ((tmin > tzmax) || (tzmin > tmax))
+		return FALSE;
+
+	if (tzmin > tmin)
+		tmin = tzmin;
+
+	if (tzmax < tmax)
+		tmax = tzmax;
+
+	*dist = tmin;
+
+	return TRUE;
+}
+
 // Color
 
 inline Color color_rgba(u8 r, u8 g, u8 b, u8 a)
