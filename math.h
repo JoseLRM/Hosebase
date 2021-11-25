@@ -1006,6 +1006,13 @@ inline v4 quaternion_interpolate(v4 a, v4 b, f32 n)
 	return q;
 }
 
+inline v4 quaternion_from_euler(f32 roll, f32 pitch, f32 yaw)
+{
+	// TODO: Optimize xd
+	m4 r = m4_rotate_euler(roll, pitch, yaw);
+	return m4_decompose_rotation(r);
+}
+
 // Ray
 
 inline Ray ray_mouse_picking_perspective(v2 mouse_position, v3 camera_position, m4 inverse_view_matrix, m4 inverse_projection_matrix)
