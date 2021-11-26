@@ -509,6 +509,11 @@ Asset asset_load_from_file(const char* filepath, AssetPriority priority)
 {
 	AssetType* type = find_asset_type_from_filepath(filepath);
 
+	if (type == NULL) {
+		SV_LOG_ERROR("Unknown extension '%s'\n", filepath);
+		return 0;
+	}
+
 	u64 hash = compute_asset_filepath_hash(filepath);
 
 	Asset asset_handle = find_asset_in_table(type, hash);
@@ -579,6 +584,14 @@ void* asset_get(Asset asset)
 	if (a) {
 		return a + 1;
 	}
+	return NULL;
+}
+
+void* asset_get_ptr(Asset asset)
+{
+	void** a = asset_get(asset);
+	if (a)
+		return *a;
 	return NULL;
 }
 

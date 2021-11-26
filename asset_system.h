@@ -19,6 +19,7 @@ void asset_increment(Asset asset);
 void asset_decrement(Asset asset);
 
 void*       asset_get(Asset asset);
+void*       asset_get_ptr(Asset asset);
 const char* asset_filepath(Asset asset);
 const char* asset_type(Asset asset);
 
