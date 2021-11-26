@@ -8,6 +8,7 @@
 #include "src/serialize.c"
 #include "src/input.c"
 #include "src/event_system.c"
+#include "src/asset_system.c"
 #include "src/graphics.c"
 #include "src/graphics_shader.c"
 #include "src/imrend.c"

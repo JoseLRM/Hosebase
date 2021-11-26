@@ -4,6 +4,7 @@
 #include "Hosebase/graphics.h"
 #include "Hosebase/input.h"
 #include "Hosebase/event_system.h"
+#include "Hosebase/asset_system.h"
 #include "Hosebase/serialize.h"
 #include "Hosebase/font.h"
 #include "Hosebase/networking.h"
@@ -18,6 +19,10 @@ typedef struct {
 	GraphicsInitializeDesc graphics;
 #endif
 
+	struct {
+		b8 hot_reload;
+	} asset;
+
 } HosebaseInitializeDesc;
 
 inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
@@ -28,6 +33,10 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 
 	if (!_event_initialize()) {
 		SV_LOG_ERROR("Can't initialize event system\n");
+	}
+
+	if (!_asset_initialize(desc->asset.hot_reload)) {
+		SV_LOG_ERROR("Can't initialize asset system\n");
 	}
 	
 	if (!_os_initialize(&desc->os)) {
@@ -77,6 +86,11 @@ inline void hosebase_close()
 	
 #if SV_GRAPHICS
 	render_utils_close();
+#endif
+
+	asset_free_unused();
+
+#if SV_GRAPHICS
 	_graphics_close();
 #endif
 
@@ -86,6 +100,7 @@ inline void hosebase_close()
 	
 	_input_close();
 	_os_close();
+	_asset_close();
 	_event_close();
 }
 
@@ -106,6 +121,8 @@ inline b8 hosebase_frame_begin()
 #if SV_GRAPHICS
 	_graphics_begin();
 #endif
+
+	_asset_update();
 
 	return TRUE;
 }

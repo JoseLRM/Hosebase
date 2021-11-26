@@ -24,6 +24,24 @@ void memory_copy(void* dst, const void* src, size_t size);
 void memory_zero(void* dst, size_t size);
 void memory_swap(void* p0, void* p1, size_t size);
 
+inline b8 array_prepare(void** data, u32* count, u32* capacity, u32 new_capacity, u32 add, u32 stride)
+{
+	if (*count + add > * capacity) {
+
+		u8* new_data = (u8*)memory_allocate(new_capacity * stride);
+
+		if (*count) {
+			memory_copy(new_data, *data, *count * stride);
+			memory_free(*data);
+		}
+
+		*data = new_data;
+		*capacity = new_capacity;
+		return TRUE;
+	}
+	return FALSE;
+}
+
 inline const char* string_validate(const char* str)
 {
 	return str ? str : "";

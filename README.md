@@ -11,6 +11,7 @@ The base of my projects.
 <p>- Data structures</p>
 <p>- Memory management and debugging</p>
 <p>- Event system</p>
+<p>- Asset System</p>
 <p>- String utils</p>
 <p>- Random number generator</p>
 <p>- Perlin Noise Function 1D and 2D</p>
@@ -22,4 +23,4 @@ The base of my projects.
 
 <h2>Future</h2>
 <p>- Debug console</p>
-<p>- Asset System</p>
+
