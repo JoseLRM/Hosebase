@@ -1250,36 +1250,93 @@ inline u32 math_random_u32_min_max(u32 seed, u32 min, u32 max)
 
 inline f32 math_perlin_noise(u32 seed, f32 n)
 {
-	i32 offset = (n < 0.f) ? ((i32)n - 1) : (i32)n;
+	n += math_random_f32(seed * 0x3294124u) * 10000.f - 5000.f;
 
-	f32 p0 = (f32)offset + math_random_f32(seed * ((u32)offset + 0x9e3779b9 + ((u32)offset << 6) + ((u32)offset >> 2)));
-	f32 h0 = math_random_f32(seed * 24332 * ((u32)offset + 0x9e3779b9 + ((u32)offset << 6) + ((u32)offset >> 2)));
+	i32 offset = (n < 0.f) ? (i32)(n - 1.f) : (i32)n;
 
-	f32 p1;
+	f32 p0 = (f32)offset;
+	f32 h0 = math_random_f32(seed + offset);
+
 	if (n < p0) {
 
 		--offset;
-		p1 = (f32)offset + math_random_f32(seed * ((u32)offset + 0x9e3779b9 + ((u32)offset << 6) + ((u32)offset >> 2)));
+		f32 p1 = (f32)offset;
 
 		f32 pos = (n - p1) / (p0 - p1);
 		pos = (f32)cos(PI - pos * PI) * 0.5f + 0.5f;
 
-		f32 h1 = math_random_f32(seed * 24332 * ((u32)offset + 0x9e3779b9 + ((u32)offset << 6) + ((u32)offset >> 2)));
+		f32 h1 = math_random_f32(seed + offset);
 
 		return h1 + pos * (h0 - h1);
 	}
 	else {
 
 		++offset;
-		p1 = (f32)offset + math_random_f32(seed * ((u32)offset + 0x9e3779b9 + ((u32)offset << 6) + ((u32)offset >> 2)));
+		f32 p1 = (f32)offset;
 
 		f32 pos = (n - p0) / (p1 - p0);
 		pos = (f32)cos(PI - pos * -PI) * 0.5f + 0.5f;
 
-		f32 h1 = math_random_f32(seed * 24332 * ((u32)offset + 0x9e3779b9 + ((u32)offset << 6) + ((u32)offset >> 2)));
+		f32 h1 = math_random_f32(seed + offset);
 
 		return h0 + pos * (h1 - h0);
 	}
+}
+
+inline f32 _perlin_noise_2D_peak_value(u32 seed, i32 p, f32 x)
+{
+	seed += p;
+	f32 desp = math_random_f32(seed);
+	return math_perlin_noise(seed, x + desp);
+}
+
+inline f32 math_perlin_noise2D(u32 seed, f32 x, f32 y)
+{
+	i32 p0 = (i32)y;
+	if (y < 0.f) --p0;
+
+	i32 p1 = p0 + 1;
+
+	f32 n0 = _perlin_noise_2D_peak_value(seed, p0, x);
+	f32 n1 = _perlin_noise_2D_peak_value(seed, p1, x);
+
+	f32 inter = y - (f32)p0 / ((f32)p1 - (f32)p0);
+
+	inter = (cos(inter * PI) - 1.f) * -0.5f;
+
+	return n0 * (1.f - inter) + n1 * inter;
+}
+
+inline f32 _perlin_noise_3D_peak_value(u32 seed, i32 p, f32 x, f32 y)
+{
+	seed += p;
+	f32 desp0 = math_random_f32(seed);
+	f32 desp1 = math_random_f32(seed + 0x25462u);
+	return math_perlin_noise2D(seed, x + desp0, y + desp1);
+}
+
+inline f32 math_perlin_noise3D(u32 seed, f32 x, f32 y, f32 z)
+{
+	i32 p0 = (i32)z;
+	if (z < 0.f) --p0;
+
+	i32 p1 = p0 + 1;
+
+	f32 n0 = _perlin_noise_3D_peak_value(seed, p0, x, y);
+	f32 n1 = _perlin_noise_3D_peak_value(seed, p1, x, y);
+
+	f32 inter = z - (f32)p0 / ((f32)p1 - (f32)p0);
+
+	inter = (cos(inter * PI) - 1.f) * -0.5f;
+
+	return n0 * (1.f - inter) + n1 * inter;
+}
+
+inline f32 math_ridged_noise(f32 n, f32 e)
+{
+	n = 2.f * (0.5f - fabs(0.5f - n));
+	n = pow(n, e);
+	return n;
 }
 
 /*

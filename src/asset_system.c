@@ -2,7 +2,7 @@
 
 #define EXTENSION_MAX 10
 #define ASSET_TYPE_MAX 20
-#define ASSET_TABLE_SIZE 4000
+#define ASSET_TABLE_SIZE 200
 
 #define AssetFlag_Valid SV_BIT(0)
 #define AssetFlag_FromFile SV_BIT(1)
