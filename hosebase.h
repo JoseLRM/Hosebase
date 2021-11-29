@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Hosebase/os.h"
+#include "Hosebase/sound.h"
 #include "Hosebase/graphics.h"
 #include "Hosebase/input.h"
 #include "Hosebase/event_system.h"
@@ -42,6 +43,10 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 	if (!_os_initialize(&desc->os)) {
 		SV_LOG_ERROR("Can't initialize os layer\n");
 		return FALSE;
+	}
+
+	if (!_sound_initialize(48800, 48800 * sizeof(u16) * 2)) {
+		SV_LOG_ERROR("Can't initialize audio system");
 	}
 
 	if (!_input_initialize()) {
@@ -97,6 +102,8 @@ inline void hosebase_close()
 #if SV_NETWORKING
 	_net_close();
 #endif
+
+	_sound_close();
 	
 	_input_close();
 	_os_close();
@@ -132,6 +139,7 @@ inline void hosebase_frame_end()
 #if SV_GRAPHICS
 	_graphics_end();
 #endif
+	_sound_update();
 
 	++core.frame_count;
 }
