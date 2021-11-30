@@ -148,7 +148,7 @@ void _sound_update()
 				*samples++ = 0;
 			}
 
-			sound->secondary_buffer->lpVtbl->Unlock(region0, region0_size, region1, region1_size);
+			sound->secondary_buffer->lpVtbl->Unlock(sound->secondary_buffer, region0, region0_size, region1, region1_size);
 		}
 	}
 }
