@@ -1,15 +1,15 @@
 #include "Hosebase/sound.h"
 
-#include "Hosebase/serialize.h"
 #include "windows.h"
 #include "DSound.h"
+
+#include "Hosebase/serialize.h"
 
 #pragma comment(lib, "Dsound.lib")
 
 typedef struct {
-	Audio* audio;
 	u32 begin_sample_index;
-	u32 end_sample_index;
+	AudioDesc desc;
 } AudioInstance;
 
 typedef struct {
@@ -169,7 +169,14 @@ void _sound_update()
 {
 	// TEMP
 	if (input_key(Key_S, InputState_Pressed)) {
-		audio_play();
+
+		AudioDesc desc;
+		SV_ZERO(desc);
+		desc.audio = &sound->audio;
+		desc.volume = 0.5f;
+		desc.velocity = 1.5f;
+
+		audio_play_desc(&desc);
 	}
 
 	// TODO: If the audio instance count is 0 and the sampler_index is high: Decrese sampler_index to avoid precision issues
@@ -211,13 +218,28 @@ void _sound_update()
 				// Append audio instances
 				{
 					AudioInstance* inst = &sound->instance;
-					Audio* audio = inst->audio;
+					AudioDesc* desc = &inst->desc;
 
-					if (audio != NULL && inst->end_sample_index > sound->sample_index) {
+					Audio* audio = desc->audio;
+
+					// TODO: Variable velocity
+
+					if (desc->asset)
+						audio = asset_get(desc->asset);
+
+					u32 end_sample_index = 0;
+					if (audio) {
+						f32 seconds = (f32)audio->sample_count / (f32)audio->samples_per_second;
+						seconds *= desc->velocity;
+
+						end_sample_index = sound->sample_index + (u32)(seconds * (f32)sound->samples_per_second);
+					}
+
+					if (audio != NULL && end_sample_index > sound->sample_index) {
 
 						u32 sample_index = sound->sample_index - inst->begin_sample_index;
 
-						u32 write_count = SV_MIN(samples_to_write, (inst->end_sample_index - sound->sample_index));
+						u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
 
 						// TODO: Handle if exceed sample values
 						// TODO: Use two loops, one for each channel
@@ -227,8 +249,8 @@ void _sound_update()
 							u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
 							u32 s1 = (sample_index + i) % audio->sample_count;
 
-							s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second);
-							s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second);
+							s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * desc->velocity);
+							s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * desc->velocity);
 
 							s0 %= audio->sample_count;
 							s1 %= audio->sample_count;
@@ -251,8 +273,8 @@ void _sound_update()
 								right_value += (f32)sound->audio.samples[1][s] * mult;
 							}
 
-							sound->samples[i * 2 + 0] += math_round(left_value);
-							sound->samples[i * 2 + 1] += math_round(right_value);
+							sound->samples[i * 2 + 0] += math_round(left_value * desc->volume);
+							sound->samples[i * 2 + 1] += math_round(right_value * desc->volume);
 						}
 					}
 				}
@@ -445,13 +467,15 @@ void audio_destroy(Audio* audio)
 		memory_free(audio->samples[0]);
 }
 
-void audio_play()
+void audio_play_desc(const AudioDesc* desc)
 {
 	AudioInstance* inst = &sound->instance;
-	inst->audio = &sound->audio;
+	inst->desc = *desc;
+	
+	if (inst->desc.asset)
+		inst->desc.audio = NULL;
+	else if (inst->desc.audio == NULL)
+		return;
+
 	inst->begin_sample_index = sound->sample_index;
-
-	f32 seconds = (f32)inst->audio->sample_count / (f32)inst->audio->samples_per_second;
-
-	inst->end_sample_index = sound->sample_index + (u32)(seconds * (f32)sound->samples_per_second);
 }
