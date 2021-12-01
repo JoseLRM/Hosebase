@@ -14,5 +14,5 @@ void audio_destroy(Audio* audio);
 
 void audio_play();
 
-b8 _sound_initialize(u32 samples_per_second, u32 buffer_size);
+b8 _sound_initialize(u32 samples_per_second);
 void _sound_close();

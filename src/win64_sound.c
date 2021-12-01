@@ -24,6 +24,7 @@ typedef struct {
 	u32 write_sample_latency;
 
 	u32 sample_index;
+	i16* samples;
 
 	// TEMP
 	Audio audio;
@@ -53,52 +54,38 @@ static void clear_sound_buffer()
 
 static void fill_sound_buffer(u32 byte_to_lock, u32 bytes_to_write)
 {
-	u32 sample_index = sound->sample_index;
-
 	void* regions[2];
 	DWORD region_sizes[2];
 
 	if (sound->secondary_buffer->lpVtbl->Lock(sound->secondary_buffer, byte_to_lock, bytes_to_write, &regions[0], &region_sizes[0], &regions[1], &region_sizes[1], 0) == DS_OK) {
 
+		i16* src = sound->samples;
+
 		foreach(buffer_index, 2) {
-		
+
 			u32 sample_count = region_sizes[buffer_index] / sound->bytes_per_sample;
 			i16* samples = regions[buffer_index];
 			foreach(index, sample_count) {
 
-				i32 left_value = 0;
-				i32 right_value = 0;
-
-				AudioInstance* inst = &sound->instance;
-				Audio* audio = inst->audio;
-
-				if (audio != NULL && inst->end_sample_index > sample_index) {
-
-					u32 relative_sample = sample_index - inst->begin_sample_index;
-					relative_sample = (u32)(((f32)relative_sample / (f32)sound->samples_per_second) * (f32)audio->samples_per_second);
-					relative_sample %= audio->sample_count;
-
-					left_value += sound->audio.samples[0][relative_sample];
-					right_value += sound->audio.samples[1][relative_sample];
-				}
-
-				*samples++ = left_value;
-				*samples++ = right_value;
-
-				sample_index++;
+				*samples++ = *src++;
+				*samples++ = *src++;
 			}
 		}
 
 		sound->secondary_buffer->lpVtbl->Unlock(sound->secondary_buffer, regions[0], region_sizes[0], regions[1], region_sizes[1]);
 	}
-
-	sound->sample_index = sample_index;
 }
 
-b8 _sound_initialize(u32 samples_per_second, u32 buffer_size)
+b8 _sound_initialize(u32 samples_per_second)
 {
 	sound = memory_allocate(sizeof(SoundSystemData));
 
+	sound->bytes_per_sample = sizeof(i16) * 2;
+	sound->buffer_size = samples_per_second * sound->bytes_per_sample;
+	sound->samples_per_second = samples_per_second;
+	sound->write_sample_latency = samples_per_second / 15;
+
+	// TEMP
 	if (!audio_load(&sound->audio, "res/sound/shot.wav")) {
 		SV_LOG_ERROR("Can't read the wav file\n");
 		return FALSE;
@@ -153,7 +140,7 @@ b8 _sound_initialize(u32 samples_per_second, u32 buffer_size)
 
 		desc.dwSize = sizeof(DSBUFFERDESC);
 		desc.dwFlags = 0;
-		desc.dwBufferBytes = buffer_size;
+		desc.dwBufferBytes = sound->buffer_size;
 		desc.lpwfxFormat = &format;
 
 		LPDIRECTSOUNDBUFFER secondary_buffer;
@@ -166,13 +153,11 @@ b8 _sound_initialize(u32 samples_per_second, u32 buffer_size)
 		sound->secondary_buffer = secondary_buffer;
 	}
 
-	sound->buffer_size = buffer_size;
-	sound->samples_per_second = samples_per_second;
-	sound->bytes_per_sample = sizeof(i16) * 2;
-	sound->write_sample_latency = samples_per_second / 20;
-
 	clear_sound_buffer();
 	sound->secondary_buffer->lpVtbl->Play(sound->secondary_buffer, 0, 0, DSBPLAY_LOOPING);
+
+	// Allocate samples data
+	sound->samples = memory_allocate(sound->buffer_size);
 
 	return TRUE;
 }
@@ -182,17 +167,7 @@ b8 _sound_initialize(u32 samples_per_second, u32 buffer_size)
 
 void _sound_update()
 {
-	// Rate
-	/*static f64 last_update = 0.0;
-	f64 rate = 1.f / 60.f;
-
-	last_update += core.delta_time;
-
-	if (last_update < rate) {
-		return;
-	}
-	last_update -= rate;*/
-
+	// TEMP
 	if (input_key(Key_S, InputState_Pressed)) {
 		audio_play();
 	}
@@ -221,7 +196,51 @@ void _sound_update()
 
 			//TODO: Should limit the bytes_to_write value?
 
-			fill_sound_buffer(byte_to_lock, bytes_to_write);
+			if (bytes_to_write) {
+
+				u32 samples_to_write = bytes_to_write / sound->bytes_per_sample;
+
+				// Clear buffer
+				{
+					foreach(i, samples_to_write) {
+						sound->samples[i * 2 + 0] = 0;
+						sound->samples[i * 2 + 1] = 0;
+					}
+				}
+
+				// Append audio instances
+				{
+					AudioInstance* inst = &sound->instance;
+					Audio* audio = inst->audio;
+
+					if (audio != NULL && inst->end_sample_index > sound->sample_index) {
+
+						u32 sample_index = sound->sample_index - inst->begin_sample_index;
+
+						u32 write_count = SV_MIN(samples_to_write, (inst->end_sample_index - sound->sample_index));
+
+						// TODO: Handle if exceed sample values
+						// TODO: Use two loops, one for each channel
+
+						foreach(i, write_count) {
+
+							u32 relative_sample = sample_index + i;
+							relative_sample = (u32)(((f32)relative_sample / (f32)sound->samples_per_second) * (f32)audio->samples_per_second);
+							relative_sample %= audio->sample_count;
+
+							i32 left_value = sound->audio.samples[0][relative_sample];
+							i32 right_value = sound->audio.samples[1][relative_sample];
+
+							sound->samples[i * 2 + 0] += left_value;
+							sound->samples[i * 2 + 1] += right_value;
+						}
+					}
+				}
+
+				fill_sound_buffer(byte_to_lock, bytes_to_write);
+
+				sound->sample_index += samples_to_write;
+			}
 		}
 	}
 }
@@ -230,6 +249,7 @@ void _sound_close()
 {
 	if (sound) {
 
+		memory_free(sound->samples);
 		memory_free(sound);
 	}
 }
