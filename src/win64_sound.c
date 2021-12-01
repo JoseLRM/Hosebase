@@ -151,6 +151,9 @@ b8 audio_load(Audio* audio, const char* filepath)
 			u32 sample_count = (sample_bytes / (fmt->bits_per_sample / 8)) / fmt->channel_count; // Per channel sample count
 			u32 per_channel_bytes = sizeof(i16) * sample_count;
 
+			audio->sample_count = sample_count;
+			audio->samples_per_second = fmt->samples_per_second;
+
 			// TODO: Support 8 bits samples
 
 			if (audio->channel_count == 1) {
@@ -229,10 +232,11 @@ static void fill_sound_buffer(u32 byte_to_lock, u32 bytes_to_write, u32 wave_per
 		i16* samples = region0;
 		foreach(index, sample_count) {
 
-			i64 value = (i32)(sinf(tsin) * (f32)wave_tone);
+			i16 value = (i16)(sinf(tsin) * (f32)wave_tone);
 
-			*samples++ = value;
-			*samples++ = value;
+			u32 relative_sample = (u32)(((f32)sample_index / (f32)sound->samples_per_second) * (f32)sound->audio.samples_per_second);
+			*samples++ = sound->audio.samples[0][relative_sample % sound->audio.sample_count];
+			*samples++ = sound->audio.samples[1][relative_sample % sound->audio.sample_count];
 
 			sample_index++;
 			tsin += (2.f * PI) / (f32)wave_period;
@@ -242,10 +246,11 @@ static void fill_sound_buffer(u32 byte_to_lock, u32 bytes_to_write, u32 wave_per
 		samples = region1;
 		foreach(index, sample_count) {
 
-			i64 value = (i32)(sinf(tsin) * (f32)wave_tone);
+			i16 value = (i16)(sinf(tsin) * (f32)wave_tone);
 
-			*samples++ = value;
-			*samples++ = value;
+			u32 relative_sample = (u32)(((f32)sample_index / (f32)sound->samples_per_second) * (f32)sound->audio.samples_per_second);
+			*samples++ = sound->audio.samples[0][relative_sample % sound->audio.sample_count];
+			*samples++ = sound->audio.samples[1][relative_sample % sound->audio.sample_count];
 
 			sample_index++;
 			tsin += (2.f * PI) / (f32)wave_period;
@@ -357,9 +362,9 @@ void _sound_update()
 	}
 	last_update -= rate;*/
 
-	const u32 hz = 250;
+	const u32 hz = 250 + sinf((f32)timer_now() * 10.f) * 100.f;
 	const u32 wave_period = sound->samples_per_second / hz;
-	const u32 wave_tone = 20000;
+	const u32 wave_tone = 40000;
 
 	if (core.frame_count == 0) {
 		sound->secondary_buffer->lpVtbl->Play(sound->secondary_buffer, 0, 0, DSBPLAY_LOOPING);
