@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Hosebase/defines.h"
+#include "Hosebase/graphics.h"
 
 SV_BEGIN_C_HEADER
 
