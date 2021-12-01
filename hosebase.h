@@ -45,7 +45,7 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		return FALSE;
 	}
 
-	if (!_sound_initialize(4800)) {
+	if (!_sound_initialize(44800)) {
 		SV_LOG_ERROR("Can't initialize audio system");
 	}
 

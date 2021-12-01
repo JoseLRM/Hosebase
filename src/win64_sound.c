@@ -86,7 +86,7 @@ b8 _sound_initialize(u32 samples_per_second)
 	sound->write_sample_latency = samples_per_second / 15;
 
 	// TEMP
-	if (!audio_load(&sound->audio, "res/sound/shot.wav")) {
+	if (!audio_load(&sound->audio, "C:/Users/josel/Downloads/yt1s.com - Judas Priest  Painkiller Official Lyric Video (1).wav")) {
 		SV_LOG_ERROR("Can't read the wav file\n");
 		return FALSE;
 	}
@@ -224,15 +224,35 @@ void _sound_update()
 
 						foreach(i, write_count) {
 
-							u32 relative_sample = sample_index + i;
-							relative_sample = (u32)(((f32)relative_sample / (f32)sound->samples_per_second) * (f32)audio->samples_per_second);
-							relative_sample %= audio->sample_count;
+							u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
+							u32 s1 = (sample_index + i) % audio->sample_count;
 
-							i32 left_value = sound->audio.samples[0][relative_sample];
-							i32 right_value = sound->audio.samples[1][relative_sample];
+							s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second);
+							s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second);
 
-							sound->samples[i * 2 + 0] += left_value;
-							sound->samples[i * 2 + 1] += right_value;
+							s0 %= audio->sample_count;
+							s1 %= audio->sample_count;
+
+							if (s0 > s1) {
+								u32 aux = s0;
+								s0 = s1;
+								s1 = aux;
+							}
+
+							f32 left_value = 0;
+							f32 right_value = 0;
+
+							// I do it multiplying individualy the samples to have more precision
+							f32 mult = 1.f / (f32)(s1 - s0 + 1);
+
+							for (u32 s = s0; s <= s1; ++s) {
+
+								left_value += (f32)sound->audio.samples[0][s] * mult;
+								right_value += (f32)sound->audio.samples[1][s] * mult;
+							}
+
+							sound->samples[i * 2 + 0] += math_round(left_value);
+							sound->samples[i * 2 + 1] += math_round(right_value);
 						}
 					}
 				}
