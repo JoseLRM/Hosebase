@@ -10,15 +10,18 @@ typedef struct {
 } Audio;
 
 typedef struct {
-	Asset audio_asset;
 	f32 volume;
 	f32 velocity;
-} AudioDesc;
+	u64 flags;
+} AudioProperties;
+
+void audio_source_play_desc(u64 id, Asset audio_asset, const AudioProperties* props);
+void audio_source_update_properties(u64 id, const AudioProperties* props);
+void audio_source_continue(u64 id);
+void audio_source_pause(u64 id);
 
 b8 audio_load(Audio* audio, const char* filepath);
 void audio_destroy(Audio* audio);
-
-void audio_play_desc(u64 id, const AudioDesc* desc);
 
 b8 _sound_initialize(u32 samples_per_second);
 void _sound_close();
