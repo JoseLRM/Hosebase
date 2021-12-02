@@ -18,7 +18,7 @@ typedef struct {
 b8 audio_load(Audio* audio, const char* filepath);
 void audio_destroy(Audio* audio);
 
-void audio_play_desc(const AudioDesc* desc);
+void audio_play_desc(u64 id, const AudioDesc* desc);
 
 b8 _sound_initialize(u32 samples_per_second);
 void _sound_close();

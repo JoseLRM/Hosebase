@@ -7,10 +7,20 @@
 
 #pragma comment(lib, "Dsound.lib")
 
-typedef struct {
+#define AUDIO_SOURCE_MAX 10000
+
+#define AudioSourceFlag_Valid SV_BIT(0)
+
+typedef struct AudioSource AudioSource;
+
+struct AudioSource {
 	u32 begin_sample_index;
 	AudioDesc desc;
-} AudioInstance;
+
+	u32 flags;
+	u64 hash;
+	AudioSource* next;
+};
 
 typedef struct {
 	
@@ -26,11 +36,16 @@ typedef struct {
 	u32 sample_index;
 	f32* samples;
 
-	AudioInstance instance;
+	AudioSource sources[AUDIO_SOURCE_MAX];
+	u32 source_count;
+
+	AudioSource* free_sources;
 
 } SoundSystemData;
 
 static SoundSystemData* sound;
+
+///////////////////////////////////////////////////////////// AUDIO ASSET ////////////////////////////////////////////////
 
 static b8 asset_audio_load_file(void* asset, const char* filepath)
 {
@@ -54,6 +69,8 @@ static b8 asset_audio_reload_file(void* asset, const char* filepath)
 	asset_audio_free(asset);
 	return asset_audio_load_file(asset, filepath);
 }
+
+/////////////////////////////////////////////
 
 static void clear_sound_buffer()
 {
@@ -194,7 +211,7 @@ b8 _sound_initialize(u32 samples_per_second)
 		desc.load_file_fn = asset_audio_load_file;
 		desc.reload_file_fn = asset_audio_reload_file;
 		desc.free_fn = asset_audio_free;
-		desc.unused_time = 10.f;
+		desc.unused_time = 5.f;
 
 		SV_CHECK(asset_register_type(&desc));
 	}
@@ -210,13 +227,20 @@ void _sound_update()
 	// TEMP
 	if (input_key(Key_S, InputState_Pressed)) {
 
-		AudioDesc desc;
-		SV_ZERO(desc);
-		desc.audio_asset = asset_load_from_file("C:/Users/isca/Downloads/yt1s.com - Se Menea.wav", AssetPriority_RightNow);
-		desc.volume = 0.5f;
-		desc.velocity = 1.f;
+		Asset asset = asset_load_from_file("res/sound/shot.wav", AssetPriority_RightNow);
 
-		audio_play_desc(&desc);
+		if (asset) {
+
+			AudioDesc desc;
+			SV_ZERO(desc);
+			desc.audio_asset = asset;
+			desc.volume = 0.5f;
+			desc.velocity = 1.f;
+
+			audio_play_desc(0, &desc);
+
+			asset_unload(&asset);
+		}
 	}
 
 	// TODO: If the audio instance count is 0 and the sampler_index is high: Decrese sampler_index to avoid precision issues
@@ -255,63 +279,82 @@ void _sound_update()
 					}
 				}
 
-				// Append audio instances
+				// Append audio sources
 				{
-					AudioInstance* inst = &sound->instance;
-					AudioDesc* desc = &inst->desc;
+					foreach(source_index, sound->source_count) {
 
-					Audio* audio = asset_get(desc->audio_asset);
+						AudioSource* src = sound->sources + source_index;
+						AudioDesc* desc = &src->desc;
 
-					// TODO: 
-					// - Variable velocity
-					// - Decrement the asset when the audio instance is finished
-					// - Use two loops, one for each channel
+						Audio* audio = asset_get(desc->audio_asset);
 
-					u32 end_sample_index = 0;
-					if (audio) {
-						f32 seconds = (f32)audio->sample_count / (f32)audio->samples_per_second;
-						seconds *= desc->velocity;
+						// TODO: 
+						// - Variable velocity
+						// - Decrement the asset when the audio instance is finished
+						// - Use two loops, one for each channel
 
-						end_sample_index = sound->sample_index + (u32)(seconds * (f32)sound->samples_per_second);
-					}
+						if (audio == NULL || !(src->flags & AudioSourceFlag_Valid))
+							continue;
 
-					if (audio != NULL && end_sample_index > sound->sample_index) {
+						u32 end_sample_index;
+						{
+							f32 seconds = (f32)audio->sample_count / (f32)audio->samples_per_second;
+							seconds *= desc->velocity;
 
-						u32 sample_index = sound->sample_index - inst->begin_sample_index;
+							end_sample_index = src->begin_sample_index + (u32)(seconds * (f32)sound->samples_per_second);
+						}
 
-						u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
+						if (end_sample_index > sound->sample_index) {
 
-						foreach(i, write_count) {
+							u32 sample_index = sound->sample_index - src->begin_sample_index;
 
-							u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
-							u32 s1 = (sample_index + i) % audio->sample_count;
+							u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
 
-							s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * desc->velocity);
-							s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * desc->velocity);
+							foreach(i, write_count) {
 
-							s0 %= audio->sample_count;
-							s1 %= audio->sample_count;
+								u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
+								u32 s1 = (sample_index + i) % audio->sample_count;
 
-							if (s0 > s1) {
-								u32 aux = s0;
-								s0 = s1;
-								s1 = aux;
+								s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * desc->velocity);
+								s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * desc->velocity);
+
+								s0 %= audio->sample_count;
+								s1 %= audio->sample_count;
+
+								if (s0 > s1) {
+									u32 aux = s0;
+									s0 = s1;
+									s1 = aux;
+								}
+
+								f32 left_value = 0;
+								f32 right_value = 0;
+
+								// I do it multiplying individualy the samples to have more precision
+								f32 mult = 1.f / (f32)(s1 - s0 + 1);
+
+								for (u32 s = s0; s <= s1; ++s) {
+
+									left_value += (f32)audio->samples[0][s] * mult;
+									right_value += (f32)audio->samples[1][s] * mult;
+								}
+
+								sound->samples[i * 2 + 0] += left_value * desc->volume;
+								sound->samples[i * 2 + 1] += right_value * desc->volume;
 							}
+						}
+						else {
 
-							f32 left_value = 0;
-							f32 right_value = 0;
+							asset_decrement(src->desc.audio_asset);
 
-							// I do it multiplying individualy the samples to have more precision
-							f32 mult = 1.f / (f32)(s1 - s0 + 1);
+							// TODO:
+							// - Erase from hash table
+							// - Erase from free link list as much as possible
 
-							for (u32 s = s0; s <= s1; ++s) {
+							memory_zero(src, sizeof(AudioSource));
 
-								left_value += (f32)audio->samples[0][s] * mult;
-								right_value += (f32)audio->samples[1][s] * mult;
-							}
-
-							sound->samples[i * 2 + 0] += left_value * desc->volume;
-							sound->samples[i * 2 + 1] += right_value * desc->volume;
+							src->next = sound->free_sources;
+							sound->free_sources = src;
 						}
 					}
 				}
@@ -504,12 +547,38 @@ void audio_destroy(Audio* audio)
 		memory_free(audio->samples[0]);
 }
 
-void audio_play_desc(const AudioDesc* desc)
+void audio_play_desc(u64 id, const AudioDesc* desc)
 {
-	AudioInstance* inst = &sound->instance;
-	inst->desc = *desc;
+	AudioSource* src = NULL;
+	{
+		// TODO:
+		// - Find in hash table
+		// - And if the source is new: Insert it
 
-	asset_increment(inst->desc.audio_asset);
+		if (sound->free_sources) {
+			src = sound->free_sources;
+			sound->free_sources = src->next;
+			src->next = NULL;
+		}
+		
+		if (src == NULL) {
+			if (sound->source_count >= AUDIO_SOURCE_MAX) {
+				SV_LOG_WARNING("Audio source playing limit is '%u'\n", AUDIO_SOURCE_MAX);
+				return;
+			}
 
-	inst->begin_sample_index = sound->sample_index;
+			src = sound->sources + sound->source_count++;
+		}
+
+		src->flags = AudioSourceFlag_Valid;
+	}
+
+	src->desc = *desc;
+
+	src->hash = id;
+	src->next = NULL;
+
+	asset_increment(src->desc.audio_asset);
+
+	src->begin_sample_index = sound->sample_index;
 }
