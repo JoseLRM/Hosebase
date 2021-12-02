@@ -15,6 +15,10 @@ typedef struct {
 	u64 flags;
 } AudioProperties;
 
+// Synchronization calls. Remember that if the sound is locked too much time will produce some artefacts
+void audio_source_lock();
+void audio_source_unlock();
+
 void audio_source_play_desc(u64 id, Asset audio_asset, const AudioProperties* props);
 void audio_source_update_properties(u64 id, const AudioProperties* props);
 void audio_source_continue(u64 id);

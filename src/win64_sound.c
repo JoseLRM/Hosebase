@@ -45,6 +45,11 @@ typedef struct {
 
 	AudioSource* source_table[AUDIO_SOURCE_TABLE_SIZE];
 
+	Thread thread;
+	volatile b8 close_request;
+	
+	Mutex mutex_source;
+
 } SoundSystemData;
 
 static SoundSystemData* sound;
@@ -194,9 +199,19 @@ inline AudioProperties validate_props(const AudioProperties* props)
 	return p;
 }
 
+void audio_source_lock()
+{
+	mutex_lock(sound->mutex_source);
+}
+
+void audio_source_unlock()
+{
+	mutex_unlock(sound->mutex_source);
+}
+
 void audio_source_play_desc(u64 id, Asset audio_asset, const AudioProperties* props)
 {
-	u64 hash = id;
+	u64 hash = id ? id : ((u64)(timer_now() * 10000000.0) * 0x398534598457);
 	AudioSource* src = get_audio_source(hash, audio_asset);
 
 	if (src == NULL)
@@ -457,6 +472,139 @@ static void fill_sound_buffer(u32 byte_to_lock, u32 bytes_to_write)
 	}
 }
 
+static i32 thread_main(void* _data)
+{
+	const u32 updates_per_second = 500;
+
+	while (!sound->close_request) {
+
+		f64 start_time = timer_now();
+
+		{
+			DWORD play_cursor, write_cursor;
+
+			if (sound->secondary_buffer->lpVtbl->GetCurrentPosition(sound->secondary_buffer, &play_cursor, &write_cursor) == DS_OK) {
+
+				DWORD byte_to_lock = (sound->sample_index * sound->bytes_per_sample) % sound->buffer_size;
+				DWORD bytes_to_write;
+
+				DWORD target_cursor = (play_cursor + (sound->write_sample_latency * sound->bytes_per_sample)) % sound->buffer_size;
+
+				if (byte_to_lock == target_cursor) {
+					bytes_to_write = 0;
+				}
+				else if (byte_to_lock > target_cursor) {
+					bytes_to_write = sound->buffer_size - byte_to_lock + target_cursor;
+				}
+				else {
+					bytes_to_write = target_cursor - byte_to_lock;
+				}
+
+				//TODO: Should limit the bytes_to_write value?
+
+				if (bytes_to_write) {
+
+					u32 samples_to_write = bytes_to_write / sound->bytes_per_sample;
+
+					// Clear buffer
+					{
+						foreach(i, samples_to_write) {
+							sound->samples[i * 2 + 0] = 0.f;
+							sound->samples[i * 2 + 1] = 0.f;
+						}
+					}
+
+					// Append audio sources
+					{
+						audio_source_lock();
+
+						foreach(source_index, sound->source_count) {
+
+							AudioSource* src = sound->sources + source_index;
+							AudioProperties* props = &src->props;
+
+							Audio* audio = asset_get(src->audio_asset);
+
+							// TODO: 
+							// - Variable velocity
+							// - Decrement the asset when the audio instance is finished
+							// - Use two loops, one for each channel
+
+							if (audio == NULL || !(src->flags & AudioSourceFlag_Valid))
+								continue;
+
+							u32 end_sample_index;
+							{
+								f32 seconds = (f32)audio->sample_count / (f32)audio->samples_per_second;
+								seconds *= props->velocity;
+
+								end_sample_index = src->begin_sample_index + (u32)(seconds * (f32)sound->samples_per_second);
+							}
+
+							if (end_sample_index > sound->sample_index) {
+
+								u32 sample_index = sound->sample_index - src->begin_sample_index;
+
+								u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
+
+								foreach(i, write_count) {
+
+									u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
+									u32 s1 = (sample_index + i) % audio->sample_count;
+
+									s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->velocity);
+									s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->velocity);
+
+									s0 %= audio->sample_count;
+									s1 %= audio->sample_count;
+
+									if (s0 > s1) {
+										u32 aux = s0;
+										s0 = s1;
+										s1 = aux;
+									}
+
+									f32 left_value = 0;
+									f32 right_value = 0;
+
+									// I do it multiplying individualy the samples to have more precision
+									f32 mult = 1.f / (f32)(s1 - s0 + 1);
+
+									for (u32 s = s0; s <= s1; ++s) {
+
+										left_value += (f32)audio->samples[0][s] * mult;
+										right_value += (f32)audio->samples[1][s] * mult;
+									}
+
+									sound->samples[i * 2 + 0] += left_value * props->volume;
+									sound->samples[i * 2 + 1] += right_value * props->volume;
+								}
+							}
+							else {
+
+								free_audio_source(src->hash);
+							}
+						}
+
+						audio_source_unlock();
+					}
+
+					fill_sound_buffer(byte_to_lock, bytes_to_write);
+
+					sound->sample_index += samples_to_write;
+				}
+			}
+		}
+
+		f64 ellapsed = timer_now() - start_time;
+		f64 wait = (1.0 / (f64)updates_per_second) - ellapsed;
+
+		thread_sleep((f64)(SV_MAX(wait, 0.0) * 1000.0));
+	}
+
+	return 0;
+}
+
 b8 _sound_initialize(u32 samples_per_second)
 {
 	sound = memory_allocate(sizeof(SoundSystemData));
@@ -531,9 +679,6 @@ b8 _sound_initialize(u32 samples_per_second)
 	clear_sound_buffer();
 	sound->secondary_buffer->lpVtbl->Play(sound->secondary_buffer, 0, 0, DSBPLAY_LOOPING);
 
-	// Allocate samples data
-	sound->samples = memory_allocate(sound->samples_per_second * 2.f * sizeof(f32));
-
 	// Register audio asset
 	{
 		AssetTypeDesc desc;
@@ -553,177 +698,32 @@ b8 _sound_initialize(u32 samples_per_second)
 		SV_CHECK(asset_register_type(&desc));
 	}
 
+	// Allocate samples data
+	sound->samples = memory_allocate(sound->samples_per_second * 2.f * sizeof(f32));
+
+	// Run thread
+	sound->thread = thread_create(thread_main, NULL);
+
+	if (sound->thread == 0) {
+		SV_LOG_ERROR("Can't create the sound thread\n");
+		return FALSE;
+	}
+
+	// Mutex
+	sound->mutex_source = mutex_create();
+
 	return TRUE;
-}
-
-// TEMP
-#include "input.h"
-
-void _sound_update()
-{
-	// TEMP
-	{
-		static AudioProperties props;
-		props.velocity = 1.f;
-		u64 id = 0x2340934754;
-
-		if (input_key(Key_S, InputState_Pressed)) {
-
-			Asset asset = asset_load_from_file("C:/Users/josel/Downloads/yt1s.com - Judas Priest  Painkiller Official Lyric Video (1).wav", AssetPriority_RightNow);
-
-			if (asset) {
-				audio_source_play_desc(id, asset, &props);
-
-				asset_unload(&asset);
-			}
-		}
-
-		if (input_key(Key_F, InputState_Pressed)) {
-
-			Asset asset = asset_load_from_file("res/sound/shot.wav", AssetPriority_RightNow);
-
-			if (asset) {
-				AudioProperties p;
-				SV_ZERO(p);
-				p.velocity = 1.f;
-				p.volume = 1.f;
-				audio_source_play_desc((u64)(timer_now() * 1000000.0), asset, &p);
-
-				asset_unload(&asset);
-			}
-		}
-
-		if (input_key(Key_M, InputState_Any)) {
-			props.volume += core.delta_time / 4.f;
-			audio_source_update_properties(id, &props);
-		}
-
-		if (input_key(Key_N, InputState_Any)) {
-			props.volume -= core.delta_time / 4.f;
-			props.volume = SV_MAX(props.volume, 0.f);
-
-			audio_source_update_properties(id, &props);
-		}
-	}
-
-	// TODO: If the audio instance count is 0 and the sampler_index is high: Decrese sampler_index to avoid precision issues
-
-	{
-		DWORD play_cursor, write_cursor;
-
-		if (sound->secondary_buffer->lpVtbl->GetCurrentPosition(sound->secondary_buffer, &play_cursor, &write_cursor) == DS_OK) {
-
-			DWORD byte_to_lock = (sound->sample_index * sound->bytes_per_sample) % sound->buffer_size;
-			DWORD bytes_to_write;
-
-			DWORD target_cursor = (play_cursor + (sound->write_sample_latency * sound->bytes_per_sample)) % sound->buffer_size;
-
-			if (byte_to_lock == target_cursor) {
-				bytes_to_write = 0;
-			}
-			else if (byte_to_lock > target_cursor) {
-				bytes_to_write = sound->buffer_size - byte_to_lock + target_cursor;
-			}
-			else {
-				bytes_to_write = target_cursor - byte_to_lock;
-			}
-
-			//TODO: Should limit the bytes_to_write value?
-
-			if (bytes_to_write) {
-
-				u32 samples_to_write = bytes_to_write / sound->bytes_per_sample;
-
-				// Clear buffer
-				{
-					foreach(i, samples_to_write) {
-						sound->samples[i * 2 + 0] = 0.f;
-						sound->samples[i * 2 + 1] = 0.f;
-					}
-				}
-
-				// Append audio sources
-				{
-					foreach(source_index, sound->source_count) {
-
-						AudioSource* src = sound->sources + source_index;
-						AudioProperties* props = &src->props;
-
-						Audio* audio = asset_get(src->audio_asset);
-
-						// TODO: 
-						// - Variable velocity
-						// - Decrement the asset when the audio instance is finished
-						// - Use two loops, one for each channel
-
-						if (audio == NULL || !(src->flags & AudioSourceFlag_Valid))
-							continue;
-
-						u32 end_sample_index;
-						{
-							f32 seconds = (f32)audio->sample_count / (f32)audio->samples_per_second;
-							seconds *= props->velocity;
-
-							end_sample_index = src->begin_sample_index + (u32)(seconds * (f32)sound->samples_per_second);
-						}
-
-						if (end_sample_index > sound->sample_index) {
-
-							u32 sample_index = sound->sample_index - src->begin_sample_index;
-
-							u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
-
-							foreach(i, write_count) {
-
-								u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
-								u32 s1 = (sample_index + i) % audio->sample_count;
-
-								s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->velocity);
-								s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->velocity);
-
-								s0 %= audio->sample_count;
-								s1 %= audio->sample_count;
-
-								if (s0 > s1) {
-									u32 aux = s0;
-									s0 = s1;
-									s1 = aux;
-								}
-
-								f32 left_value = 0;
-								f32 right_value = 0;
-
-								// I do it multiplying individualy the samples to have more precision
-								f32 mult = 1.f / (f32)(s1 - s0 + 1);
-
-								for (u32 s = s0; s <= s1; ++s) {
-
-									left_value += (f32)audio->samples[0][s] * mult;
-									right_value += (f32)audio->samples[1][s] * mult;
-								}
-
-								sound->samples[i * 2 + 0] += left_value * props->volume;
-								sound->samples[i * 2 + 1] += right_value * props->volume;
-							}
-						}
-						else {
-
-							free_audio_source(src->hash);
-						}
-					}
-				}
-
-				fill_sound_buffer(byte_to_lock, bytes_to_write);
-
-				sound->sample_index += samples_to_write;
-			}
-		}
-	}
 }
 
 void _sound_close()
 {
 	if (sound) {
+
+		sound->close_request = TRUE;
+
+		thread_wait(sound->thread);
+
+		mutex_destroy(sound->mutex_source);
 
 		memory_free(sound->samples);
 		memory_free(sound);

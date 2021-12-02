@@ -1263,6 +1263,11 @@ void thread_wait(Thread thread)
 	assert_title(thread, "The thread must be valid");
 }
 
+void thread_sleep(u64 millis)
+{
+	Sleep(millis);
+}
+
 #define WRITE_BARRIER _WriteBarrier(); _mm_sfence()
 #define READ_BARRIER _ReadBarrier()
 #define GENERAL_BARRIER WRITE_BARRIER; READ_BARRIER

@@ -139,7 +139,6 @@ inline void hosebase_frame_end()
 #if SV_GRAPHICS
 	_graphics_end();
 #endif
-	_sound_update();
 
 	++core.frame_count;
 }
