@@ -412,6 +412,11 @@ inline void deserialize_u32(Deserializer* s, u32* n)
 	deserializer_read(s, n, sizeof(u32));
 }
 
+inline void deserialize_u32_array(Deserializer* s, u32* n, u32 count)
+{
+	deserializer_read(s, n, sizeof(u32) * count);
+}
+
 inline void deserialize_u64(Deserializer* s, u64* n)
 {
 	deserializer_read(s, n, sizeof(u64));
