@@ -26,13 +26,34 @@ typedef struct {
 	u32 sample_index;
 	f32* samples;
 
-	// TEMP
-	Audio audio;
 	AudioInstance instance;
 
 } SoundSystemData;
 
 static SoundSystemData* sound;
+
+static b8 asset_audio_load_file(void* asset, const char* filepath)
+{
+	Audio* audio = asset;
+
+	if (!audio_load(audio, filepath)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void asset_audio_free(void* asset)
+{
+	Audio* audio = asset;
+	audio_destroy(audio);
+}
+
+static b8 asset_audio_reload_file(void* asset, const char* filepath)
+{
+	asset_audio_free(asset);
+	return asset_audio_load_file(asset, filepath);
+}
 
 static void clear_sound_buffer()
 {
@@ -90,12 +111,6 @@ b8 _sound_initialize(u32 samples_per_second)
 	sound->buffer_size = samples_per_second * sound->bytes_per_sample;
 	sound->samples_per_second = samples_per_second;
 	sound->write_sample_latency = samples_per_second / 15;
-
-	// TEMP
-	if (!audio_load(&sound->audio, "C:/Users/isca/Downloads/David Bisbal - Buleria (letra).wav")) {
-		SV_LOG_ERROR("Can't read the wav file\n");
-		return FALSE;
-	}
 
 	if (DirectSoundCreate(NULL, &sound->ds, NULL) != DS_OK) {
 		return FALSE;
@@ -165,6 +180,25 @@ b8 _sound_initialize(u32 samples_per_second)
 	// Allocate samples data
 	sound->samples = memory_allocate(sound->samples_per_second * 2.f * sizeof(f32));
 
+	// Register audio asset
+	{
+		AssetTypeDesc desc;
+		const char* extensions[10];
+		desc.extensions = extensions;
+
+		desc.name = "audio";
+		desc.asset_size = sizeof(Audio);
+		desc.extensions[0] = "wav";
+		desc.extensions[1] = "WAV";
+		desc.extension_count = 2;
+		desc.load_file_fn = asset_audio_load_file;
+		desc.reload_file_fn = asset_audio_reload_file;
+		desc.free_fn = asset_audio_free;
+		desc.unused_time = 10.f;
+
+		SV_CHECK(asset_register_type(&desc));
+	}
+
 	return TRUE;
 }
 
@@ -178,7 +212,7 @@ void _sound_update()
 
 		AudioDesc desc;
 		SV_ZERO(desc);
-		desc.audio = &sound->audio;
+		desc.audio_asset = asset_load_from_file("C:/Users/isca/Downloads/yt1s.com - Se Menea.wav", AssetPriority_RightNow);
 		desc.volume = 0.5f;
 		desc.velocity = 1.f;
 
@@ -226,12 +260,12 @@ void _sound_update()
 					AudioInstance* inst = &sound->instance;
 					AudioDesc* desc = &inst->desc;
 
-					Audio* audio = desc->audio;
+					Audio* audio = asset_get(desc->audio_asset);
 
-					// TODO: Variable velocity
-
-					if (desc->asset)
-						audio = asset_get(desc->asset);
+					// TODO: 
+					// - Variable velocity
+					// - Decrement the asset when the audio instance is finished
+					// - Use two loops, one for each channel
 
 					u32 end_sample_index = 0;
 					if (audio) {
@@ -246,9 +280,6 @@ void _sound_update()
 						u32 sample_index = sound->sample_index - inst->begin_sample_index;
 
 						u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
-
-						// TODO: Handle if exceed sample values
-						// TODO: Use two loops, one for each channel
 
 						foreach(i, write_count) {
 
@@ -275,8 +306,8 @@ void _sound_update()
 
 							for (u32 s = s0; s <= s1; ++s) {
 
-								left_value += (f32)sound->audio.samples[0][s] * mult;
-								right_value += (f32)sound->audio.samples[1][s] * mult;
+								left_value += (f32)audio->samples[0][s] * mult;
+								right_value += (f32)audio->samples[1][s] * mult;
 							}
 
 							sound->samples[i * 2 + 0] += left_value * desc->volume;
@@ -477,11 +508,8 @@ void audio_play_desc(const AudioDesc* desc)
 {
 	AudioInstance* inst = &sound->instance;
 	inst->desc = *desc;
-	
-	if (inst->desc.asset)
-		inst->desc.audio = NULL;
-	else if (inst->desc.audio == NULL)
-		return;
+
+	asset_increment(inst->desc.audio_asset);
 
 	inst->begin_sample_index = sound->sample_index;
 }

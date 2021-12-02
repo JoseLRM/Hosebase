@@ -10,8 +10,7 @@ typedef struct {
 } Audio;
 
 typedef struct {
-	Audio* audio; // If the asset is specify, this pointer should be NULL
-	Asset asset;
+	Asset audio_asset;
 	f32 volume;
 	f32 velocity;
 } AudioDesc;

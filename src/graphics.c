@@ -26,6 +26,56 @@ typedef struct {
  
 static GraphicsData* gfx = NULL;
 
+static b8 asset_texture_load_file(void* asset, const char* filepath)
+{
+	GPUImage** pimage = asset;
+
+	void* data;
+	u32 width;
+	u32 height;
+	if (load_image(filepath, &data, &width, &height)) {
+
+		GPUImageDesc desc;
+		desc.data = data;
+		desc.size = 4 * width * height;
+		desc.format = Format_R8G8B8A8_UNORM;
+		desc.layout = GPUImageLayout_ShaderResource;
+		desc.type = GPUImageType_ShaderResource;
+		desc.width = width;
+		desc.height = height;
+		desc.usage = ResourceUsage_Static;
+		desc.cpu_access = CPUAccess_None;
+
+		b8 res = graphics_image_create(pimage, &desc);
+
+		memory_free(data);
+
+		if (!res) {
+			SV_LOG_ERROR("Can't create the textue '%s'\n", filepath);
+		}
+
+		return TRUE;
+	}
+	else {
+		SV_LOG_ERROR("Can't load the texture '%s'\n", filepath);
+		return FALSE;
+	}
+}
+
+static void asset_texture_free(void* asset)
+{
+	GPUImage** pimage = asset;
+	graphics_destroy(*pimage);
+	*pimage = NULL;
+}
+
+static b8 asset_texture_reload_file(void* asset, const char* filepath)
+{
+	asset_texture_free(asset);
+	return asset_texture_load_file(asset, filepath);
+}
+
+
 b8 _graphics_initialize(const GraphicsInitializeDesc* desc)
 {
 	b8 res;
@@ -150,6 +200,26 @@ b8 _graphics_initialize(const GraphicsInitializeDesc* desc)
 	SV_CHECK(graphics_shader_initialize());
 
 	memory_zero(&gfx->def_compute_state, sizeof(ComputeState));
+
+	// Register texture asset
+	{
+		AssetTypeDesc desc;
+		const char* extensions[10];
+		desc.extensions = extensions;
+
+		desc.name = "texture";
+		desc.asset_size = sizeof(GPUImage*);
+		desc.extensions[0] = "png";
+		desc.extensions[1] = "jpg";
+		desc.extensions[2] = "gif";
+		desc.extension_count = 3;
+		desc.load_file_fn = asset_texture_load_file;
+		desc.reload_file_fn = asset_texture_reload_file;
+		desc.free_fn = asset_texture_free;
+		desc.unused_time = 4.f;
+
+		SV_CHECK(asset_register_type(&desc));
+	}
 
 	return TRUE;
 }
