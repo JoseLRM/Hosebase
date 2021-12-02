@@ -24,7 +24,7 @@ typedef struct {
 	u32 write_sample_latency;
 
 	u32 sample_index;
-	i16* samples;
+	f32* samples;
 
 	// TEMP
 	Audio audio;
@@ -59,7 +59,7 @@ static void fill_sound_buffer(u32 byte_to_lock, u32 bytes_to_write)
 
 	if (sound->secondary_buffer->lpVtbl->Lock(sound->secondary_buffer, byte_to_lock, bytes_to_write, &regions[0], &region_sizes[0], &regions[1], &region_sizes[1], 0) == DS_OK) {
 
-		i16* src = sound->samples;
+		f32* src = sound->samples;
 
 		foreach(buffer_index, 2) {
 
@@ -67,8 +67,14 @@ static void fill_sound_buffer(u32 byte_to_lock, u32 bytes_to_write)
 			i16* samples = regions[buffer_index];
 			foreach(index, sample_count) {
 
-				*samples++ = *src++;
-				*samples++ = *src++;
+				f32 left = *src++;
+				f32 right = *src++;
+
+				left = math_clamp(-32768.f, left, 32767.f);
+				right = math_clamp(-32768.f, right, 32767.f);
+
+				*samples++ = (i16)left;
+				*samples++ = (i16)right;
 			}
 		}
 
@@ -86,7 +92,7 @@ b8 _sound_initialize(u32 samples_per_second)
 	sound->write_sample_latency = samples_per_second / 15;
 
 	// TEMP
-	if (!audio_load(&sound->audio, "C:/Users/josel/Downloads/yt1s.com - Judas Priest  Painkiller Official Lyric Video (1).wav")) {
+	if (!audio_load(&sound->audio, "C:/Users/isca/Downloads/David Bisbal - Buleria (letra).wav")) {
 		SV_LOG_ERROR("Can't read the wav file\n");
 		return FALSE;
 	}
@@ -157,7 +163,7 @@ b8 _sound_initialize(u32 samples_per_second)
 	sound->secondary_buffer->lpVtbl->Play(sound->secondary_buffer, 0, 0, DSBPLAY_LOOPING);
 
 	// Allocate samples data
-	sound->samples = memory_allocate(sound->buffer_size);
+	sound->samples = memory_allocate(sound->samples_per_second * 2.f * sizeof(f32));
 
 	return TRUE;
 }
@@ -174,7 +180,7 @@ void _sound_update()
 		SV_ZERO(desc);
 		desc.audio = &sound->audio;
 		desc.volume = 0.5f;
-		desc.velocity = 1.5f;
+		desc.velocity = 1.f;
 
 		audio_play_desc(&desc);
 	}
@@ -210,8 +216,8 @@ void _sound_update()
 				// Clear buffer
 				{
 					foreach(i, samples_to_write) {
-						sound->samples[i * 2 + 0] = 0;
-						sound->samples[i * 2 + 1] = 0;
+						sound->samples[i * 2 + 0] = 0.f;
+						sound->samples[i * 2 + 1] = 0.f;
 					}
 				}
 
@@ -273,8 +279,8 @@ void _sound_update()
 								right_value += (f32)sound->audio.samples[1][s] * mult;
 							}
 
-							sound->samples[i * 2 + 0] += math_round(left_value * desc->volume);
-							sound->samples[i * 2 + 1] += math_round(right_value * desc->volume);
+							sound->samples[i * 2 + 0] += left_value * desc->volume;
+							sound->samples[i * 2 + 1] += right_value * desc->volume;
 						}
 					}
 				}
