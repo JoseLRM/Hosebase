@@ -146,9 +146,10 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 
 // Default widgets
 
-typedef void(*GuiDrawableFn)(GuiWidget* widget);
-
 b8 gui_button(const char* text, u64 flags);
+b8 gui_slider(const char* text, f32* n, f32 min, f32 max, u64 flags);
+
+typedef void(*GuiDrawableFn)(GuiWidget* widget);
 void gui_drawable(GuiDrawableFn fn, u64 flags);
 
 // Stack layout
