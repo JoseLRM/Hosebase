@@ -54,11 +54,11 @@ struct GuiParent {
 	GuiParent* parent;
 	GuiLayout layout;
 
-	struct {
-		GPUImage* image;
-		v4 texcoord;
-		Color color;
-	} background;
+struct {
+	GPUImage* image;
+	v4 texcoord;
+	Color color;
+} background;
 };
 
 typedef struct {
@@ -85,7 +85,7 @@ void gui_draw(GPUImage* image, CommandList cmd);
 void gui_push_id(u64 id);
 void gui_pop_id(u32 count);
 
-inline void gui_push_string_id(const char* str) 
+inline void gui_push_string_id(const char* str)
 {
 	gui_push_id((u64)str);
 }
@@ -98,9 +98,9 @@ b8 gui_has_focus();
 
 typedef struct {
 	const char* name;
-	u8*(*read_fn)(GuiWidget* widget, u8* it);
-	u8*(*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
-	u8*(*draw_fn)(GuiWidget* widget);
+	u8* (*read_fn)(GuiWidget* widget, u8* it);
+	u8* (*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
+	u8* (*draw_fn)(GuiWidget* widget);
 	u32 size;
 } GuiRegisterWidgetDesc;
 
@@ -147,7 +147,22 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 // Default widgets
 
 b8 gui_button(const char* text, u64 flags);
-b8 gui_slider(const char* text, f32* n, f32 min, f32 max, u64 flags);
+
+typedef enum {
+	GuiSliderType_f32,
+	GuiSliderType_u32,
+} GuiSliderType;
+
+b8 gui_slider_ex(const char* text, void* n, const void* min, const void* max, GuiSliderType type, u64 flags);
+
+inline b8 gui_slider_f32(const char* text, f32* n, f32 min, f32 max, u64 flags)
+{
+	return gui_slider_ex(text, n, &min, &max, GuiSliderType_f32, 0);
+}
+inline b8 gui_slider_u32(const char* text, u32* n, u32 min, u32 max, u64 flags)
+{
+	return gui_slider_ex(text, n, &min, &max, GuiSliderType_u32, 0);
+}
 
 typedef void(*GuiDrawableFn)(GuiWidget* widget);
 void gui_drawable(GuiDrawableFn fn, u64 flags);

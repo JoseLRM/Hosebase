@@ -98,12 +98,21 @@ static u32 SLIDER_TYPE;
 
 typedef struct {
 	const char* text;
-	f32 n;
-	f32 min, max;
+
+	GuiSliderType type;
+	union {
+		struct {
+			f32 n, min, max;
+		} _f32;
+		struct {
+			u32 n, min, max;
+		} _u32;
+	};
+
 	b8 in_focus;
 } Slider;
 
-b8 gui_slider(const char* text, f32* n, f32 min, f32 max, u64 flags)
+b8 gui_slider_ex(const char* text, void* n, const void* min, const void* max, GuiSliderType type, u64 flags)
 {
 	u64 id;
 
@@ -120,6 +129,9 @@ b8 gui_slider(const char* text, f32* n, f32 min, f32 max, u64 flags)
 
 	b8 res = FALSE;
 
+	// TODO
+	u32 type_size = 4;
+
 	GuiWidget* widget = gui_find_widget(SLIDER_TYPE, id, gui_current_parent());
 	if (widget) {
 
@@ -127,17 +139,52 @@ b8 gui_slider(const char* text, f32* n, f32 min, f32 max, u64 flags)
 		
 		if (slider->in_focus) {
 
-			*n = slider->n;
+			switch (type)
+			{
+			case GuiSliderType_f32:
+			case GuiSliderType_u32:
+				memory_copy(n, &slider->_f32.n, 4);
+				break;
+			}
+
 			res = TRUE;
 		}
 	}
 
 	gui_write_text(text);
-	gui_write(*n);
-	gui_write(min);
-	gui_write(max);
+	gui_write(type);
+	gui_write_(n, type_size);
+	gui_write_(min, type_size);
+	gui_write_(max, type_size);
 
-	*n = math_clamp(min, *n, max);
+	switch (type)
+	{
+
+	case GuiSliderType_f32:
+	{
+		f32 _min = *(f32*)min;
+		f32 _max = *(f32*)max;
+		f32 _n = *(f32*)n;
+
+		_n = math_clamp(_min, _n, _max);
+
+		memory_copy(n, &_n, type_size);
+	}
+	break;
+
+	case GuiSliderType_u32:
+	{
+		u32 _min = *(u32*)min;
+		u32 _max = *(u32*)max;
+		u32 _n = *(u32*)n;
+
+		_n = SV_MAX(SV_MIN(_n, _max), _min);
+
+		memory_copy(n, &_n, type_size);
+	}
+	break;
+
+	}
 
 	return res;
 }
@@ -148,9 +195,23 @@ static u8* slider_read(GuiWidget* widget, u8* it)
 	slider->in_focus = FALSE;
 
 	gui_read_text(it, slider->text);
-	gui_read(it, slider->n);
-	gui_read(it, slider->min);
-	gui_read(it, slider->max);
+	gui_read(it, slider->type);
+
+	switch (slider->type) {
+
+	case GuiSliderType_f32:
+		gui_read(it, slider->_f32.n);
+		gui_read(it, slider->_f32.min);
+		gui_read(it, slider->_f32.max);
+		break;
+
+	case GuiSliderType_u32:
+		gui_read(it, slider->_u32.n);
+		gui_read(it, slider->_u32.min);
+		gui_read(it, slider->_u32.max);
+		break;
+
+	}
 
 	return it;
 }
@@ -169,10 +230,33 @@ static void slider_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
 		v4 b = widget->bounds;
 		pos = (pos - (b.x - (b.z * 0.5f))) / b.z;
 
-		f32 n = math_clamp01(pos) * (slider->max - slider->min);
-		n += slider->min;
-		
-		slider->n = n;
+		f32 n = math_clamp01(pos);
+
+		switch (slider->type) {
+
+		case GuiSliderType_f32:
+		{
+			f32 max = slider->_f32.max;
+			f32 min = slider->_f32.min;
+			n *= max - min;
+			n += min;
+
+			slider->_f32.n = n;
+		}
+		break;
+
+		case GuiSliderType_u32:
+		{
+			f32 max = slider->_f32.max;
+			f32 min = slider->_f32.min;
+			n *= max - min;
+			n += min;
+
+			slider->_u32.n = n;
+		}
+		break;
+
+		}
 
 		if (input_mouse_button(MouseButton_Left, InputState_Released)) {
 			gui_free_focus();
