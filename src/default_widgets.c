@@ -247,9 +247,9 @@ static void slider_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
 
 		case GuiSliderType_u32:
 		{
-			f32 max = slider->_f32.max;
-			f32 min = slider->_f32.min;
-			n *= max - min;
+			u32 max = slider->_u32.max;
+			u32 min = slider->_u32.min;
+			n *= (f32)(max - min);
 			n += min;
 
 			slider->_u32.n = n;
@@ -299,7 +299,19 @@ static void slider_draw(GuiWidget* widget)
 	b.z -= outline_size * 2.f * pixel.x;
 	b.w -= outline_size * 2.f * pixel.y;
 
-	f32 n = (slider->n - slider->min) / (slider->max - slider->min);
+	f32 n = 0.f;
+
+	switch (slider->type) {
+
+	case GuiSliderType_f32:
+		n = (slider->_f32.n - slider->_f32.min) / (slider->_f32.max - slider->_f32.min);
+		break;
+
+	case GuiSliderType_u32:
+		n = (f32)(slider->_u32.n - slider->_u32.min) / (f32)(slider->_u32.max - slider->_u32.min);
+		break;
+
+	}
 
 	b.x -= b.z * 0.5f;
 	b.z *= n;

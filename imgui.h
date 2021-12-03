@@ -155,7 +155,7 @@ typedef enum {
 
 b8 gui_slider_ex(const char* text, void* n, const void* min, const void* max, GuiSliderType type, u64 flags);
 
-inline b8 gui_slider_f32(const char* text, f32* n, f32 min, f32 max, u64 flags)
+inline b8 gui_slider(const char* text, f32* n, f32 min, f32 max, u64 flags)
 {
 	return gui_slider_ex(text, n, &min, &max, GuiSliderType_f32, 0);
 }
