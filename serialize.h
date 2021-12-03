@@ -234,6 +234,11 @@ inline void serialize_u32(Serializer* s, u32 n)
 	serializer_write(s, &n, sizeof(u32));
 }
 
+inline void serialize_u32_array(Serializer* s, const u32* n, u32 count)
+{
+	serializer_write(s, n, sizeof(u32) * count);
+}
+
 inline void serialize_u64(Serializer* s, u64 n)
 {
 	serializer_write(s, &n, sizeof(u64));
