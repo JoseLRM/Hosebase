@@ -1135,6 +1135,87 @@ inline b8 ray_intersect_aabb(Ray ray, const v3 min, const v3 max, f32* dist)
 	return TRUE;
 }
 
+// View Frustum
+
+#define FRUSTUM_NEAR 0
+#define FRUSTUM_LEFT 1
+#define FRUSTUM_RIGHT 2
+#define FRUSTUM_DOWN 3
+#define FRUSTUM_UP 4
+#define FRUSTUM_FAR 5
+
+typedef struct {
+
+	// Plane Order: NEAR, LEFT, RIGHT, DOWN, UP, FAR
+
+	v4 planes[6]; // xyz ->Normal, w -> distance to origin
+} Frustum;
+
+inline Frustum frustum_calculate(m4 m)
+{
+	Frustum f;
+	// TODO: wtf is going on
+
+	f.planes[FRUSTUM_NEAR].x = m.v[0][3] + m.v[0][2];
+	f.planes[FRUSTUM_NEAR].y = m.v[1][3] + m.v[1][2];
+	f.planes[FRUSTUM_NEAR].z = m.v[2][3] + m.v[2][2];
+	f.planes[FRUSTUM_NEAR].w = m.v[3][3] + m.v[3][2];
+
+	f.planes[FRUSTUM_LEFT].x = m.v[0][3] + m.v[0][0];
+	f.planes[FRUSTUM_LEFT].y = m.v[1][3] + m.v[1][0];
+	f.planes[FRUSTUM_LEFT].z = m.v[2][3] + m.v[2][0];
+	f.planes[FRUSTUM_LEFT].w = m.v[3][3] + m.v[3][0];
+
+	f.planes[FRUSTUM_RIGHT].x = m.v[0][3] - m.v[0][0];
+	f.planes[FRUSTUM_RIGHT].y = m.v[1][3] - m.v[1][0];
+	f.planes[FRUSTUM_RIGHT].z = m.v[2][3] - m.v[2][0];
+	f.planes[FRUSTUM_RIGHT].w = m.v[3][3] - m.v[3][0];
+
+	f.planes[FRUSTUM_DOWN].x = m.v[0][3] + m.v[0][1];
+	f.planes[FRUSTUM_DOWN].y = m.v[1][3] + m.v[1][1];
+	f.planes[FRUSTUM_DOWN].z = m.v[2][3] + m.v[2][1];
+	f.planes[FRUSTUM_DOWN].w = m.v[3][3] + m.v[3][1];
+
+	f.planes[FRUSTUM_UP].x = m.v[0][3] - m.v[0][1];
+	f.planes[FRUSTUM_UP].y = m.v[1][3] - m.v[1][1];
+	f.planes[FRUSTUM_UP].z = m.v[2][3] - m.v[2][1];
+	f.planes[FRUSTUM_UP].w = m.v[3][3] - m.v[3][1];
+
+	f.planes[FRUSTUM_FAR].x = m.v[0][3] - m.v[0][2];
+	f.planes[FRUSTUM_FAR].y = m.v[1][3] - m.v[1][2];
+	f.planes[FRUSTUM_FAR].z = m.v[2][3] - m.v[2][2];
+	f.planes[FRUSTUM_FAR].w = m.v[3][3] - m.v[3][2];
+
+	foreach(i, 6) {
+
+		v3 normal = v4_to_v3(f.planes[i]);
+		normal = v3_normalize(normal);
+
+		f.planes[i].x = normal.x;
+		f.planes[i].y = normal.y;
+		f.planes[i].z = normal.z;
+	}
+
+	return f;
+}
+
+inline b8 frustum_intersect_sphere(Frustum frustum, v3 to_center, f32 radius)
+{
+	foreach(i, 6) {
+
+		v3 normal = v4_to_v3(frustum.planes[i]);
+		f32 distance = frustum.planes[i].w;
+
+		f32 e = v3_dot(to_center, normal);
+
+		e += distance + radius;
+		if (e <= 0.f)
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
 // Color
 
 inline Color color_rgba(u8 r, u8 g, u8 b, u8 a)
