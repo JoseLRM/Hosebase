@@ -131,6 +131,8 @@ void gui_read_text_(u8** it_, const char** text);
 v2 gui_pixel_size();
 v2 gui_mouse_position();
 
+f32 gui_aspect();
+
 void gui_draw_bounds(v4 bounds, Color color);
 void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc);
 void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment);
@@ -163,6 +165,8 @@ inline b8 gui_slider_u32(const char* text, u32* n, u32 min, u32 max, u64 flags)
 {
 	return gui_slider_ex(text, n, &min, &max, GuiSliderType_u32, 0);
 }
+
+b8 gui_checkbox(const char* text, b8* n, u64 flags);
 
 typedef void(*GuiDrawableFn)(GuiWidget* widget);
 void gui_drawable(GuiDrawableFn fn, u64 flags);

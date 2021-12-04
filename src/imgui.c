@@ -649,6 +649,11 @@ v2 gui_mouse_position()
 	return gui->mouse_position;
 }
 
+f32 gui_aspect()
+{
+	return gui->aspect;
+}
+
 void gui_draw_bounds(v4 bounds, Color color)
 {
 	imrend_draw_quad(v3_set(bounds.x, bounds.y, 0.f), v2_set(bounds.z, bounds.w), color, gui->cmd);

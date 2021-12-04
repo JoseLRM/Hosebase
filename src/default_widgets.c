@@ -321,6 +321,144 @@ static void slider_draw(GuiWidget* widget)
 	gui_draw_text(slider->text, widget->bounds, TextAlignment_Center);
 }
 
+///////////////////////////////// CHECKBOX /////////////////////////////////
+
+static u32 CHECKBOX_TYPE;
+
+typedef struct {
+	const char* text;
+	b8 value;
+	b8 pressed;
+} Checkbox;
+
+b8 gui_checkbox(const char* text, b8* n, u64 flags)
+{
+	u64 id;
+
+	{
+		text = string_validate(text);
+		if (text[0] == '#') {
+			id = 0x8ff42a8d34;
+			text++;
+		}
+		else id = (u64)text;
+	}
+
+	id = gui_write_widget(CHECKBOX_TYPE, flags, id);
+
+	b8 res = FALSE;
+
+	GuiWidget* widget = gui_find_widget(CHECKBOX_TYPE, id, gui_current_parent());
+	if (widget) {
+
+		Checkbox* cb = (Checkbox*)(widget + 1);
+		res = cb->pressed;
+
+		if (cb->pressed) {
+			*n = cb->value;
+		}
+	}
+
+	gui_write_text(text);
+	gui_write(*n);
+
+	return res;
+}
+
+inline v4 compute_checkbox_button(v4 bounds)
+{
+	v4 b = bounds;
+	b.x -= b.z * 0.5f;
+	b.w *= 0.8f;
+	b.z = b.w / gui_aspect();
+
+	b.x += b.z * 0.5f;
+	return b;
+}
+
+inline v4 compute_text_bounds(v4 bounds)
+{
+	f32 button_width = (bounds.w * 0.8f) / gui_aspect();
+
+	v4 b = bounds;
+	b.x += b.z * 0.5f;
+	b.z -= button_width * 1.1f;
+	b.x -= b.z * 0.5f;
+
+	return b;
+}
+
+static u8* checkbox_read(GuiWidget* widget, u8* it)
+{
+	Checkbox* cb = (Checkbox*)(widget + 1);
+	cb->pressed = FALSE;
+
+	gui_read_text(it, cb->text);
+	gui_read(it, cb->value);
+
+	return it;
+}
+
+static void checkbox_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
+{
+	Checkbox* cb = (Checkbox*)(widget + 1);
+
+	v4 button = compute_checkbox_button(widget->bounds);
+
+	if (has_focus) {
+
+		if (input_mouse_button(MouseButton_Left, InputState_Released)) {
+
+			if (gui_mouse_in_bounds(button)) {
+				cb->pressed = TRUE;
+				cb->value = !cb->value;
+			}
+
+			gui_free_focus();
+		}
+	}
+	else {
+		if (input_mouse_button(MouseButton_Left, InputState_Pressed) && gui_mouse_in_bounds(button)) {
+
+			gui_set_focus(widget, parent->id, 0);
+		}
+	}
+}
+
+static void checkbox_draw(GuiWidget* widget)
+{
+	Checkbox* cb = (Checkbox*)(widget + 1);
+
+	Color button_color = color_gray(100);
+	Color button_decoration_color = color_red();
+
+	GuiFocus focus = gui_get_focus();
+
+	v4 button = compute_checkbox_button(widget->bounds);
+
+	if (focus.type == widget->type && focus.id == widget->id) {
+
+		button_color = color_gray(75);
+	}
+	else if (gui_mouse_in_bounds(button)) {
+
+		button_color = color_gray(175);
+	}
+
+	gui_draw_bounds(button, button_color);
+
+	if (cb->value) {
+		f32 decoration_size = 0.8f;
+
+		button.z *= decoration_size;
+		button.w *= decoration_size;
+
+		gui_draw_bounds(button, button_decoration_color);
+	}
+
+	gui_draw_text(cb->text, compute_text_bounds(widget->bounds), TextAlignment_Left);
+}
+
 /////////////////////////////////////////////// DRAWABLE ////////////////////////////////////////////////////////////
 
 static u32 DRAWABLE_TYPE;
@@ -368,6 +506,13 @@ static void register_default_widgets()
 	desc.draw_fn = slider_draw;
 	desc.size = sizeof(Slider);
 	SLIDER_TYPE = gui_register_widget(&desc);
+
+	desc.name = "checkbox";
+	desc.read_fn = checkbox_read;
+	desc.update_fn = checkbox_update;
+	desc.draw_fn = checkbox_draw;
+	desc.size = sizeof(Checkbox);
+	CHECKBOX_TYPE = gui_register_widget(&desc);
 
 	desc.name = "drawable";
 	desc.read_fn = drawable_read;
