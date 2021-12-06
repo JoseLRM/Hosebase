@@ -23,7 +23,7 @@ typedef void(*WebServerDisconnectFn)(u32 client_id);
 
 b8   web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, WebServerAcceptFn accept_fn, WebServerDisconnectFn disconnect_fn);
 void web_server_close();
-b8   web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, u32 size);
+b8   web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, u32 size, b8 assert);
 
 b8 web_server_message_get(WebMessage* message);
 
@@ -39,8 +39,7 @@ typedef void(*WebClientDisconnectFn)(DisconnectReason reason);
 
 b8   web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClientDisconnectFn disconnect_fn);
 void web_client_close();
-b8   web_client_send(const void* data, u32 size);
-b8   web_client_send_all(const void* data, u32 size);
+b8   web_client_send(const void* data, u32 size, b8 assert);
 
 b8 web_client_message_get(WebMessage* message);
 

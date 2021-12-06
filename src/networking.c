@@ -8,9 +8,22 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
+#define ASSERTION_MESSAGES_MAX 10000
+#define ASSERTION_MESSAGE_RATE 1.0
+#define WAIT_COUNT 50
+
+typedef struct NetHeader NetHeader;
+
 typedef struct {
 	u32 id;
 	struct sockaddr_in hint;
+	b8 disconnect_request; // TODO
+
+	u32 recive_assertion_count;
+	u32 send_assertion_count;
+	NetHeader* assertion_messages[ASSERTION_MESSAGES_MAX];
+	u32 assertion_messages_tail;
+	u32 assertion_messages_head;
 } ClientRegister;
 
 typedef struct {
@@ -46,6 +59,18 @@ typedef struct {
 	u32 buffer_capacity;
 	u32 id;
 
+	u32 recive_assertion_count;
+	u32 send_assertion_count;
+	b8 send_assertion_message_request;
+	f64 last_assertion_message;
+
+	NetHeader* assertion_messages[ASSERTION_MESSAGES_MAX];
+	u32 assertion_messages_tail;
+	u32 assertion_messages_head;
+
+	// TODO
+	b8 disconnect_request;
+
 	WebClientDisconnectFn disconnect_fn;
 
 	Mutex mutex_send;
@@ -68,7 +93,8 @@ typedef struct {
 #define HEADER_TYPE_ACCEPT 0x12
 #define HEADER_TYPE_CUSTOM_FROM_SERVER 0x32
 #define HEADER_TYPE_CUSTOM_FROM_CLIENT 0x69
-#define HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL 0x70
+#define HEADER_TYPE_ASSERTION_FROM_SERVER 0x90
+#define HEADER_TYPE_ASSERTION_FROM_CLIENT 0x80
 #define HEADER_TYPE_DISCONNECT_CLIENT 0xFE
 #define HEADER_TYPE_DISCONNECT_SERVER 0xFF
 
@@ -76,10 +102,11 @@ typedef struct {
 #pragma pack(1)
 
 // TODO: Some data compression
-typedef struct {
+struct NetHeader {
 	u32 size;
+	u32 assert_value;
 	u8 type;
-} NetHeader;
+};
 
 typedef struct {
 
@@ -102,6 +129,21 @@ typedef struct {
 
 } NetMessageCustom;
 
+typedef struct {
+
+	NetHeader header;
+	u32 client_id;
+	u32 assertion_count;
+
+} NetMessageClientAssertion;
+
+typedef struct {
+
+	NetHeader header;
+	u32 assertion_count;
+
+} NetMessageServerAssertion;
+
 #pragma pack(pop)
 
 static NetData* net;
@@ -111,11 +153,9 @@ void web_message_free(WebMessage* message)
 	memory_free(message->data);
 }
 
-/////////////////////////////////////////////// SERVER /////////////////////////////////////////////////////////
-
 b8 _send(const void* data, u32 size, SOCKET socket, struct sockaddr_in dst)
 {
-	int ok = sendto(socket, data, size, 0, (struct sockaddr*)&dst, sizeof(dst));
+	int ok = sendto(socket, data, size, 0, (struct sockaddr*) & dst, sizeof(dst));
 
 	if (ok == SOCKET_ERROR) {
 		SV_LOG_ERROR("Can't send data\n");
@@ -125,18 +165,62 @@ b8 _send(const void* data, u32 size, SOCKET socket, struct sockaddr_in dst)
 	return TRUE;
 }
 
-inline b8 _server_send(const void* data, u32 size, struct sockaddr_in dst)
+inline b8 push_assertion_message(NetHeader** stack, u32* tail_, u32* head_, NetHeader* msg)
+{
+	u32 tail = *tail_;
+	u32 head = *head_;
+
+	if (tail == head && stack[tail] != NULL) {
+		return FALSE;
+	}
+
+	u32 index = head++ % ASSERTION_MESSAGES_MAX;
+
+	stack[index] = msg;
+
+	*tail_ = tail;
+	*head_ = head;
+	return TRUE;
+}
+
+/////////////////////////////////////////////// SERVER /////////////////////////////////////////////////////////
+
+inline b8 server_assert_message(void* data, ClientRegister* client, b8 assert)
+{
+	ServerData* s = net->server;
+	NetHeader* msg = data;
+
+	if (assert) {
+
+		msg->assert_value = client->send_assertion_count++;
+
+		if (!push_assertion_message(client->assertion_messages, &client->assertion_messages_tail, &client->assertion_messages_head, msg)) {
+
+			SV_LOG_ERROR("The client %u has more than %u assert messages waiting, disconnecting...", client->id, ASSERTION_MESSAGES_MAX);
+			client->disconnect_request = TRUE;
+			return FALSE;
+		}
+	}
+	else msg->assert_value = u32_max;
+
+	return TRUE;
+}
+
+inline b8 _server_send(void* data, u32 size, ClientRegister* client, b8 assert)
 {
 	ServerData* s = net->server;
 
 	mutex_lock(s->mutex_send);
-	_send(data, size, s->socket, dst);
+
+	if (server_assert_message(data, client, assert))
+		_send(data, size, s->socket, client->hint);
+
 	mutex_unlock(s->mutex_send);
 
 	return TRUE;
 }
 
-inline b8 _server_send_all(const void* data, u32 size, u32* clients_to_ignore, u32 client_count)
+inline b8 _server_send_all(void* data, u32 size, u32* clients_to_ignore, u32 client_count, b8 assert)
 {
 	ServerData* s = net->server;
 	b8 res = TRUE;
@@ -160,8 +244,11 @@ inline b8 _server_send_all(const void* data, u32 size, u32* clients_to_ignore, u
 		
 		if (ignore) continue;
 
-		if (!_send(data, size, s->socket, s->clients[i].hint)) {
-			res = FALSE;
+		if (server_assert_message(data, s->clients + i, assert)) {
+
+			if (!_send(data, size, s->socket, s->clients[i].hint)) {
+				res = FALSE;
+			}
 		}
 	}
 
@@ -223,10 +310,13 @@ inline void register_client_if_not_exists(struct sockaddr_in client)
 					NetMessageAccept msg;
 
 					msg.header.type = HEADER_TYPE_ACCEPT;
+					msg.header.assert_value = u32_max;
 					msg.header.size = sizeof(NetMessageAccept) - sizeof(NetHeader);
 					msg.client_id = reg.id;
 
-					_server_send(&msg, sizeof(msg), client);
+					mutex_lock(s->mutex_send);
+					_send(&msg, sizeof(msg), s->socket, client);
+					mutex_unlock(s->mutex_send);
 					
 					s->clients[index] = reg;
 				}
@@ -349,22 +439,62 @@ inline void _server_message_save(NetMessageCustom* header)
 
 static u32 server_loop(void* arg)
 {
-	struct sockaddr_in client;
-	i32 client_size = sizeof(client);
-	memory_zero(&client, client_size);
+	struct sockaddr_in client_hint;
+	i32 client_size = sizeof(client_hint);
+	memory_zero(&client_hint, client_size);
 
 	ServerData* s = net->server;
 
 	while (s->running) {
 
-		NetHeader* header = server_recive_message(&client, 500);
+		NetHeader* header = server_recive_message(&client_hint, WAIT_COUNT);
+
+		ClientRegister* client = NULL;
+		u32 client_id = u32_max;
+
+		b8 send_assertion_message_request = FALSE;
 
 		if (header) {
-			
+
+			client = NULL;
+			client_id = *(u32*)(header + 1);
+			{
+				foreach(i, s->client_capacity) {
+
+					if (s->clients[i].id == client_id) {
+						client = s->clients + i;
+						break;
+					}
+				}
+			}
+
+			if (client == NULL) {
+				SV_LOG_ERROR("Can't recive a client message, the ID '%u' is not registred\n", client_id);
+				continue;
+			}
+
+			if (header->assert_value != u32_max) {
+
+				if (header->assert_value > client->recive_assertion_count) {
+					send_assertion_message_request = TRUE;
+					header = NULL;
+					// TODO: Probably I don't want to lose this message, should be stored for future use
+				}
+				else if (header->assert_value < client->recive_assertion_count) {
+					header = NULL;
+				}
+				else {
+					client->recive_assertion_count++;
+				}
+			}
+		}
+		
+		if (header) {
+
 			switch (header->type) {
 
 			case HEADER_TYPE_CONNECT:
-				register_client_if_not_exists(client);
+				register_client_if_not_exists(client_hint);
 				break;
 				
 			case HEADER_TYPE_DISCONNECT_CLIENT:
@@ -378,33 +508,77 @@ static u32 server_loop(void* arg)
 			break;
 			
 			case HEADER_TYPE_CUSTOM_FROM_CLIENT:
-			case HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL:
 			{
 				NetMessageCustom* msg = (NetMessageCustom*)header;
-				
-				u32 id = msg->client_id;
+				_server_message_save(msg);
+			}
+			break;
 
-				// TODO: Check if is valid
-				if (FALSE) {
-					SV_LOG_ERROR("Can't recive a client message, the ID '%u' is not registred\n", id);
-				}
-				else {
+			case HEADER_TYPE_ASSERTION_FROM_CLIENT:
+			{
+				NetMessageClientAssertion* msg = (NetMessageClientAssertion*)header;
 
-					if (header->type == HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL) {
+				u32 assertion_count = msg->assertion_count;
 
-						msg->header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT;
+				// TODO: This can be a bottleneck
+				mutex_lock(s->mutex_send);
 
-						_server_send_all(msg, sizeof(NetMessageCustom) + header->size, &id, 1);
+				// Remove asserted messages from stack
+				while (client->assertion_messages_tail < client->assertion_messages_head)
+				{
+					u32 index = client->assertion_messages_tail % ASSERTION_MESSAGES_MAX;
 
-						msg->header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL;
+					NetHeader* msg = client->assertion_messages[index];
+					assert(msg);
+
+					if (msg && msg->assert_value < assertion_count) {
+
+						memory_free(msg);
+						client->assertion_messages[index] = NULL;
+
+						client->assertion_messages_tail++;
 					}
-					
-					_server_message_save(msg);
+					else break;
 				}
+
+				// Send again messages
+				for (u32 i = client->assertion_messages_tail; i < client->assertion_messages_head; ++i) {
+
+					u32 index = i % ASSERTION_MESSAGES_MAX;
+
+					NetHeader* msg = client->assertion_messages[index];
+					assert(msg);
+
+					if (msg) {
+						_send(msg, sizeof(NetHeader) + msg->size, s->socket, client->hint);
+					}
+				}
+
+				// Send assertion
+				{
+					NetMessageServerAssertion msg;
+					msg.header.type = HEADER_TYPE_ASSERTION_FROM_SERVER;
+					msg.header.size = sizeof(NetMessageServerAssertion) - sizeof(NetHeader);
+					msg.header.assert_value = u32_max;
+					msg.assertion_count = client->recive_assertion_count;
+
+					_send(&msg, sizeof(NetMessageServerAssertion), s->socket, client->hint);
+				}
+
+				mutex_unlock(s->mutex_send);
 			}
 			break;
 			
 			}
+		}
+
+		if (send_assertion_message_request) {
+			NetMessageServerAssertion msg;
+			msg.header.type = HEADER_TYPE_ASSERTION_FROM_SERVER;
+			msg.header.size = sizeof(NetMessageServerAssertion) - sizeof(NetHeader);
+			msg.assertion_count = client->recive_assertion_count;
+
+			_server_send(&msg, sizeof(NetMessageServerAssertion), client, FALSE);
 		}
 	}
 
@@ -512,7 +686,7 @@ void web_server_close()
 		header.type = HEADER_TYPE_DISCONNECT_SERVER;
 		header.size = 0;
 
-		_server_send_all(&header, sizeof(NetHeader), NULL, 0);
+		_server_send_all(&header, sizeof(NetHeader), NULL, 0, FALSE);
 	
 		thread_wait(s->thread);
 
@@ -531,7 +705,7 @@ void web_server_close()
 	}
 }
 
-b8 web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, u32 size)
+b8 web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, u32 size, b8 assert)
 {
 	ServerData* s = net->server;
 
@@ -549,19 +723,20 @@ b8 web_server_send(u32* clients, u32 client_count, b8 ignore, const void* data, 
 	
 	if (ignore || client_count == 0) {
 
-		res = _server_send_all(buffer, buffer_size, clients, ignore ? client_count : 0);
+		res = _server_send_all(buffer, buffer_size, clients, ignore ? client_count : 0, assert);
 	}
 	else {
 
 		foreach(i, client_count) {
 
-			if (!_server_send(buffer, buffer_size, s->clients[i].hint)) {
+			if (!_server_send(buffer, buffer_size, s->clients + i, assert)) {
 				res = FALSE;
 			}
 		}
 	}
 
-	memory_free(buffer);
+	if (!assert)
+		memory_free(buffer);
 
 	return res;
 }
@@ -617,20 +792,71 @@ inline void _client_message_save(const void* data, u32 size, u32 client_id)
 	mutex_unlock(c->mutex_message);
 }
 
+inline b8 client_assert_message(void* data, b8 assert)
+{
+	ClientData* c = net->client;
+	NetHeader* msg = data;
+
+	if (assert) {
+
+		msg->assert_value = c->send_assertion_count++;
+
+		if (!push_assertion_message(c->assertion_messages, &c->assertion_messages_tail, &c->assertion_messages_head, msg)) {
+
+			SV_LOG_ERROR("The server has more than %u assert messages waiting, disconnecting...", ASSERTION_MESSAGES_MAX);
+			c->disconnect_request = TRUE;
+			return FALSE;
+		}
+	}
+	else msg->assert_value = u32_max;
+
+	return TRUE;
+}
+
+b8 _client_send(void* data, u32 size, b8 assert)
+{
+	ClientData* c = net->client;
+
+	mutex_lock(c->mutex_send);
+	if (client_assert_message(data, assert))
+		_send(data, size, c->socket, net->client->server_hint);
+	mutex_unlock(c->mutex_send);
+
+	return TRUE;
+}
+
 static u32 client_loop(void* arg)
 {
 	ClientData* c = net->client;
 	
 	while (c->running) {
 
-		NetHeader* header = client_recive_message(500);
+		NetHeader* header = client_recive_message(WAIT_COUNT);
 
 		if (header) {
-			
+
+			if (header->assert_value != u32_max) {
+
+				if (header->assert_value > c->recive_assertion_count) {
+					c->send_assertion_message_request = TRUE;
+					header = NULL;
+					// TODO: Probably I don't want to lose this message, should be stored for future use
+				}
+				else if (header->assert_value < c->recive_assertion_count) {
+					header = NULL;
+				}
+				else {
+					c->recive_assertion_count++;
+				}
+			}
+		}
+		
+		if (header) {
+
 			switch (header->type) {
 
 			case HEADER_TYPE_ACCEPT:
-				SV_LOG_ERROR("The connection is already connected\n");
+				SV_LOG_ERROR("The connection is already accepted\n");
 				break;
 
 			case HEADER_TYPE_CUSTOM_FROM_SERVER:
@@ -655,23 +881,79 @@ static u32 client_loop(void* arg)
 				_client_message_save(msg + 1, size, msg->client_id);
 			}
 			break;
+
+			case HEADER_TYPE_ASSERTION_FROM_SERVER:
+			{
+				NetMessageServerAssertion* msg = (NetMessageServerAssertion*)header;
+
+				u32 assertion_count = msg->assertion_count;
+
+				// TODO: This can be a bottleneck
+				mutex_lock(c->mutex_send);
+
+				// Remove asserted messages from stack
+				while (c->assertion_messages_tail < c->assertion_messages_head)
+				{
+					u32 index = c->assertion_messages_tail % ASSERTION_MESSAGES_MAX;
+
+					NetHeader* msg = c->assertion_messages[index];
+					assert(msg);
+
+					if (msg && msg->assert_value < assertion_count) {
+
+						memory_free(msg);
+						c->assertion_messages[index] = NULL;
+
+						c->assertion_messages_tail++;
+					}
+					else break;
+				}
+
+				// Send again messages
+				for (u32 i = c->assertion_messages_tail; i < c->assertion_messages_head; ++i) {
+
+					u32 index = i % ASSERTION_MESSAGES_MAX;
+
+					NetHeader* msg = c->assertion_messages[index];
+					assert(msg);
+
+					if (msg) {
+						_send(msg, sizeof(NetHeader) + msg->size, c->socket, c->server_hint);
+					}
+				}
+
+				mutex_unlock(c->mutex_send);
+			}
+			break;
 			
+			}
+		}
+
+		if (!c->send_assertion_message_request) {
+
+			if (timer_now() - c->last_assertion_message > ASSERTION_MESSAGE_RATE) {
+				c->send_assertion_message_request = TRUE;
+			}
+		}
+
+		if (c->send_assertion_message_request) {
+
+			NetMessageClientAssertion msg;
+			msg.header.type = HEADER_TYPE_ASSERTION_FROM_CLIENT;
+			msg.header.size = sizeof(NetMessageClientAssertion) - sizeof(NetHeader);
+
+			msg.client_id = c->id;
+			msg.assertion_count = c->recive_assertion_count;
+
+			if (_client_send(&msg, sizeof(NetMessageClientAssertion), FALSE)) {
+
+				c->send_assertion_message_request = FALSE;
+				c->last_assertion_message = timer_now();
 			}
 		}
 	}
 
 	return 0;
-}
-
-b8 _client_send(const void* data, u32 size)
-{
-	ClientData* c = net->client;
-
-	mutex_lock(c->mutex_send);
-	_send(data, size, c->socket, net->client->server_hint);
-	mutex_unlock(c->mutex_send);
-
-	return TRUE;
 }
 
 b8 web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClientDisconnectFn disconnect_fn)
@@ -728,7 +1010,7 @@ b8 web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClien
 		msg.type = HEADER_TYPE_CONNECT;
 		msg.size = 0;
 
-		if (!_client_send(&msg, sizeof(msg))) {
+		if (!_client_send(&msg, sizeof(msg), FALSE)) {
 			SV_LOG_ERROR("Can't communicate with server\n");
 			goto error;
 		}
@@ -788,7 +1070,7 @@ void web_client_close()
 		msg.header.size = sizeof(NetMessageDisconnectClient) - sizeof(NetHeader);
 		msg.client_id = c->id;
 
-		_client_send(&msg, sizeof(NetMessageDisconnectClient));
+		_client_send(&msg, sizeof(NetMessageDisconnectClient), FALSE);
 
 		thread_wait(c->thread);
 
@@ -804,39 +1086,29 @@ void web_client_close()
 	}		
 }
 
-inline b8 _web_client_send(NetMessageCustom msg, const void* data, u32 size)
+inline b8 _web_client_send(NetMessageCustom msg, const void* data, u32 size, b8 assert)
 {
-	// TODO: Use thread stack
 	u8* mem = memory_allocate(sizeof(NetMessageCustom) + size);
 
 	memory_copy(mem, &msg, sizeof(NetMessageCustom));
 	memory_copy(mem + sizeof(NetMessageCustom), data, size);
 
-	b8 res = _client_send(mem, sizeof(NetMessageCustom) + size);
+	b8 res = _client_send(mem, sizeof(NetMessageCustom) + size, assert);
 
-	memory_free(mem);
+	if (!assert)
+		memory_free(mem);
 
 	return res;
 }
 
-b8 web_client_send(const void* data, u32 size)
+b8 web_client_send(const void* data, u32 size, b8 assert)
 {
 	NetMessageCustom msg;
 	msg.header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT;
 	msg.header.size = size + sizeof(u32);
 	msg.client_id = net->client->id;
 
-	return _web_client_send(msg, data, size);
-}
-
-b8 web_client_send_all(const void* data, u32 size)
-{
-	NetMessageCustom msg;
-	msg.header.type = HEADER_TYPE_CUSTOM_FROM_CLIENT_TO_ALL;
-	msg.header.size = size + sizeof(u32);
-	msg.client_id = net->client->id;
-
-	return _web_client_send(msg, data, size);
+	return _web_client_send(msg, data, size, assert);
 }
 
 b8 web_client_message_get(WebMessage* message)
