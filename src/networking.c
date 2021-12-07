@@ -8,7 +8,8 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-#define ASSERTION_MESSAGES_MAX 10000
+#define SERVER_ASSERTION_MESSAGES_MAX 10000
+#define CLIENT_ASSERTION_MESSAGES_MAX 50000
 #define ASSERTION_MESSAGE_RATE 1.0
 #define WAIT_COUNT 50
 
@@ -21,7 +22,7 @@ typedef struct {
 
 	u32 recive_assertion_count;
 	u32 send_assertion_count;
-	NetHeader* assertion_messages[ASSERTION_MESSAGES_MAX];
+	NetHeader* assertion_messages[SERVER_ASSERTION_MESSAGES_MAX];
 	u32 assertion_messages_tail;
 	u32 assertion_messages_head;
 } ClientRegister;
@@ -64,7 +65,7 @@ typedef struct {
 	b8 send_assertion_message_request;
 	f64 last_assertion_message;
 
-	NetHeader* assertion_messages[ASSERTION_MESSAGES_MAX];
+	NetHeader* assertion_messages[CLIENT_ASSERTION_MESSAGES_MAX];
 	u32 assertion_messages_tail;
 	u32 assertion_messages_head;
 
@@ -165,16 +166,16 @@ b8 _send(const void* data, u32 size, SOCKET socket, struct sockaddr_in dst)
 	return TRUE;
 }
 
-inline b8 push_assertion_message(NetHeader** stack, u32* tail_, u32* head_, NetHeader* msg)
+inline b8 push_assertion_message(NetHeader** stack, u32* tail_, u32* head_, NetHeader* msg, u32 max)
 {
 	u32 tail = *tail_;
 	u32 head = *head_;
 
-	if (tail == head && stack[tail] != NULL) {
+	if (tail != head && (tail % max) == (head % max)) {
 		return FALSE;
 	}
 
-	u32 index = head++ % ASSERTION_MESSAGES_MAX;
+	u32 index = head++ % max;
 
 	stack[index] = msg;
 
@@ -194,9 +195,9 @@ inline b8 server_assert_message(void* data, ClientRegister* client, b8 assert)
 
 		msg->assert_value = client->send_assertion_count++;
 
-		if (!push_assertion_message(client->assertion_messages, &client->assertion_messages_tail, &client->assertion_messages_head, msg)) {
+		if (!push_assertion_message(client->assertion_messages, &client->assertion_messages_tail, &client->assertion_messages_head, msg, SERVER_ASSERTION_MESSAGES_MAX)) {
 
-			SV_LOG_ERROR("The client %u has more than %u assert messages waiting, disconnecting...", client->id, ASSERTION_MESSAGES_MAX);
+			SV_LOG_ERROR("The client %u has more than %u assert messages waiting, disconnecting...\n", client->id, SERVER_ASSERTION_MESSAGES_MAX);
 			client->disconnect_request = TRUE;
 			return FALSE;
 		}
@@ -526,7 +527,7 @@ static u32 server_loop(void* arg)
 				// Remove asserted messages from stack
 				while (client->assertion_messages_tail < client->assertion_messages_head)
 				{
-					u32 index = client->assertion_messages_tail % ASSERTION_MESSAGES_MAX;
+					u32 index = client->assertion_messages_tail % SERVER_ASSERTION_MESSAGES_MAX;
 
 					NetHeader* msg = client->assertion_messages[index];
 					assert(msg);
@@ -541,10 +542,15 @@ static u32 server_loop(void* arg)
 					else break;
 				}
 
+				if (client->assertion_messages_tail == client->assertion_messages_head) {
+					client->assertion_messages_tail = 0;
+					client->assertion_messages_head = 0;
+				}
+
 				// Send again messages
 				for (u32 i = client->assertion_messages_tail; i < client->assertion_messages_head; ++i) {
 
-					u32 index = i % ASSERTION_MESSAGES_MAX;
+					u32 index = i % SERVER_ASSERTION_MESSAGES_MAX;
 
 					NetHeader* msg = client->assertion_messages[index];
 					assert(msg);
@@ -801,9 +807,9 @@ inline b8 client_assert_message(void* data, b8 assert)
 
 		msg->assert_value = c->send_assertion_count++;
 
-		if (!push_assertion_message(c->assertion_messages, &c->assertion_messages_tail, &c->assertion_messages_head, msg)) {
+		if (!push_assertion_message(c->assertion_messages, &c->assertion_messages_tail, &c->assertion_messages_head, msg, CLIENT_ASSERTION_MESSAGES_MAX)) {
 
-			SV_LOG_ERROR("The server has more than %u assert messages waiting, disconnecting...", ASSERTION_MESSAGES_MAX);
+			SV_LOG_ERROR("The server has more than %u assert messages waiting, disconnecting...\n", CLIENT_ASSERTION_MESSAGES_MAX);
 			c->disconnect_request = TRUE;
 			return FALSE;
 		}
@@ -894,7 +900,7 @@ static u32 client_loop(void* arg)
 				// Remove asserted messages from stack
 				while (c->assertion_messages_tail < c->assertion_messages_head)
 				{
-					u32 index = c->assertion_messages_tail % ASSERTION_MESSAGES_MAX;
+					u32 index = c->assertion_messages_tail % CLIENT_ASSERTION_MESSAGES_MAX;
 
 					NetHeader* msg = c->assertion_messages[index];
 					assert(msg);
@@ -909,10 +915,15 @@ static u32 client_loop(void* arg)
 					else break;
 				}
 
+				if (c->assertion_messages_tail == c->assertion_messages_head) {
+					c->assertion_messages_tail = 0;
+					c->assertion_messages_head = 0;
+				}
+
 				// Send again messages
 				for (u32 i = c->assertion_messages_tail; i < c->assertion_messages_head; ++i) {
 
-					u32 index = i % ASSERTION_MESSAGES_MAX;
+					u32 index = i % CLIENT_ASSERTION_MESSAGES_MAX;
 
 					NetHeader* msg = c->assertion_messages[index];
 					assert(msg);
