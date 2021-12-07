@@ -22,7 +22,10 @@ typedef int64_t i64;
 typedef float	f32;
 typedef double	f64;
 
-typedef char b8;
+typedef int8_t  b8;
+typedef int16_t b16;
+typedef int32_t b32;
+typedef int64_t b64;
 #define TRUE 1
 #define FALSE 0
 
