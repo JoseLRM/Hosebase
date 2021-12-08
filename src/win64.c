@@ -1268,6 +1268,11 @@ void thread_sleep(u64 millis)
 	Sleep(millis);
 }
 
+u64 thread_id()
+{
+	return (u64)GetCurrentThreadId();
+}
+
 #define WRITE_BARRIER _WriteBarrier(); _mm_sfence()
 #define READ_BARRIER _ReadBarrier()
 #define GENERAL_BARRIER WRITE_BARRIER; READ_BARRIER

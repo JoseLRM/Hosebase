@@ -18,5 +18,6 @@
 #include "src/font.c"
 #include "src/text_processing.c"
 #include "src/render_utils.c"
+#include "src/profiler.c"
 
 CoreData core;

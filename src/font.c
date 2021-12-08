@@ -112,7 +112,7 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 	add_glyph(' ', &info, height_scale, &glyphs);
 
 	// Sort the glyphs by their heights
-	SV_QUICKSORT((TempGlyph*)glyphs.data, glyphs.size, glyph_less_than);
+	array_sort(glyphs.data, glyphs.size, sizeof(TempGlyph), glyph_less_than);
 
 	// Calculate num of lines and atlas resolution
 	u32 atlas_width;

@@ -45,6 +45,10 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		return FALSE;
 	}
 
+#if SV_SLOW
+	_profiler_initialize();
+#endif
+
 	if (!_sound_initialize(44800)) {
 		SV_LOG_ERROR("Can't initialize audio system");
 	}
@@ -106,6 +110,11 @@ inline void hosebase_close()
 	_sound_close();
 	
 	_input_close();
+
+#if SV_SLOW
+	_profiler_close();
+#endif
+
 	_os_close();
 	_asset_close();
 	_event_close();
@@ -121,6 +130,10 @@ inline b8 hosebase_frame_begin()
 		core.delta_time = SV_MIN((f32)(now - last), 0.3f);
 		last = now;
 	}
+
+#if SV_SLOW
+	_profiler_reset();
+#endif
 	
 	_input_update();
 	if (!_os_recive_input()) return FALSE; // Close request

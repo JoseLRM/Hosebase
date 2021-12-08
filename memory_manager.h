@@ -42,6 +42,51 @@ inline b8 array_prepare(void** data, u32* count, u32* capacity, u32 new_capacity
 	return FALSE;
 }
 
+inline void _quicksort(u8* data, u32 stride, u32 left_limit, u32 right_limit, void* fn_)
+{
+	typedef b8(*LessThanFn)(const void*, const void*);
+
+	LessThanFn fn = (LessThanFn)fn_;
+
+	i32 left = left_limit;
+
+	i32 right = right_limit;
+	u8* pivote = data + (right * stride);
+	--right;
+
+	while (1) {
+
+		while (fn(data + (left * stride), pivote) && left < right) ++left;
+		while (fn(pivote, data + (right * stride)) && right > left) --right;
+
+		if (left < right) {
+
+			memory_swap(data + (left * stride), data + (right * stride), stride);
+			++left;
+			--right;
+		}
+		else break;
+	}
+
+	if (left < right)
+		++left;
+
+	if (!fn(data + (left * stride), pivote)) {
+
+		memory_swap(data + (left * stride), data + (right_limit * stride), stride);
+	}
+
+	if (left_limit != left) _quicksort(data, stride, left_limit, left, fn);
+	if (left + 1 != right_limit) _quicksort(data, stride, left + 1, right_limit, fn);
+}
+
+inline void array_sort(void* data, u32 count, u32 stride, void* fn)
+{
+	if (data == NULL || count == 0)
+		return;
+	_quicksort((u8*)data, stride, 0, count - 1, fn);
+}
+
 inline const char* string_validate(const char* str)
 {
 	return str ? str : "";
@@ -707,45 +752,6 @@ inline const char* line_read_v3(const char* it, v3* value, b8* res)
 	return it;
 }
 
-// Sorting algorithms
-
-typedef b8(*LessThanFn)(const void*, const void*);
-
-inline void _quicksort(u8* data, u32 stride, u32 left_limit, u32 right_limit, LessThanFn fn)
-{
-	i32 left = left_limit;
-
-	i32 right = right_limit;
-	u8* pivote = data + (right * stride);
-	--right;
-
-	while(1) {
-
-		while (fn(data + (left * stride), pivote) && left < right) ++left;		
-		while (fn(pivote, data + (right * stride)) && right > left) --right;
-
-		if (left < right) {
-
-			memory_swap(data + (left * stride), data + (right * stride), stride);
-			++left;
-			--right;
-		}
-		else break;
-	}
-	
-	if (left < right)
-		++left;
-
-	if (!fn(data + (left * stride), pivote)) {
-
-		memory_swap(data + (left * stride), data + (right_limit * stride), stride);
-	}
-
-	if (left_limit != left) _quicksort(data, stride, left_limit, left, fn);
-	if (left + 1 != right_limit) _quicksort(data, stride, left + 1, right_limit, fn);
-}
-
-#define SV_QUICKSORT(data, size, less_than_fn) do { if (data && size) _quicksort((u8*)(data), sizeof(*(data)), 0, size - 1, (LessThanFn)(less_than_fn)); } while(0)
 
 /*
 
