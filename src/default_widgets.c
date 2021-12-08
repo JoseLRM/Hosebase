@@ -1,5 +1,50 @@
 #include "Hosebase/imgui.h"
 
+///////////////////////////////// TEXT /////////////////////////////////
+
+static u32 TEXT_TYPE;
+
+typedef struct {
+	const char* text;
+} Text;
+
+void gui_text(const char* text, ...)
+{
+	u64 id = (u64)text;
+
+	id = gui_write_widget(TEXT_TYPE, 0, id);
+
+	va_list args;
+	va_start(args, text);
+
+	// TODO: Make it safer
+	char txt[10000];
+
+	vsprintf(txt, text, args);
+	gui_write_text(txt);
+
+	va_end(args);
+}
+
+static u8* text_read(GuiWidget* widget, u8* it)
+{
+	Text* text = (Text*)(widget + 1);
+
+	gui_read_text(it, text->text);
+
+	return it;
+}
+
+static void text_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
+{
+}
+
+static void text_draw(GuiWidget* widget)
+{
+	Text* text = (Text*)(widget + 1);
+	gui_draw_text(text->text, widget->bounds, TextAlignment_Left);
+}
+
 ///////////////////////////////// BUTTON /////////////////////////////////
 
 static u32 BUTTON_TYPE;
@@ -492,6 +537,13 @@ static void drawable_draw(GuiWidget* widget)
 static void register_default_widgets()
 {
 	GuiRegisterWidgetDesc desc;
+
+	desc.name = "text";
+	desc.read_fn = text_read;
+	desc.update_fn = text_update;
+	desc.draw_fn = text_draw;
+	desc.size = sizeof(Text);
+	TEXT_TYPE = gui_register_widget(&desc);
 
 	desc.name = "button";
 	desc.read_fn = button_read;

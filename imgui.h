@@ -148,6 +148,8 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 
 // Default widgets
 
+void gui_text(const char* text, ...);
+
 b8 gui_button(const char* text, u64 flags);
 
 typedef enum {
