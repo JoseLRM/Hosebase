@@ -42,6 +42,8 @@ typedef int64_t b64;
 
 #define i32_min -2147483648
 
+#define i32_max 2147483647
+
 /*constexpr i8	i8_min		= std::numeric_limits<i8>::min();
 constexpr i16	i16_min		= std::numeric_limits<i16>::min();
 constexpr i32	i32_min		= std::numeric_limits<i32>::min();
