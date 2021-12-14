@@ -137,6 +137,104 @@ static void button_draw(GuiWidget* widget)
 	gui_draw_text(button->text, widget->bounds, TextAlignment_Center);
 }
 
+///////////////////////////////// TEXT FIELD /////////////////////////////////
+
+// TODO
+static char text_field_text[300];
+static TextContext text_field_context;
+
+static u32 TEXT_FIELD_TYPE;
+
+typedef struct {
+	const char* buffer;
+	u32 buffer_size;
+	b8 modified;
+} TextField;
+
+b8 gui_text_field(char* buffer, u32 buffer_size, u64 flags)
+{
+	u64 id = gui_write_widget(TEXT_FIELD_TYPE, flags, 0x29c30a87645);
+
+	b8 res = FALSE;
+
+	GuiWidget* widget = gui_find_widget(TEXT_FIELD_TYPE, id, gui_current_parent());
+	if (widget) {
+
+		TextField* field = (TextField*)(widget + 1);
+		res = field->modified;
+
+		if (res) {
+			string_copy(buffer, text_field_text, buffer_size);
+		}
+	}
+
+	gui_write_text(buffer);
+	gui_write(buffer_size);
+
+	return res;
+}
+
+static u8* text_field_read(GuiWidget* widget, u8* it)
+{
+	TextField* field = (TextField*)(widget + 1);
+	field->modified = FALSE;
+
+	gui_read_text(it, field->buffer);
+	gui_read(it, field->buffer_size);
+
+	return it;
+}
+
+static void text_field_update(GuiParent* parent, GuiWidget* widget, b8 has_focus)
+{
+	TextField* field = (TextField*)(widget + 1);
+
+	if (has_focus) {
+
+		if (input_key(Key_Enter, InputState_Pressed)) {
+			gui_free_focus();
+		}
+
+		else if (input_mouse_button(MouseButton_Left, InputState_Pressed)) {
+
+			if (!gui_mouse_in_bounds(widget->bounds)) {
+				gui_free_focus();
+			}
+		}
+
+		else {
+
+			u64 flags = 0;
+
+			TextProcessDesc desc;
+			desc.buffer = text_field_text;
+			desc.buffer_size = 300;
+			desc.context = &text_field_context;
+			desc.bounds = widget->bounds;
+			desc.font = gui_font();
+			desc.font_size = 1.f;
+			desc.in_flags = 0;
+			desc.out_flags = &flags;
+
+			text_process(&desc);
+		}
+	}
+	else {
+		if (input_mouse_button(MouseButton_Left, InputState_Pressed) && gui_mouse_in_bounds(widget->bounds)) {
+
+			gui_set_focus(widget, parent->id, 0);
+			string_copy(text_field_text, field->buffer, 300);
+		}
+	}
+}
+
+static void text_field_draw(GuiWidget* widget)
+{
+	TextField* field = (TextField*)(widget + 1);
+
+	gui_draw_text(text_field_text, widget->bounds, TextAlignment_Left);
+}
+
 ////////////////////////////////////////////// SLIDER ///////////////////////////////////////////
 
 static u32 SLIDER_TYPE;
@@ -551,6 +649,13 @@ static void register_default_widgets()
 	desc.draw_fn = button_draw;
 	desc.size = sizeof(Button);
 	BUTTON_TYPE = gui_register_widget(&desc);
+
+	desc.name = "text_field";
+	desc.read_fn = text_field_read;
+	desc.update_fn = text_field_update;
+	desc.draw_fn = text_field_draw;
+	desc.size = sizeof(TextField);
+	TEXT_FIELD_TYPE = gui_register_widget(&desc);
 
 	desc.name = "slider";
 	desc.read_fn = slider_read;

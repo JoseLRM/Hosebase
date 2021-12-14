@@ -90,6 +90,8 @@ inline void gui_push_string_id(const char* str)
 	gui_push_id((u64)str);
 }
 
+Font* gui_font();
+
 void gui_free_focus();
 void gui_set_focus(GuiWidget* widget, u64 parent_id, u32 action);
 
@@ -151,6 +153,8 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 void gui_text(const char* text, ...);
 
 b8 gui_button(const char* text, u64 flags);
+
+b8 gui_text_field(char* buffer, u32 buffer_size, u64 flags);
 
 typedef enum {
 	GuiSliderType_f32,

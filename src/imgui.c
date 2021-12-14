@@ -260,6 +260,11 @@ void gui_read_text_(u8** it_, const char** text)
 	*it_ = it;
 }
 
+Font* gui_font()
+{
+	return gui->default_font;
+}
+
 void gui_free_focus()
 {
 	gui->focus.type = u32_max;

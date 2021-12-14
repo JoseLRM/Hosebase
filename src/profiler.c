@@ -33,6 +33,8 @@ typedef struct {
 	u32 function_count;
 	u32 function_capacity;
 
+	char search_filter[FN_NAME_SIZE];
+
 	Mutex mutex;
 
 } ProfilerData;
@@ -162,7 +164,9 @@ void profiler_gui()
 
 			gui_free_layout_update(data);
 
-			gui_button("Search", 0);
+			if (gui_text_field(profiler->search_filter, FN_NAME_SIZE, 0)) {
+				SV_LOG_INFO("Mod\n");
+			}
 
 			data.height = (GuiDimension){ 15.f, GuiUnit_Pixel };
 			data.y = (GuiCoord){ 35.f, GuiUnit_Pixel, GuiCoordAlign_InverseTop };
