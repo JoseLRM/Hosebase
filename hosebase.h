@@ -127,7 +127,7 @@ inline b8 hosebase_frame_begin()
 		static f64 last = 0.0;
 		f64 now = timer_now();
 		
-		core.delta_time = SV_MIN((f32)(now - last), 0.3f);
+		core.delta_time = SV_MIN((f32)(now - last), 0.15f);
 		last = now;
 	}
 

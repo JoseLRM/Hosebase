@@ -25,6 +25,21 @@ inline f32 math_sqrt(f32 n)
 	return n * y;
 }
 
+inline f32 math_sin(f32 n)
+{
+	return sinf(n);
+}
+
+inline f32 math_cos(f32 n)
+{
+	return cosf(n);
+}
+
+inline f32 math_atan2(float a, float b)
+{
+	return atan2f(a, b);
+}
+
 inline f64 math_sqrt_f64(f64 n)
 {
 	i64 i;
@@ -189,7 +204,7 @@ inline f32 v2_distance(v2 from, v2 to)
 
 inline f32 v2_angle(v2 v)
 {
-	f32 res = atan2f(v.y, v.x);
+	f32 res = math_atan2(v.y, v.x);
 	if (res < 0.0) {
 		res = (2.f * PI) + res;
 	}
@@ -199,9 +214,9 @@ inline f32 v2_angle(v2 v)
 inline v2 v2_angle_set(v2 v, f32 angle)
 {
 	f32 mag = v2_length(v);
-	v.x = cosf(angle);
+	v.x = math_cos(angle);
 	v.x *= mag;
-	v.y = sinf(angle);
+	v.y = math_sin(angle);
 	v.y *= mag;
 	return v;
 }
@@ -809,8 +824,8 @@ inline m4 m4_scale_f32(f32 scale)
 
 inline m4 m4_rotate_roll(f32 roll)
 {
-	f32 s = sin(roll);
-	f32 c = cos(roll);
+	f32 s = math_sin(roll);
+	f32 c = math_cos(roll);
 	
 	m4 m = m4_identity();
 	m.v[0][0] = c;
@@ -822,8 +837,8 @@ inline m4 m4_rotate_roll(f32 roll)
 
 inline m4 m4_rotate_pitch(f32 pitch)
 {
-	f32 s = sin(pitch);
-	f32 c = cos(pitch);
+	f32 s = math_sin(pitch);
+	f32 c = math_cos(pitch);
 	
 	m4 m = m4_identity();
 	m.v[1][1] = c;
@@ -836,8 +851,8 @@ inline m4 m4_rotate_pitch(f32 pitch)
 
 inline m4 m4_rotate_yaw(f32 yaw)
 {
-	f32 s = sin(yaw);
-	f32 c = cos(yaw);
+	f32 s = math_sin(yaw);
+	f32 c = math_cos(yaw);
 	
 	m4 m = m4_identity();
 	m.v[0][0] = c;
@@ -1349,7 +1364,7 @@ inline f32 math_perlin_noise(u32 seed, f32 n)
 		f32 p1 = (f32)offset;
 
 		f32 pos = (n - p1) / (p0 - p1);
-		pos = (f32)cos(PI - pos * PI) * 0.5f + 0.5f;
+		pos = math_cos(PI - pos * PI) * 0.5f + 0.5f;
 
 		f32 h1 = math_random_f32(seed + offset);
 
@@ -1361,7 +1376,7 @@ inline f32 math_perlin_noise(u32 seed, f32 n)
 		f32 p1 = (f32)offset;
 
 		f32 pos = (n - p0) / (p1 - p0);
-		pos = (f32)cos(PI - pos * -PI) * 0.5f + 0.5f;
+		pos = math_cos(PI - pos * -PI) * 0.5f + 0.5f;
 
 		f32 h1 = math_random_f32(seed + offset);
 
@@ -1388,7 +1403,7 @@ inline f32 math_perlin_noise2D(u32 seed, f32 x, f32 y)
 
 	f32 inter = y - (f32)p0 / ((f32)p1 - (f32)p0);
 
-	inter = (cos(inter * PI) - 1.f) * -0.5f;
+	inter = (math_cos(inter * PI) - 1.f) * -0.5f;
 
 	return n0 * (1.f - inter) + n1 * inter;
 }
@@ -1413,7 +1428,7 @@ inline f32 math_perlin_noise3D(u32 seed, f32 x, f32 y, f32 z)
 
 	f32 inter = z - (f32)p0 / ((f32)p1 - (f32)p0);
 
-	inter = (cos(inter * PI) - 1.f) * -0.5f;
+	inter = (math_cos(inter * PI) - 1.f) * -0.5f;
 
 	return n0 * (1.f - inter) + n1 * inter;
 }
