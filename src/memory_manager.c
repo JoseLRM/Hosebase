@@ -70,18 +70,37 @@ void memory_zero(void* dst, size_t size)
 void memory_swap(void* p0, void* p1, size_t size)
 {
 	// TODO: Optimize?
-	
+
 	u8* it0 = (u8*)p0;
 	u8* it1 = (u8*)p1;
 	u8* end = it0 + size;
 
 	while (it0 != end) {
 
-		u8 aux = *it0;
-		*it0 = *it1;
-		*it1 = aux;
-		
-		++it0;
-		++it1;
+		u32 write_count = SV_MIN(end - it0, 8);
+
+		if (write_count == 8) {
+
+			u64* _it0 = (u64*)it0;
+			u64* _it1 = (u64*)it1;
+
+			u64 aux = *_it0;
+			*_it0 = *_it1;
+			*_it1 = aux;
+
+			it0 += 8;
+			it1 += 8;
+		}
+		else {
+
+			while (it0 != end) {
+
+				u8 aux = *it0;
+				*it0 = *it1;
+				*it1 = aux;
+				it0++;
+				it1++;
+			}
+		}
 	}
 }

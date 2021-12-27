@@ -1317,6 +1317,35 @@ static b8 _task_initialize()
 			data->running = FALSE;
 			return FALSE;
 		}
+
+		// Put the thread in a dedicated hardware core
+		{
+			DWORD_PTR mask = 1ull << t;
+			DWORD_PTR res = SetThreadAffinityMask(thread_data->thread, mask);
+			assert(res > 0);
+		}
+
+		// Set thread priority
+		{
+			BOOL res = SetThreadPriority(thread_data->thread, THREAD_PRIORITY_HIGHEST);
+			assert(res != 0);
+		}
+
+#if SV_SLOW
+		// Set thread name
+		{
+			char name[200];
+			string_copy(name, "TaskSystem_", 200);
+			
+			char id_str[30];
+			string_from_u32(id_str, t);
+
+			string_append(name, id_str, 200);
+
+			HRESULT hr = SetThreadDescription(thread_data->thread, (PCWSTR)name);
+			assert(SUCCEEDED(hr));
+		}
+#endif
 	}
 
 	data->thread_count = thread_count;

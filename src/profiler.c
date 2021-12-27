@@ -130,7 +130,7 @@ void _profiler_save(const char* name, struct _ProfilerChrono res, b8 is_function
 
 static b8 function_less_than(const FunctionData* f0, const FunctionData* f1)
 {
-	return f0->total_time >= f1->total_time;
+	return f0->total_time > f1->total_time;
 }
 
 void profiler_gui()

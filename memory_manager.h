@@ -42,26 +42,61 @@ inline b8 array_prepare(void** data, u32* count, u32* capacity, u32 new_capacity
 	return FALSE;
 }
 
-inline void _quicksort(u8* data, u32 stride, u32 left_limit, u32 right_limit, void* fn_)
+typedef b8(*LessThanFn)(const void*, const void*);
+
+struct _SortData {
+	u8* data;
+	u32 stride;
+	LessThanFn fn;
+};
+
+static void _insertion_sort(struct _SortData* data, u32 begin, u32 end)
 {
-	typedef b8(*LessThanFn)(const void*, const void*);
+	for (u32 i = begin + 1; i < end; ++i) {
 
-	LessThanFn fn = (LessThanFn)fn_;
+		i32 j = i - 1;
 
+		while (1) {
+
+			if (!data->fn(data->data + (i * data->stride), data->data + (j * data->stride))) {
+				++j;
+				break;
+			}
+
+			--j;
+
+			if (j == begin - 1) {
+				j = begin;
+				break;
+			}
+		}
+
+		if (j != i) {
+
+			for (u32 w = j; w < i; ++w) {
+
+				memory_swap(data->data + (i * data->stride), data->data + (w * data->stride), data->stride);
+			}
+		}
+	}
+}
+
+static void _quick_sort(struct _SortData* data, u32 left_limit, u32 right_limit)
+{
 	i32 left = left_limit;
 
 	i32 right = right_limit;
-	u8* pivote = data + (right * stride);
+	u32 pivote = right;
 	--right;
 
 	while (1) {
 
-		while (fn(data + (left * stride), pivote) && left < right) ++left;
-		while (fn(pivote, data + (right * stride)) && right > left) --right;
+		while (data->fn(data->data + (left * data->stride), data->data + (pivote * data->stride)) && left < right) ++left;
+		while (data->fn(data->data + (pivote * data->stride), data->data + (right * data->stride)) && right > left) --right;
 
 		if (left < right) {
 
-			memory_swap(data + (left * stride), data + (right * stride), stride);
+			memory_swap(data->data + (left * data->stride), data->data + (right * data->stride), data->stride);
 			++left;
 			--right;
 		}
@@ -71,20 +106,45 @@ inline void _quicksort(u8* data, u32 stride, u32 left_limit, u32 right_limit, vo
 	if (left < right)
 		++left;
 
-	if (!fn(data + (left * stride), pivote)) {
+	if (!data->fn(data->data + (left * data->stride), data->data + (pivote * data->stride))) {
 
-		memory_swap(data + (left * stride), data + (right_limit * stride), stride);
+		memory_swap(data->data + (left * data->stride), data->data + (right_limit * data->stride), data->stride);
 	}
 
-	if (left_limit != left) _quicksort(data, stride, left_limit, left, fn);
-	if (left + 1 != right_limit) _quicksort(data, stride, left + 1, right_limit, fn);
+	if (left_limit != left) {
+
+		if (left - left_limit <= 100) {
+			_insertion_sort(data, left_limit, left + 1);
+		}
+		else _quick_sort(data, left_limit, left);
+	}
+	if (left + 1 != right_limit) {
+
+		if (right_limit - (left + 1) <= 100) {
+			_insertion_sort(data, left + 1, right_limit + 1);
+		}
+		else _quick_sort(data, left + 1, right_limit);
+	}
 }
 
 inline void array_sort(void* data, u32 count, u32 stride, void* fn)
 {
 	if (data == NULL || count == 0)
 		return;
-	_quicksort((u8*)data, stride, 0, count - 1, fn);
+
+	struct _SortData d;
+	d.data = (u8*)data;
+	d.stride = stride;
+	d.fn = (LessThanFn)fn;
+
+	if (count > 100 && count < 15000) {
+
+		_quick_sort(&d, 0, count - 1);
+	}
+	else {
+		// TODO: Fastest algorithm for biggest array lengths
+		_insertion_sort(&d, 0, count);
+	}
 }
 
 inline const char* string_validate(const char* str)
