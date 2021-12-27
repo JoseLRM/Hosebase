@@ -102,6 +102,17 @@ inline f32 math_sign(f32 n)
 	return (n < 0.f) ? -1.f : 1.f;
 }
 
+inline f32 math_exp(f32 n)
+{
+	// TODO: 32 bits
+	return exp(n);
+}
+
+inline f32 math_smooth(f32 n, f32 falloff)
+{
+	return math_exp(-n * falloff) * (n - 1.f) + 1.f;
+}
+
 // Vector
 
 inline v2 v2_set(f32 x, f32 y)
