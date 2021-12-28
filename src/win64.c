@@ -625,26 +625,25 @@ b8 _os_recive_input()
 #endif
 	}
 
-	if (!platform->show_cursor) {
-		RECT rect;
-		if (GetWindowRect(platform->handle, &rect)) {
+	// Mouse clipping
+	{
+		if (!platform->show_cursor) {
+			RECT rect;
+			if (GetWindowRect(platform->handle, &rect)) {
 
-			i32 width = rect.right - rect.left;
-			i32 height = rect.bottom - rect.top;
+				i32 width = rect.right - rect.left;
+				i32 height = rect.bottom - rect.top;
 
-			rect.left = rect.left + width / 2 - 1;
-			rect.right = rect.right - width / 2 + 1;
-			rect.top = rect.top + height / 2 - 1;
-			rect.bottom = rect.bottom - height / 2 + 1;
+				rect.left = rect.left + width / 2 - 1;
+				rect.right = rect.right - width / 2 + 1;
+				rect.top = rect.top + height / 2 - 1;
+				rect.bottom = rect.bottom - height / 2 + 1;
 
-			ClipCursor(&rect);
+				ClipCursor(&rect);
+			}
 		}
-	}
-	else {
-		RECT rect;
-		if (GetWindowRect(GetDesktopWindow(), &rect)) {
-
-			ClipCursor(&rect);
+		else {
+			ClipCursor(NULL);
 		}
 	}
 

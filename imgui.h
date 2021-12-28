@@ -126,9 +126,11 @@ b8 imgui_write_layout_update(u32 type);
 
 #define gui_read(it, data) gui_read_(&it, &data, sizeof(data))
 #define gui_read_text(it, text) gui_read_text_(&it, &text)
+#define gui_read_buffer(it, size) gui_read_buffer_(&it, size)
 
 void gui_read_(u8** it_, void* data, u32 size);
 void gui_read_text_(u8** it_, const char** text);
+const void* gui_read_buffer_(u8** it_, u32 size);
 
 v2 gui_pixel_size();
 v2 gui_mouse_position();
@@ -174,8 +176,8 @@ inline b8 gui_slider_u32(const char* text, u32* n, u32 min, u32 max, u64 flags)
 
 b8 gui_checkbox(const char* text, b8* n, u64 flags);
 
-typedef void(*GuiDrawableFn)(GuiWidget* widget);
-void gui_drawable(GuiDrawableFn fn, u64 flags);
+typedef void(*GuiDrawableFn)(GuiWidget* widget, const void* data);
+void gui_drawable(GuiDrawableFn fn, const void* data, u32 size, u64 flags);
 
 // Stack layout
 

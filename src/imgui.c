@@ -260,6 +260,13 @@ void gui_read_text_(u8** it_, const char** text)
 	*it_ = it;
 }
 
+const void* gui_read_buffer_(u8** it_, u32 size)
+{
+	u8* it = *it_;
+	*it_ += size;
+	return it;
+}
+
 Font* gui_font()
 {
 	return gui->default_font;

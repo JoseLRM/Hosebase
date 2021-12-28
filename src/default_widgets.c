@@ -608,28 +608,40 @@ static u32 DRAWABLE_TYPE;
 
 typedef struct {
 	GuiDrawableFn fn;
+	const void* data;
 } Drawable;
 
-void gui_drawable(GuiDrawableFn fn, u64 flags)
+void gui_drawable(GuiDrawableFn fn, const void* data, u32 size, u64 flags)
 {
 	if (fn == NULL)
 		return;
 
 	gui_write_widget(DRAWABLE_TYPE, flags, (u64)fn);
 	gui_write(fn);
+	gui_write(size);
+	gui_write_(data, size);
 }
 
 static u8* drawable_read(GuiWidget* widget, u8* it)
 {
 	Drawable* drawable = (Drawable*)(widget + 1);
+	drawable->data = NULL;
+	u32 size;
+
 	gui_read(it, drawable->fn);
+	gui_read(it, size);
+
+	if (size) {
+		drawable->data = gui_read_buffer(it, size);
+	}
+
 	return it;
 }
 
 static void drawable_draw(GuiWidget* widget)
 {
 	Drawable* drawable = (Drawable*)(widget + 1);
-	drawable->fn(widget);
+	drawable->fn(widget, drawable->data);
 }
 
 static void register_default_widgets()
