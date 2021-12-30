@@ -359,6 +359,42 @@ void audio_play(Asset audio_asset, const AudioProperties* props)
 	}
 }
 
+inline void free_audio_source(u64 hash);
+
+void audio_stop()
+{
+	// Audio instances
+	{
+		mutex_lock(sound->mutex_instance);
+
+		foreach(i, sound->instance_count) {
+
+			AudioInstance* inst = sound->instances + i;
+			if (inst->audio_asset != 0) {
+				free_audio_instance(inst);
+			}
+		}
+
+		sound->instance_count = 0;
+		sound->instance_free_count = 0;
+
+		mutex_unlock(sound->mutex_instance);
+	}
+
+	// Audio sources
+	{
+		audio_source_lock();
+
+		foreach(source_index, sound->source_count) {
+
+			AudioSource* src = sound->sources + source_index;
+			free_audio_source(src->hash);
+		}
+
+		audio_source_unlock();
+	}
+}
+
 ///////////////////////////////// AUDIO SOURCE //////////////////////////////////////////
 
 // Add a valid asset to create a new one if doesn't exists

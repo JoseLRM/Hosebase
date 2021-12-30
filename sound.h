@@ -30,6 +30,7 @@ b8 audio_load(Audio* audio, const char* filepath);
 void audio_destroy(Audio* audio);
 
 void audio_play(Asset audio_asset, const AudioProperties* props);
+void audio_stop();
 
 // AUDIO SOURCE
 
