@@ -217,6 +217,9 @@ static void text_field_update(GuiParent* parent, GuiWidget* widget, b8 has_focus
 			desc.out_flags = &flags;
 
 			text_process(&desc);
+
+			// TODO:
+			field->modified = TRUE;
 		}
 	}
 	else {
@@ -232,7 +235,16 @@ static void text_field_draw(GuiWidget* widget)
 {
 	TextField* field = (TextField*)(widget + 1);
 
-	gui_draw_text(text_field_text, widget->bounds, TextAlignment_Left);
+	GuiFocus focus = gui_get_focus();
+
+	const char* text = field->buffer;
+
+	if (focus.type == widget->type && focus.id == widget->id) {
+
+		text = text_field_text;
+	}
+
+	gui_draw_text(text, widget->bounds, TextAlignment_Left);
 }
 
 ////////////////////////////////////////////// SLIDER ///////////////////////////////////////////

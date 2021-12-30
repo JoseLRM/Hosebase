@@ -463,6 +463,30 @@ LRESULT CALLBACK window_proc (
 	return result;
 }
 
+inline void configure_thread(HANDLE thread, const char* name, u64 affinity_mask, i32 priority)
+{
+	// Put the thread in a dedicated hardware core
+	{
+		DWORD_PTR mask = affinity_mask;
+		DWORD_PTR res = SetThreadAffinityMask(thread, mask);
+		assert(res > 0);
+	}
+
+	// Set thread priority
+	{
+		BOOL res = SetThreadPriority(thread, priority);
+		assert(res != 0);
+	}
+
+#if SV_SLOW
+	// Set thread name
+	{
+		HRESULT hr = SetThreadDescription(thread, (PCWSTR)name);
+		assert(SUCCEEDED(hr));
+	}
+#endif
+}
+
 b8 _os_initialize(const OSInitializeDesc* desc)
 {
 	platform = memory_allocate(sizeof(PlatformData));
@@ -473,6 +497,8 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	}
 
 	QueryPerformanceCounter(&platform->begin_time);
+
+	configure_thread(GetCurrentThread(), "main", 1ULL, THREAD_PRIORITY_HIGHEST);
 	
 	platform->hinstance = GetModuleHandle(NULL);
 	
@@ -1283,21 +1309,24 @@ static b8 _task_initialize()
 	TaskSystemData* data = &platform->task_system;
 	data->running = TRUE;
 
-	u32 thread_count = 4;
+	u32 thread_count;
 
 	// Compute preferred thread count
 	{
 		SYSTEM_INFO sysinfo;
 		GetSystemInfo(&sysinfo);
 
-		thread_count = sysinfo.dwNumberOfProcessors;
+		thread_count = SV_MAX(sysinfo.dwNumberOfProcessors, 1);
 	}
-	
-	thread_count = SV_MAX(thread_count, 2);
-	thread_count = SV_MIN(thread_count, TASK_THREAD_MAX);
 
-	// Take in acount the main thread
-	--thread_count;
+	u64 affinity_offset = 1;
+
+	if (thread_count == 1) {
+		affinity_offset = 0;
+	}
+	else thread_count--;
+
+	thread_count = SV_MIN(thread_count, TASK_THREAD_MAX);
 
 	data->semaphore = CreateSemaphoreExA(NULL, 0, thread_count, NULL, 0, SEMAPHORE_ALL_ACCESS);
 
@@ -1317,34 +1346,18 @@ static b8 _task_initialize()
 			return FALSE;
 		}
 
-		// Put the thread in a dedicated hardware core
-		{
-			DWORD_PTR mask = 1ull << t;
-			DWORD_PTR res = SetThreadAffinityMask(thread_data->thread, mask);
-			assert(res > 0);
-		}
-
-		// Set thread priority
-		{
-			BOOL res = SetThreadPriority(thread_data->thread, THREAD_PRIORITY_HIGHEST);
-			assert(res != 0);
-		}
-
-#if SV_SLOW
-		// Set thread name
+		// Config thread
 		{
 			char name[200];
-			string_copy(name, "TaskSystem_", 200);
-			
+			string_copy(name, "task_", 200);
+
 			char id_str[30];
 			string_from_u32(id_str, t);
 
 			string_append(name, id_str, 200);
 
-			HRESULT hr = SetThreadDescription(thread_data->thread, (PCWSTR)name);
-			assert(SUCCEEDED(hr));
+			configure_thread(thread_data->thread, name, 1ull << (affinity_offset + (u64)t), THREAD_PRIORITY_HIGHEST);
 		}
-#endif
 	}
 
 	data->thread_count = thread_count;

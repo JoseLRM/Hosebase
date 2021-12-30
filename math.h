@@ -239,8 +239,10 @@ inline f32 v2_dot(v2 a, v2 b)
 
 inline v2 v2_perpendicular(v2 v)
 {
-	v.x = -v.x;
-	return v;
+	v2 r;
+	r.x = v.y;
+	r.y = -v.x;
+	return r;
 }
 
 inline v2 v2_reflection(v2 v, v2 normal)

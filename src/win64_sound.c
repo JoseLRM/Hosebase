@@ -7,11 +7,15 @@
 
 #pragma comment(lib, "Dsound.lib")
 
+// TODO: Adjust
+
 #define AUDIO_SOURCE_MAX 10000
 #define AUDIO_SOURCE_TABLE_SIZE 500
 
 #define AudioSourceFlag_Valid SV_BIT(0)
 #define AudioSourceFlag_Stopped SV_BIT(1)
+
+#define AUDIO_INSTANCE_MAX 1000
 
 typedef struct AudioSource AudioSource;
 
@@ -23,6 +27,17 @@ struct AudioSource {
 	u64 hash;
 	AudioSource* next;
 };
+
+typedef struct {
+	AudioProperties props;
+	Asset audio_asset;
+	u32 begin_sample_index;
+} AudioInstance;
+
+typedef struct {
+	AudioProperties props;
+	v3 direction;
+} AudioListener;
 
 typedef struct {
 	
@@ -45,6 +60,15 @@ typedef struct {
 
 	AudioSource* source_table[AUDIO_SOURCE_TABLE_SIZE];
 
+	AudioInstance instances[AUDIO_INSTANCE_MAX];
+	u32 instance_count;
+	u32 instance_free_count;
+	Mutex mutex_instance;
+
+	AudioListener listener;
+
+	Mutex mutex_listener;
+
 	Thread thread;
 	volatile b8 close_request;
 	
@@ -53,6 +77,28 @@ typedef struct {
 } SoundSystemData;
 
 static SoundSystemData* sound;
+
+inline AudioProperties validate_props(const AudioProperties* props)
+{
+	AudioProperties p;
+	SV_ZERO(p);
+
+	if (props != NULL) {
+		p = *props;
+		p.volume = SV_MAX(p.volume, 0.f);
+		p.sample_velocity = SV_MAX(p.sample_velocity, 0.f);
+		p.range = SV_MAX(p.range, 0.f);
+	}
+	else {
+		p.volume = 1.f;
+		p.sample_velocity = 1.f;
+		p.range = 10.f;
+		p.position = v3_zero();
+		p.velocity = v3_zero();
+	}
+
+	return p;
+}
 
 ///////////////////////////////////////////////////////////// AUDIO ASSET ////////////////////////////////////////////////
 
@@ -79,179 +125,16 @@ static b8 asset_audio_reload_file(void* asset, const char* filepath)
 	return asset_audio_load_file(asset, filepath);
 }
 
-///////////////////////////////// AUDIO SOURCE //////////////////////////////////////////
+///////////////////////////// LISTENER ///////////////////////////////
 
-// Add a valid asset to create a new one if doesn't exists
-inline AudioSource* get_audio_source(u64 hash, Asset audio_asset)
+void listener_update(const AudioProperties* props, v3 direction)
 {
-	AudioSource* src = NULL;
-	AudioSource* parent = NULL;
+	mutex_lock(sound->mutex_listener);
 
-	AudioSource** source = sound->source_table + hash % AUDIO_SOURCE_TABLE_SIZE;
+	sound->listener.props = validate_props(props);
+	sound->listener.direction = direction;
 
-	if (*source) {
-
-		src = *source;
-
-		while (src->hash != hash) {
-
-			parent = src;
-			src = src->next;
-			if (src == NULL) {
-				break;
-			}
-		}
-	}
-
-	if (src == NULL && audio_asset) {
-
-		// Create a new one
-		{
-			if (sound->free_sources) {
-				src = sound->free_sources;
-				sound->free_sources = src->next;
-			}
-
-			if (src == NULL) {
-				if (sound->source_count >= AUDIO_SOURCE_MAX) {
-					SV_LOG_WARNING("Audio source playing limit is '%u'\n", AUDIO_SOURCE_MAX);
-					return NULL;
-				}
-
-				src = sound->sources + sound->source_count++;
-			}
-
-			src->flags = AudioSourceFlag_Valid;
-			src->hash = hash;
-			src->next = NULL;
-			src->audio_asset = audio_asset;
-
-			asset_increment(src->audio_asset);
-		}
-
-		if (parent != NULL) {
-
-			parent->next = src;
-		}
-		else *source = src;
-	}
-
-	return src;
-}
-
-inline void free_audio_source(u64 hash)
-{
-	AudioSource* src = NULL;
-	AudioSource* parent = NULL;
-
-	AudioSource** source = sound->source_table + hash % AUDIO_SOURCE_TABLE_SIZE;
-
-	if (*source) {
-
-		src = *source;
-
-		while (src->hash != hash) {
-
-			parent = src;
-			src = src->next;
-			if (src == NULL) {
-				break;
-			}
-		}
-
-		if (src != NULL) {
-
-			if (parent != NULL) {
-				parent->next = src->next;
-			}
-			else {
-				*source = src->next;
-			}
-
-			// TODO: Erase from free link list as much as possible
-
-			asset_decrement(src->audio_asset);
-
-			memory_zero(src, sizeof(AudioSource));
-
-			// Add to link list
-			src->next = sound->free_sources;
-			sound->free_sources = src;
-		}
-	}
-}
-
-inline AudioProperties validate_props(const AudioProperties* props)
-{
-	AudioProperties p;
-	SV_ZERO(p);
-
-	if (props != NULL) {
-		p = *props;
-		p.volume = SV_MAX(p.volume, 0.f);
-		p.velocity = SV_MAX(p.velocity, 0.f);
-	}
-	else {
-		p.volume = 1.f;
-		p.velocity = 1.f;
-	}
-
-	return p;
-}
-
-void audio_source_lock()
-{
-	mutex_lock(sound->mutex_source);
-}
-
-void audio_source_unlock()
-{
-	mutex_unlock(sound->mutex_source);
-}
-
-void audio_source_play_desc(u64 id, Asset audio_asset, const AudioProperties* props)
-{
-	u64 hash = id ? id : ((u64)(timer_now() * 10000000.0) * 0x398534598457);
-	AudioSource* src = get_audio_source(hash, audio_asset);
-
-	if (src == NULL)
-		return;
-
-	src->props = validate_props(props);
-	src->begin_sample_index = sound->sample_index;
-}
-
-void audio_source_update_properties(u64 id, const AudioProperties* props)
-{
-	u64 hash = id;
-	AudioSource* src = get_audio_source(hash, 0);
-
-	if (src == NULL)
-		return;
-
-	src->props = validate_props(props);
-}
-
-void audio_source_continue(u64 id)
-{
-	u64 hash = id;
-	AudioSource* src = get_audio_source(hash, 0);
-
-	if (src == NULL)
-		return;
-
-	src->flags &= ~AudioSourceFlag_Stopped;
-}
-
-void audio_source_pause(u64 id)
-{
-	u64 hash = id;
-	AudioSource* src = get_audio_source(hash, 0);
-
-	if (src == NULL)
-		return;
-
-	src->flags |= AudioSourceFlag_Stopped;
+	mutex_unlock(sound->mutex_listener);
 }
 
 ///////////////////////////////// AUDIO //////////////////////////////////////////
@@ -425,6 +308,249 @@ void audio_destroy(Audio* audio)
 		memory_free(audio->samples[0]);
 }
 
+inline void free_audio_instance(AudioInstance* inst)
+{
+	asset_decrement(inst->audio_asset);
+	memory_zero(inst, sizeof(AudioInstance));
+	sound->instance_free_count++;
+	// TODO: Decrease instance_free_count
+}
+
+void audio_play(Asset audio_asset, const AudioProperties* props)
+{
+	AudioInstance* inst = NULL;
+
+	mutex_lock(sound->mutex_instance);
+
+	if (sound->instance_free_count) {
+
+		foreach(i, sound->instance_count) {
+
+			AudioInstance* instance = sound->instances + i;
+			if (instance->audio_asset == 0) {
+				inst = instance;
+				break;
+			}
+		}
+
+		if (inst != NULL)
+			sound->instance_free_count--;
+
+		assert(inst);
+	}
+
+	if (inst == NULL) {
+
+		if (sound->instance_count >= AUDIO_INSTANCE_MAX) {
+			SV_LOG_WARNING("Audio instances exceeded, the limit is %u\n", AUDIO_INSTANCE_MAX);
+		}
+		else inst = sound->instances + sound->instance_count++;
+	}
+
+	mutex_unlock(sound->mutex_instance);
+
+	if (inst != NULL) {
+
+		inst->props = validate_props(props);
+		inst->begin_sample_index = sound->sample_index;
+		inst->audio_asset = audio_asset;
+
+		asset_increment(inst->audio_asset);
+	}
+}
+
+///////////////////////////////// AUDIO SOURCE //////////////////////////////////////////
+
+// Add a valid asset to create a new one if doesn't exists
+inline AudioSource* get_audio_source(u64 hash, Asset audio_asset)
+{
+	AudioSource* src = NULL;
+	AudioSource* parent = NULL;
+
+	AudioSource** source = sound->source_table + hash % AUDIO_SOURCE_TABLE_SIZE;
+
+	if (*source) {
+
+		src = *source;
+
+		while (src->hash != hash) {
+
+			parent = src;
+			src = src->next;
+			if (src == NULL) {
+				break;
+			}
+		}
+	}
+
+	if (src == NULL && audio_asset) {
+
+		// Create a new one
+		{
+			if (sound->free_sources) {
+				src = sound->free_sources;
+				sound->free_sources = src->next;
+			}
+
+			if (src == NULL) {
+				if (sound->source_count >= AUDIO_SOURCE_MAX) {
+					SV_LOG_WARNING("Audio source playing limit is '%u'\n", AUDIO_SOURCE_MAX);
+					return NULL;
+				}
+
+				src = sound->sources + sound->source_count++;
+			}
+
+			src->flags = AudioSourceFlag_Valid;
+			src->hash = hash;
+			src->next = NULL;
+			src->audio_asset = audio_asset;
+
+			asset_increment(src->audio_asset);
+		}
+
+		if (parent != NULL) {
+
+			parent->next = src;
+		}
+		else *source = src;
+	}
+
+	return src;
+}
+
+inline void free_audio_source(u64 hash)
+{
+	AudioSource* src = NULL;
+	AudioSource* parent = NULL;
+
+	AudioSource** source = sound->source_table + hash % AUDIO_SOURCE_TABLE_SIZE;
+
+	if (*source) {
+
+		src = *source;
+
+		while (src->hash != hash) {
+
+			parent = src;
+			src = src->next;
+			if (src == NULL) {
+				break;
+			}
+		}
+
+		if (src != NULL) {
+
+			if (parent != NULL) {
+				parent->next = src->next;
+			}
+			else {
+				*source = src->next;
+			}
+
+			// TODO: Erase from free link list as much as possible
+
+			asset_decrement(src->audio_asset);
+
+			memory_zero(src, sizeof(AudioSource));
+
+			// Add to link list
+			src->next = sound->free_sources;
+			sound->free_sources = src;
+		}
+	}
+}
+
+void audio_source_lock()
+{
+	mutex_lock(sound->mutex_source);
+}
+
+void audio_source_unlock()
+{
+	mutex_unlock(sound->mutex_source);
+}
+
+void audio_source_desc(u64 id, const AudioProperties* props)
+{
+	u64 hash = id;
+	
+	AudioSource* src = get_audio_source(hash, 0);
+
+	if (src == NULL)
+		return;
+
+	src->props = validate_props(props);
+}
+
+void audio_source_continue(u64 id)
+{
+	u64 hash = id;
+	AudioSource* src = get_audio_source(hash, 0);
+
+	if (src == NULL)
+		return;
+
+	src->flags &= ~AudioSourceFlag_Stopped;
+}
+
+void audio_source_pause(u64 id)
+{
+	u64 hash = id;
+	AudioSource* src = get_audio_source(hash, 0);
+
+	if (src == NULL)
+		return;
+
+	src->flags |= AudioSourceFlag_Stopped;
+}
+
+void audio_source_kill(u64 id)
+{
+	free_audio_source(id);
+}
+
+void audio_source_play(u64 id, Asset audio_asset, const AudioProperties* source_props, const AudioProperties* audio_props)
+{
+	u64 hash = id;
+	AudioSource* src = get_audio_source(hash, audio_asset);
+
+	// TODO: Play individual sounds
+
+	if (src == NULL)
+		return;
+
+	src->props = validate_props(source_props);
+	src->begin_sample_index = sound->sample_index;
+}
+
+/////////////////////////////////////////////////// MUSIC ////////////////////////////////////////////////////////
+
+void music_play(u64 id, Asset audio_asset, const AudioProperties* props)
+{
+	// TODO
+}
+
+void music_desc(u64 id, const AudioProperties* props)
+{
+	// TODO
+}
+
+void music_continue(u64 id)
+{
+	// TODO
+}
+
+void music_pause(u64 id)
+{
+	// TODO
+}
+
+void music_stop(u64 id)
+{
+	// TODO
+}
+
 ///////////////////////////////////////////////////////// SOUND BUFFER UTILS ////////////////////////////////////////////
 
 static void clear_sound_buffer()
@@ -472,6 +598,136 @@ static void fill_sound_buffer(u32 byte_to_lock, u32 bytes_to_write)
 	}
 }
 
+static b8 write_audio(u32* begin_sample_index, Asset audio_asset, const AudioProperties* props, const AudioListener* listener, u32 samples_to_write)
+{
+	const Audio* audio = asset_get(audio_asset);
+
+	// TODO: 
+	// - Variable velocity
+	// - Use two loops, one for each channel
+
+	if (audio == NULL)
+		return TRUE;
+
+	f32 v0 = props->volume;
+	f32 v1 = props->volume;
+
+	// 3D effect
+	if ((listener->props.flags & AudioFlag_3D) && (props->flags & AudioFlag_3D)){
+
+		v3 to = v3_sub(props->position, listener->props.position);
+		f32 to_distance = v3_length(to);
+
+		if (to_distance > 0.00001f) {
+
+			v3 to_normalized = v3_div_scalar(to, to_distance);
+
+			// Fade off
+			{
+				const f32 range = SV_MIN(props->range, listener->props.range);
+
+				const f32 min_dist = 1.f;
+				const f32 dist_range = SV_MAX(range - min_dist, 0.f);
+
+				if (dist_range > 0.00001f) {
+
+					f32 dist = SV_MAX(to_distance, min_dist) - min_dist;
+
+					f32 mul = dist / dist_range;
+					mul = 1.f - math_smooth(mul, 4.f);
+
+					v0 *= mul;
+					v1 *= mul;
+				}
+			}
+
+			// Stereo
+			{
+				v3 dir = listener->direction;
+
+				v2 move_dir = v2_normalize(v2_set(dir.x, dir.z));
+
+				v2 move_ear_dir = v2_perpendicular(move_dir);
+
+				v3 l_ear_dir = dir;
+				l_ear_dir.x += -move_ear_dir.x * 1.8f;
+				l_ear_dir.z += -move_ear_dir.y * 1.8f;
+				l_ear_dir = v3_normalize(l_ear_dir);
+
+				v3 r_ear_dir = dir;
+				r_ear_dir.x += move_ear_dir.x * 1.8f;
+				r_ear_dir.z += move_ear_dir.y * 1.8f;
+				r_ear_dir = v3_normalize(r_ear_dir);
+
+				const f32 factor = 0.85f;
+
+				f32 mul0 = (1.f - factor) + ((v3_dot(l_ear_dir, to_normalized) * 0.5f + 0.5f) * 0.85f + 0.15f) * factor;
+				f32 mul1 = (1.f - factor) + ((v3_dot(r_ear_dir, to_normalized) * 0.5f + 0.5f) * 0.85f + 0.15f) * factor;
+
+				v0 *= mul0;
+				v1 *= mul1;
+			}
+
+			// TODO: Doppler effect (but first need a way of modify the pitch)
+		}
+	}
+
+	if (v0 < 0.0001f && v1 < 0.0001f)
+		return TRUE;
+
+	u32 end_sample_index;
+	{
+		f32 seconds = (f32)audio->sample_count / (f32)audio->samples_per_second;
+		seconds *= props->sample_velocity;
+
+		end_sample_index = *begin_sample_index + (u32)(seconds * (f32)sound->samples_per_second);
+	}
+
+	if (end_sample_index > sound->sample_index) {
+
+		u32 sample_index = sound->sample_index - *begin_sample_index;
+
+		u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
+
+		foreach(i, write_count) {
+
+			u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
+			u32 s1 = (sample_index + i) % audio->sample_count;
+
+			s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->sample_velocity);
+			s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->sample_velocity);
+
+			s0 %= audio->sample_count;
+			s1 %= audio->sample_count;
+
+			if (s0 > s1) {
+				u32 aux = s0;
+				s0 = s1;
+				s1 = aux;
+			}
+
+			f32 left_value = 0;
+			f32 right_value = 0;
+
+			// I do it multiplying individualy the samples to have more precision
+			f32 mult = 1.f / (f32)(s1 - s0 + 1);
+
+			for (u32 s = s0; s <= s1; ++s) {
+
+				left_value += (f32)audio->samples[0][s] * mult;
+				right_value += (f32)audio->samples[1][s] * mult;
+			}
+
+			sound->samples[i * 2 + 0] += left_value * v0;
+			sound->samples[i * 2 + 1] += right_value * v1;
+		}
+
+		return TRUE;
+	}
+	
+	return FALSE;
+}
+
 static i32 thread_main(void* _data)
 {
 	const u32 updates_per_second = 500;
@@ -506,12 +762,36 @@ static i32 thread_main(void* _data)
 
 					u32 samples_to_write = bytes_to_write / sound->bytes_per_sample;
 
+					AudioListener listener;
+					{
+						mutex_lock(sound->mutex_listener);
+						listener = sound->listener;
+						mutex_unlock(sound->mutex_listener);
+					}
+
 					// Clear buffer
 					{
 						foreach(i, samples_to_write) {
 							sound->samples[i * 2 + 0] = 0.f;
 							sound->samples[i * 2 + 1] = 0.f;
 						}
+					}
+
+					// Append audio instances
+					{
+						mutex_lock(sound->mutex_instance);
+
+						foreach(instance_index, sound->instance_count) {
+
+							AudioInstance* inst = sound->instances + instance_index;
+
+							if (!write_audio(&inst->begin_sample_index, inst->audio_asset, &inst->props, &listener, samples_to_write)) {
+
+								free_audio_instance(inst);
+							}
+						}
+
+						mutex_unlock(sound->mutex_instance);
 					}
 
 					// Append audio sources
@@ -521,66 +801,8 @@ static i32 thread_main(void* _data)
 						foreach(source_index, sound->source_count) {
 
 							AudioSource* src = sound->sources + source_index;
-							AudioProperties* props = &src->props;
 
-							Audio* audio = asset_get(src->audio_asset);
-
-							// TODO: 
-							// - Variable velocity
-							// - Decrement the asset when the audio instance is finished
-							// - Use two loops, one for each channel
-
-							if (audio == NULL || !(src->flags & AudioSourceFlag_Valid))
-								continue;
-
-							u32 end_sample_index;
-							{
-								f32 seconds = (f32)audio->sample_count / (f32)audio->samples_per_second;
-								seconds *= props->velocity;
-
-								end_sample_index = src->begin_sample_index + (u32)(seconds * (f32)sound->samples_per_second);
-							}
-
-							if (end_sample_index > sound->sample_index) {
-
-								u32 sample_index = sound->sample_index - src->begin_sample_index;
-
-								u32 write_count = SV_MIN(samples_to_write, (end_sample_index - sound->sample_index));
-
-								foreach(i, write_count) {
-
-									u32 s0 = (sample_index + SV_MAX(i, 1u) - 1) % audio->sample_count;
-									u32 s1 = (sample_index + i) % audio->sample_count;
-
-									s0 = (u32)(((f32)s0 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->velocity);
-									s1 = (u32)(((f32)s1 / (f32)sound->samples_per_second) * (f32)audio->samples_per_second * props->velocity);
-
-									s0 %= audio->sample_count;
-									s1 %= audio->sample_count;
-
-									if (s0 > s1) {
-										u32 aux = s0;
-										s0 = s1;
-										s1 = aux;
-									}
-
-									f32 left_value = 0;
-									f32 right_value = 0;
-
-									// I do it multiplying individualy the samples to have more precision
-									f32 mult = 1.f / (f32)(s1 - s0 + 1);
-
-									for (u32 s = s0; s <= s1; ++s) {
-
-										left_value += (f32)audio->samples[0][s] * mult;
-										right_value += (f32)audio->samples[1][s] * mult;
-									}
-
-									sound->samples[i * 2 + 0] += left_value * props->volume;
-									sound->samples[i * 2 + 1] += right_value * props->volume;
-								}
-							}
-							else {
+							if (!write_audio(&src->begin_sample_index, src->audio_asset, &src->props, &listener, samples_to_write)) {
 
 								free_audio_source(src->hash);
 							}
@@ -709,8 +931,36 @@ b8 _sound_initialize(u32 samples_per_second)
 		return FALSE;
 	}
 
+	// Configure thread
+	{
+		HANDLE th = (HANDLE)sound->thread;
+
+		// Put the thread in a dedicated hardware core
+		{
+			DWORD_PTR mask = u64_max;
+			DWORD_PTR res = SetThreadAffinityMask(th, mask);
+			assert(res > 0);
+		}
+
+		// Set thread priority
+		{
+			BOOL res = SetThreadPriority(th, THREAD_PRIORITY_HIGHEST);
+			assert(res != 0);
+		}
+
+#if SV_SLOW
+		// Set thread name
+		{
+			HRESULT hr = SetThreadDescription(th, (PCWSTR)("sound"));
+			assert(SUCCEEDED(hr));
+		}
+#endif
+	}
+
 	// Mutex
 	sound->mutex_source = mutex_create();
+	sound->mutex_instance = mutex_create();
+	sound->mutex_listener = mutex_create();
 
 	return TRUE;
 }
@@ -718,12 +968,14 @@ b8 _sound_initialize(u32 samples_per_second)
 void _sound_close()
 {
 	if (sound) {
-
+		// TODO
 		sound->close_request = TRUE;
 
 		thread_wait(sound->thread);
 
 		mutex_destroy(sound->mutex_source);
+		mutex_destroy(sound->mutex_instance);
+		mutex_destroy(sound->mutex_listener);
 
 		memory_free(sound->samples);
 		memory_free(sound);
