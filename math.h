@@ -1227,12 +1227,12 @@ inline Frustum frustum_calculate(m4 m)
 	return f;
 }
 
-inline b8 frustum_intersect_sphere(Frustum frustum, v3 to_center, f32 radius)
+inline b8 frustum_intersect_sphere(const Frustum* frustum, v3 to_center, f32 radius)
 {
 	foreach(i, 6) {
 
-		v3 normal = v4_to_v3(frustum.planes[i]);
-		f32 distance = frustum.planes[i].w;
+		v3 normal = v4_to_v3(frustum->planes[i]);
+		f32 distance = frustum->planes[i].w;
 
 		f32 e = v3_dot(to_center, normal);
 

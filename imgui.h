@@ -132,6 +132,7 @@ void gui_read_(u8** it_, void* data, u32 size);
 void gui_read_text_(u8** it_, const char** text);
 const void* gui_read_buffer_(u8** it_, u32 size);
 
+v2 gui_resolution();
 v2 gui_pixel_size();
 v2 gui_mouse_position();
 

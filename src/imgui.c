@@ -651,6 +651,11 @@ void gui_set_background(GPUImage* image, v4 texcoord, Color color)
 
 //////////////////////////////// WIDGET UTILS //////////////////////////////////
 
+v2 gui_resolution() 
+{
+	return gui->resolution;
+}
+
 v2 gui_pixel_size()
 {
 	return gui->pixel;
