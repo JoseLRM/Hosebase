@@ -25,6 +25,11 @@ inline f32 math_sqrt(f32 n)
 	return n * y;
 }
 
+inline f32 math_pow(f32 n, f32 e)
+{
+	return pow(n, e);
+}
+
 inline f32 math_sin(f32 n)
 {
 	return sinf(n);
@@ -1327,16 +1332,17 @@ inline Color color_white()       { return color_rgb(255u, 255u, 255u); }
 
 // Random
 
-// return value from 0u to (u32_max / 2u)
 inline u32 math_random_u32(u32 seed)
 {
-	seed = (seed << 13) ^ seed;
-	return ((seed * (seed * seed * 15731u * 789221u) + 1376312589u) & 0x7fffffffu);
+	seed = (0x983658u + seed) * 0x79023854u;
+	seed = (seed << 16) ^ seed;
+	return seed;
 }
 
 inline f32 math_random_f32(u32 seed)
 {
-	return (f32)math_random_u32(seed) * (1.f / (f32)(u32_max / 2u));
+	seed = math_random_u32(seed) & 0xFFFFFF;
+	return (f32)seed / (f32)0xFFFFFF;
 }
 inline f32 math_random_f32_max(u32 seed, f32 max)
 {
@@ -1349,52 +1355,30 @@ inline f32 math_random_f32_min_max(u32 seed, f32 min, f32 max)
 
 inline u32 math_random_u32_max(u32 seed, u32 max)
 {
-	if (max > 8u)
-		return math_random_u32(seed) % max;
-	else
-		return (u32)math_random_f32_max(++seed, (f32)max);
+	return math_random_u32(seed) % max;
 }
 inline u32 math_random_u32_min_max(u32 seed, u32 min, u32 max)
 {
-	if (max - min > 8u)
-		return min + (math_random_u32(seed) % (max - min));
-	else
-		return (u32)math_random_f32_min_max(++seed, (f32)min, (f32)max);
+	return min + (math_random_u32(seed) % (max - min));
 }
 
 inline f32 math_perlin_noise(u32 seed, f32 n)
 {
-	n += math_random_f32(seed * 0x3294124u) * 10000.f - 5000.f;
+	i32 i = (i32)n;
 
-	i32 offset = (n < 0.f) ? (i32)(n - 1.f) : (i32)n;
+	f32 d = n - (f32)i;
 
-	f32 p0 = (f32)offset;
-	f32 h0 = math_random_f32(seed + offset);
-
-	if (n < p0) {
-
-		--offset;
-		f32 p1 = (f32)offset;
-
-		f32 pos = (n - p1) / (p0 - p1);
-		pos = math_cos(PI - pos * PI) * 0.5f + 0.5f;
-
-		f32 h1 = math_random_f32(seed + offset);
-
-		return h1 + pos * (h0 - h1);
+	if (n < 0.f) {
+		i--;
+		d = 1.f - d;
 	}
-	else {
 
-		++offset;
-		f32 p1 = (f32)offset;
+	f32 height0 = math_random_f32((u32)n * seed);
+	f32 height1 = math_random_f32((u32)(n + 1) * seed);
 
-		f32 pos = (n - p0) / (p1 - p0);
-		pos = math_cos(PI - pos * -PI) * 0.5f + 0.5f;
+	d = 1.f - (math_cos(d * PI) * 0.5f + 0.5f);
 
-		f32 h1 = math_random_f32(seed + offset);
-
-		return h0 + pos * (h1 - h0);
-	}
+	return height1 * d + height0 * (1.f - d);
 }
 
 inline f32 _perlin_noise_2D_peak_value(u32 seed, i32 p, f32 x)
@@ -1449,7 +1433,7 @@ inline f32 math_perlin_noise3D(u32 seed, f32 x, f32 y, f32 z)
 inline f32 math_ridged_noise(f32 n, f32 e)
 {
 	n = 2.f * (0.5f - fabs(0.5f - n));
-	n = pow(n, e);
+	n = math_pow(n, e);
 	return n;
 }
 
