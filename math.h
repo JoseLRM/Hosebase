@@ -1334,7 +1334,7 @@ inline Color color_white()       { return color_rgb(255u, 255u, 255u); }
 
 inline u32 math_random_u32(u32 seed)
 {
-	seed = (0x983658u + seed) * 0x79023854u;
+	seed = seed * 0x7902854u;
 	seed = (seed << 16) ^ seed;
 	return seed;
 }
@@ -1373,8 +1373,8 @@ inline f32 math_perlin_noise(u32 seed, f32 n)
 		d = 1.f - d;
 	}
 
-	f32 height0 = math_random_f32((u32)n * seed);
-	f32 height1 = math_random_f32((u32)(n + 1) * seed);
+	f32 height0 = math_random_f32((u32)i * seed);
+	f32 height1 = math_random_f32((u32)(i + 1) * seed);
 
 	d = 1.f - (math_cos(d * PI) * 0.5f + 0.5f);
 

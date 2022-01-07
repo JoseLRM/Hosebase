@@ -236,6 +236,45 @@ typedef struct {
 
 } v4_i32;
 
+typedef struct {
+
+	union {
+		struct {
+			b8 x;
+			b8 y;
+		};
+		b8 v[2];
+	};
+
+} v2_b8;
+
+typedef struct {
+
+	union {
+		struct {
+			b8 x;
+			b8 y;
+			b8 z;
+		};
+		b8 v[3];
+	};
+
+} v3_b8;
+
+typedef struct {
+
+	union {
+		struct {
+			b8 x;
+			b8 y;
+			b8 z;
+			b8 w;
+		};
+		b8 v[4];
+	};
+
+} v4_b8;
+
 // Row major matrix: [column][row] 
 typedef struct {
 	union {
