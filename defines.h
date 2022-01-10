@@ -240,6 +240,18 @@ typedef struct {
 
 	union {
 		struct {
+			u16 x;
+			u16 y;
+		};
+		u16 v[2];
+	};
+
+} v2_u16;
+
+typedef struct {
+
+	union {
+		struct {
 			b8 x;
 			b8 y;
 		};
