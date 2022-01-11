@@ -461,6 +461,8 @@ inline void destroy_graphics_primitive(GraphicsPrimitive* p)
 
 static void destroy_primitives()
 {
+	// TODO: Should skip individual primitives to assert that any frame is using it
+
 	mutex_lock(gfx->primitives_to_destroy_mutex);
 	
 	foreach(i, gfx->primitives_to_destroy.size) {
@@ -475,7 +477,7 @@ static void destroy_primitives()
 
 void _graphics_begin()
 {
-	if (core.frame_count % 20u == 0u) {
+	if (core.frame_count % 200u == 0u) {
 		destroy_primitives();
 	}
 	
