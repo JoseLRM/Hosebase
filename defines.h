@@ -115,6 +115,7 @@ typedef struct {
 	f32 delta_time;
 	f32 time_step;
 	u32 frame_count;
+	u32 FPS;
 } CoreData;
 
 extern CoreData core;

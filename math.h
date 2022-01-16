@@ -1214,10 +1214,10 @@ inline Frustum frustum_calculate(m4 m)
 	f.planes[FRUSTUM_UP].z = m.v[2][3] - m.v[2][1];
 	f.planes[FRUSTUM_UP].w = m.v[3][3] - m.v[3][1];
 
-	f.planes[FRUSTUM_FAR].x = m.v[0][3] - m.v[0][2];
-	f.planes[FRUSTUM_FAR].y = m.v[1][3] - m.v[1][2];
-	f.planes[FRUSTUM_FAR].z = m.v[2][3] - m.v[2][2];
-	f.planes[FRUSTUM_FAR].w = m.v[3][3] - m.v[3][2];
+	f.planes[FRUSTUM_FAR].x = m.v[0][2] - m.v[0][3];
+	f.planes[FRUSTUM_FAR].y = m.v[1][2] - m.v[1][3];
+	f.planes[FRUSTUM_FAR].z = m.v[2][2] - m.v[2][3];
+	f.planes[FRUSTUM_FAR].w = m.v[3][2] - m.v[3][3];
 
 	foreach(i, 6) {
 
