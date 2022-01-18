@@ -507,6 +507,7 @@ namespace sv {
 				VkPhysicalDeviceProperties			props;
 				VkPhysicalDeviceFeatures			features;
 				VkPhysicalDeviceMemoryProperties	mem_props;
+				VkFormatProperties	format_props;
 
 				u32 suitability = 0u;
 
@@ -515,6 +516,11 @@ namespace sv {
 				vkGetPhysicalDeviceProperties(device, &props);
 				vkGetPhysicalDeviceFeatures(device, &features);
 				vkGetPhysicalDeviceMemoryProperties(device, &mem_props);
+				vkGetPhysicalDeviceFormatProperties(device, VK_FORMAT_R32_UINT, &format_props);
+
+				if (format_props.bufferFeatures & VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT) {
+					suitability++;
+				}
 
 				// Choose FamilyQueueIndices
 				{
