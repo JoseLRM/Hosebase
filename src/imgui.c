@@ -555,7 +555,7 @@ void gui_draw(GPUImage* image, CommandList cmd)
 	gui->cmd = cmd;
 	gui->image = image;
 
-	imrend_begin_batch(image, cmd);
+	imrend_begin_batch(image, NULL, cmd);
 	imrend_camera(ImRendCamera_Normal, cmd);
 
 	foreach(i, gui->parent_count) {

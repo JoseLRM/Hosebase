@@ -85,11 +85,14 @@ typedef struct {
 typedef struct {
 	Buffer buffer;
 	GPUImage* render_target;
+	GPUImage* depth_map;
 	
 	DynamicArray(m4) matrix_stack;
 	DynamicArray(ImRendScissor) scissor_stack;
 	
 	m4 current_matrix;
+
+	b8 depth_read, depth_write;
 	
 	struct {
 		ImRendCamera current;
@@ -112,8 +115,14 @@ typedef struct {
 	Shader* ps_primitive;
 
 	RenderPass* render_pass;
+	RenderPass* render_pass_depth;
 
 	BlendState* bs_transparent;
+
+	DepthStencilState* dss_none;
+	DepthStencilState* dss_write;
+	DepthStencilState* dss_read;
+	DepthStencilState* dss_read_write;
 
 	Sampler* sampler_def_linear;
 	Sampler* sampler_def_nearest;
@@ -134,6 +143,8 @@ typedef enum {
 	ImRendHeader_PopMatrix,
 	ImRendHeader_PushScissor,
 	ImRendHeader_PopScissor,
+	ImRendHeader_DepthTest,
+	ImRendHeader_LineWidth,
 
 	ImRendHeader_Camera,
 	ImRendHeader_CustomCamera,
@@ -186,20 +197,36 @@ b8 imrend_initialize()
 	SV_CHECK(compile_shader(&imrend->gfx.ps_primitive, ShaderType_Pixel, PRIMITIVE_SHADER));
 
 	{
-		AttachmentDesc att;
-		att.load_op = AttachmentOperation_Load;
-		att.store_op = AttachmentOperation_Store;
-		att.format = Format_R32G32B32A32_FLOAT;
-		att.initial_layout = GPUImageLayout_RenderTarget;
-		att.layout = GPUImageLayout_RenderTarget;
-		att.final_layout = GPUImageLayout_RenderTarget;
-		att.type = AttachmentType_RenderTarget;
-		
+		AttachmentDesc att[3];
+		att[0].load_op = AttachmentOperation_Load;
+		att[0].store_op = AttachmentOperation_Store;
+		att[0].stencil_load_op = AttachmentOperation_DontCare;
+		att[0].stencil_store_op = AttachmentOperation_DontCare;
+		att[0].format = Format_R32G32B32A32_FLOAT;
+		att[0].initial_layout = GPUImageLayout_RenderTarget;
+		att[0].layout = GPUImageLayout_RenderTarget;
+		att[0].final_layout = GPUImageLayout_RenderTarget;
+		att[0].type = AttachmentType_RenderTarget;
+
+		att[1].load_op = AttachmentOperation_Load;
+		att[1].store_op = AttachmentOperation_Store;
+		att[1].stencil_load_op = AttachmentOperation_Load;
+		att[1].stencil_store_op = AttachmentOperation_Store;
+		att[1].format = Format_D24_UNORM_S8_UINT;
+		att[1].initial_layout = GPUImageLayout_DepthStencil;
+		att[1].layout = GPUImageLayout_DepthStencil;
+		att[1].final_layout = GPUImageLayout_DepthStencil;
+		att[1].type = AttachmentType_DepthStencil;
+
 		RenderPassDesc desc;
-		desc.attachments = &att;
+		desc.attachments = att;
+		desc.attachment_count = 2;
+
+		SV_CHECK(graphics_renderpass_create(&imrend->gfx.render_pass_depth, &desc));
+
 		desc.attachment_count = 1u;
 
-		SV_CHECK(graphics_renderpass_create(&imrend->gfx.render_pass, &desc));
+		SV_CHECK(graphics_renderpass_create(&imrend->gfx.render_pass, &desc));		
 	}
 	{
 		BlendAttachmentDesc att;
@@ -218,6 +245,33 @@ b8 imrend_initialize()
 		desc.attachment_count = 1u;
 
 		SV_CHECK(graphics_blendstate_create(&imrend->gfx.bs_transparent, &desc));
+	}
+
+	{
+		DepthStencilStateDesc desc;
+		desc.depth_compare_op = CompareOperation_Less;
+		desc.stencil_test_enabled = FALSE;
+
+		desc.depth_test_enabled = FALSE;
+		desc.depth_write_enabled = FALSE;
+		SV_CHECK(graphics_depthstencilstate_create(&imrend->gfx.dss_none, &desc));
+
+		desc.depth_test_enabled = FALSE;
+		desc.depth_write_enabled = TRUE;
+		SV_CHECK(graphics_depthstencilstate_create(&imrend->gfx.dss_write, &desc));
+
+		desc.depth_test_enabled = TRUE;
+		desc.depth_write_enabled = FALSE;
+		SV_CHECK(graphics_depthstencilstate_create(&imrend->gfx.dss_read, &desc));
+
+		desc.depth_test_enabled = TRUE;
+		desc.depth_write_enabled = TRUE;
+		SV_CHECK(graphics_depthstencilstate_create(&imrend->gfx.dss_read_write, &desc));
+
+		DepthStencilState* dss_none;
+		DepthStencilState* dss_write;
+		DepthStencilState* dss_read;
+		DepthStencilState* dss_write_read;
 	}
 
 	{
@@ -418,12 +472,13 @@ inline void update_current_scissor(ImRendState* state, CommandList cmd)
 	graphics_scissor_set(s, 0u, cmd);
 }
     
-void imrend_begin_batch(GPUImage* render_target, CommandList cmd)
+void imrend_begin_batch(GPUImage* render_target, GPUImage* depth_map, CommandList cmd)
 {
 	SV_IMREND();
 
 	buffer_reset(&state->buffer);
 	state->render_target = render_target;
+	state->depth_map = depth_map;
 }
     
 void imrend_flush(CommandList cmd)
@@ -435,11 +490,18 @@ void imrend_flush(CommandList cmd)
 
 	graphics_viewport_set_image(state->render_target, 0u, cmd);
 	graphics_scissor_set_image(state->render_target, 0u, cmd);
-	
-	GPUImage* att[1];
-	att[0] = state->render_target;
 
-	graphics_renderpass_begin(gfx->render_pass, att, NULL, 1.f, 0u, cmd);
+	state->depth_read = FALSE;
+	state->depth_write = FALSE;
+	graphics_depthstencilstate_bind(imrend->gfx.dss_none, cmd);
+	
+	GPUImage* att[2];
+	att[0] = state->render_target;
+	att[1] = state->depth_map;
+
+	RenderPass* render_pass = (state->depth_map == NULL) ? gfx->render_pass : gfx->render_pass_depth;
+
+	graphics_renderpass_begin(render_pass, att, NULL, 1.f, 0u, cmd);
 
 	state->current_matrix = m4_identity();
 	array_reset(&state->matrix_stack);
@@ -489,6 +551,34 @@ void imrend_flush(CommandList cmd)
 		}
 		break;
 
+		case ImRendHeader_DepthTest:
+		{
+			b8 read = imrend_read(b8, it);
+			b8 write = imrend_read(b8, it);
+
+			if (read != state->depth_read || write != state->depth_write) {
+				state->depth_read = read;
+				state->depth_write = write;
+
+				DepthStencilState* dss = imrend->gfx.dss_none;
+
+				if (read && write) dss = imrend->gfx.dss_read_write;
+				else if (read) dss = imrend->gfx.dss_read;
+				else if (write) dss = imrend->gfx.dss_write;
+
+				graphics_depthstencilstate_bind(dss, cmd);
+			}
+		}
+		break;
+
+		case ImRendHeader_LineWidth:
+		{
+			f32 width = imrend_read(f32, it);
+
+			graphics_line_width_set(width, cmd);
+		}
+		break;
+
 		case ImRendHeader_Camera:
 		{
 			state->camera.current = imrend_read(ImRendCamera, it);
@@ -520,7 +610,6 @@ void imrend_flush(CommandList cmd)
 				graphics_constant_buffer_bind(state->gfx.cbuffer_primitive, 0u, ShaderType_Vertex, cmd);
 
 				graphics_blendstate_bind(gfx->bs_transparent, cmd);
-				graphics_depthstencilstate_unbind(cmd);
 				graphics_inputlayoutstate_unbind(cmd);
 				graphics_rasterizerstate_unbind(cmd);
 
@@ -556,7 +645,7 @@ void imrend_flush(CommandList cmd)
 							GPUBarrier barrier = gpu_barrier_image(image, layout, (layout == GPUImageLayout_DepthStencil) ? GPUImageLayout_DepthStencilReadOnly : GPUImageLayout_ShaderResource);
 							graphics_barrier(&barrier, 1u, cmd);
 								
-							graphics_renderpass_begin(gfx->render_pass, att, NULL, 1.f, 0, cmd);
+							graphics_renderpass_begin(render_pass, att, NULL, 1.f, 0, cmd);
 						}
 					}
 
@@ -586,7 +675,7 @@ void imrend_flush(CommandList cmd)
 						// TEMP
 						graphics_renderpass_end(cmd);
 						graphics_barrier(&barrier, 1u, cmd);
-						graphics_renderpass_begin(gfx->render_pass, att, NULL, 1.f, 0, cmd);
+						graphics_renderpass_begin(render_pass, att, NULL, 1.f, 0, cmd);
 					}
 				}
 				else if (draw_call == ImRendDrawCall_Triangle) {
@@ -717,7 +806,7 @@ void imrend_flush(CommandList cmd)
 					
 				graphics_renderpass_end(cmd);
 				draw_text(&desc, cmd);
-				graphics_renderpass_begin(gfx->render_pass, att, NULL, 1.f, 0, cmd);
+				graphics_renderpass_begin(render_pass, att, NULL, 1.f, 0, cmd);
 		    
 			}break;
 		    
@@ -772,6 +861,25 @@ void imrend_pop_scissor(CommandList cmd)
 
 	ImRendHeader header = ImRendHeader_PopScissor;
 	imrend_write(state, header);
+}
+
+void imrend_depth_test(b8 read, b8 write, CommandList cmd)
+{
+	SV_IMREND();
+
+	ImRendHeader header = ImRendHeader_DepthTest;
+	imrend_write(state, header);
+	imrend_write(state, read);
+	imrend_write(state, write);
+}
+
+void imrend_line_width(f32 line_width, CommandList cmd)
+{
+	SV_IMREND();
+
+	ImRendHeader header = ImRendHeader_LineWidth;
+	imrend_write(state, header);
+	imrend_write(state, line_width);
 }
 
 void imrend_camera(ImRendCamera camera, CommandList cmd)

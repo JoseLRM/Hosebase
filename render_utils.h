@@ -53,7 +53,7 @@ typedef enum {
 #endif
 } ImRendCamera;
 
-void imrend_begin_batch(GPUImage* render_target, CommandList cmd);
+void imrend_begin_batch(GPUImage* render_target, GPUImage* depth_map, CommandList cmd);
 void imrend_flush(CommandList cmd);
 
 void imrend_push_matrix(m4 matrix, CommandList cmd);
@@ -61,6 +61,9 @@ void imrend_pop_matrix(CommandList cmd);
 
 void imrend_push_scissor(f32 x, f32 y, f32 width, f32 height, b8 additive, CommandList cmd);
 void imrend_pop_scissor(CommandList cmd);
+
+void imrend_depth_test(b8 read, b8 write, CommandList cmd);
+void imrend_line_width(f32 line_width, CommandList cmd);
 
 void imrend_camera(ImRendCamera camera, CommandList cmd);
 void imrend_camera_custom(m4 view_matrix, m4 projection_matrix, CommandList cmd);
