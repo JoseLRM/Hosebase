@@ -373,6 +373,10 @@ void gui_begin(const char* layout, Font* default_font)
 		layout_index = 0;
 	}
 	gui->root.layout.type = layout_index;
+
+	gui->root.background.image = NULL;
+	gui->root.background.texcoord = v4_zero();
+	gui->root.background.color = color_rgba(0, 0, 0, 0);
 }
 
 void gui_end()
