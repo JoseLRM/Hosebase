@@ -2,8 +2,6 @@
 
 #include "serialize.h"
 
-typedef u64 Asset;
-
 // That's only for assets attached to files
 typedef enum {
 	AssetPriority_RightNow,

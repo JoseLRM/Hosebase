@@ -34,17 +34,12 @@ inline void bin_filepath(char* buf, u64 hash)
 	sprintf(buf, "bin/%llu.bin", hash);
 }
 
-b8 bin_read(u64 hash, Buffer* data)
+b8 bin_read(u64 hash, u8** data, u32* size)
 {
 	char filepath[BIN_PATH_SIZE];
 	bin_filepath(filepath, hash);
 
-	u8* d;
-	u32 size;
-	if (!file_read_binary(filepath, &d, &size)) return FALSE;
-
-	buffer_set(data, d, size);
-	return TRUE;
+	return file_read_binary(filepath, data, size);
 }
     
 /*b8 bin_read(u64 hash, Deserializer& deserializer, b8 system)

@@ -896,10 +896,11 @@ b8 file_read_text(const char* filepath_, u8** data, u32* psize)
 	size = GetFileSize(file, NULL);
 
 	*psize = size;
-	*data = memory_allocate(size);
+	*data = memory_allocate(size + 1);
 
 	SetFilePointer(file, 0, NULL, FILE_BEGIN);
 	ReadFile(file, *data, size, NULL, NULL);
+	(* data)[size] = '\0';
 
 	CloseHandle(file);
 	return TRUE;

@@ -120,6 +120,8 @@ typedef struct {
 
 extern CoreData core;
 
+typedef u64 Asset;
+
 typedef struct {
 		
 	union {

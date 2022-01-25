@@ -4,71 +4,70 @@
 
 #include "Hosebase/render_utils.h"
 
-static const char* PRIMITIVE_SHADER = SV_STRING(
-\n#include "core.hlsl"\n
+static const char* PRIMITIVE_VERTEX_SHADER = SV_STRING(
+	\n#include "core.hlsl"\n
 
-\n#ifdef SV_VERTEX_SHADER\n
+	\n#shader vertex\n
 
-		struct Output {
-			float2 texcoord : FragTexcoord;
-			float4 color : FragColor;
-			float4 position : SV_Position;
-		};
+	struct Output {
+	float2 texcoord : FragTexcoord;
+	float4 color : FragColor;
+	float4 position : SV_Position;
+};
 
-		struct Vertex {
-			float4 position;
-			float2 texcoord;
-			u32 color;
-			u32 padding;
-		};
+struct Vertex {
+	float4 position;
+	float2 texcoord;
+	u32 color;
+	u32 padding;
+};
 
-		SV_CONSTANT_BUFFER(immediate_buffer, b0)
-		{
-			Vertex vertices[4];
-		};
+SV_CONSTANT_BUFFER(immediate_buffer, b0)
+{
+	Vertex vertices[4];
+};
 
-		Output main(u32 vertex_id : SV_VertexID)
-		{
-			Output output;
+Output main(u32 vertex_id : SV_VertexID)
+{
+	Output output;
 
-			Vertex v = vertices[vertex_id];
+	Vertex v = vertices[vertex_id];
 
-			output.texcoord = v.texcoord;
-			output.position = v.position;
+	output.texcoord = v.texcoord;
+	output.position = v.position;
 
-			const f32 mult = 1.f / 255.f;
-			output.color.a = f32(v.color >> 24) * mult;
-			output.color.b = f32((v.color >> 16) & 0xFF) * mult;
-			output.color.g = f32((v.color >> 8) & 0xFF) * mult;
-			output.color.r = f32(v.color & 0xFF) * mult;
+	const f32 mult = 1.f / 255.f;
+	output.color.a = f32(v.color >> 24) * mult;
+	output.color.b = f32((v.color >> 16) & 0xFF) * mult;
+	output.color.g = f32((v.color >> 8) & 0xFF) * mult;
+	output.color.r = f32(v.color & 0xFF) * mult;
 
-			return output;
-		}
+	return output;
+}
 
+);
 
-\n#endif\n
+static const char* PRIMITIVE_PIXEL_SHADER = SV_STRING(
+	\n#include "core.hlsl"\n
 
-\n#ifdef SV_PIXEL_SHADER\n
+	\n#shader pixel\n
 
-		struct Input {
-			float2 texcoord : FragTexcoord;
-			float4 color : FragColor;
-		};
+	struct Input {
+	float2 texcoord : FragTexcoord;
+	float4 color : FragColor;
+};
 
-		SV_TEXTURE(tex, t0);
-		SV_SAMPLER(sam, s0);
+SV_TEXTURE(tex, t0);
+SV_SAMPLER(sam, s0);
 
-		float4 main(Input input) : SV_Target0
-		{
-			float4 color = tex.Sample(sam, input.texcoord) * input.color;
-			if (color.a < 0.0001f)
-				discard;
-			return color;
-		}
-
-
-\n#endif\n
-	);
+float4 main(Input input) : SV_Target0
+{
+	float4 color = tex.Sample(sam, input.texcoord) * input.color;
+	if (color.a < 0.0001f)
+		discard;
+	return color;
+}
+);
 
 typedef struct {
 	v4 position;
@@ -164,24 +163,25 @@ typedef enum {
 	ImRendDrawCall_TextArea,
 } ImRendDrawCall;
 
-inline b8 compile_shader(Shader** shader, ShaderType shader_type, const char* src)
+inline b8 compile_shader(Shader** shader, const char* src)
 {
 	ShaderCompileDesc cdesc;
 	cdesc.api = graphics_api();
-	cdesc.shader_type = shader_type;
 	cdesc.major_version = 6;
 	cdesc.minor_version = 0;
 	cdesc.entry_point = "main";
 	cdesc.macros = NULL;
 	cdesc.macro_count = 0u;
 
+	ShaderPreprocessorData pp;
+
 	Buffer data = buffer_init(1.f);
-	SV_CHECK(graphics_shader_compile_string(&cdesc, src, string_size(src), &data));
+	SV_CHECK(graphics_shader_compile_string(&cdesc, src, string_size(src), &data, &pp));
 
 	ShaderDesc desc;
 	desc.bin_data = data.data;
 	desc.bin_data_size = data.size;
-	desc.shader_type = shader_type;
+	desc.shader_type = pp.shader_type;
 
 	SV_CHECK(graphics_shader_create(shader, &desc));
 
@@ -193,8 +193,8 @@ b8 imrend_initialize()
 {
 	imrend = (ImRendData*)memory_allocate(sizeof(ImRendData));
 
-	SV_CHECK(compile_shader(&imrend->gfx.vs_primitive, ShaderType_Vertex, PRIMITIVE_SHADER));
-	SV_CHECK(compile_shader(&imrend->gfx.ps_primitive, ShaderType_Pixel, PRIMITIVE_SHADER));
+	SV_CHECK(compile_shader(&imrend->gfx.vs_primitive, PRIMITIVE_VERTEX_SHADER));
+	SV_CHECK(compile_shader(&imrend->gfx.ps_primitive, PRIMITIVE_PIXEL_SHADER));
 
 	{
 		AttachmentDesc att[3];

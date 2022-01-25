@@ -2,37 +2,45 @@
 
 #if SV_GRAPHICS
 
-static const char* TEXT_SHADER = SV_STRING(
+static const char* TEXT_VERTEX_SHADER = SV_STRING(
 #include "core.hlsl"\n
 
-SV_CONSTANT_BUFFER(buffer, b0){ \n
-	matrix tm;
+	SV_CONSTANT_BUFFER(buffer, b0) {
+	\n
+		matrix tm;
 }; \n
 
-#ifdef SV_VERTEX_SHADER\n
+#shader vertex\n
 
-	struct Input {\n
-	float2 position : Position; \n
-	float2 texcoord : Texcoord; \n
-	float4 color : Color; \n
+struct Input {
+	\n
+		float2 position : Position; \n
+		float2 texcoord : Texcoord; \n
+		float4 color : Color; \n
 }; \n
 
-struct Output {\n
-	float2 texcoord : FragTexcoord; \n
-	float4 color : FragColor; \n
-	float4 position : SV_Position; \n
-}; \n
+struct Output {
+		\n
+			float2 texcoord : FragTexcoord; \n
+			float4 color : FragColor; \n
+			float4 position : SV_Position; \n
+	}; \n
 
-Output main(Input input)\n
-{ \n
-	Output output;
-	output.position = mul(float4(input.position, 0.f, 1.f), tm);
-	output.color = input.color;
-	output.texcoord = input.texcoord;
-	return output;
-}\n
+		Output main(Input input)\n
+		{ \n
+			Output output;
+			output.position = mul(float4(input.position, 0.f, 1.f), tm);
+			output.color = input.color;
+			output.texcoord = input.texcoord;
+			return output;
+		}\n
 
-#elif SV_PIXEL_SHADER\n
+			);
+
+static const char* TEXT_PIXEL_SHADER = SV_STRING(
+#include "core.hlsl"\n
+
+#shader pixel\n
 
 	struct Input {\n
 	float2 texcoord : FragTexcoord; \n
@@ -50,8 +58,6 @@ float4 main(Input input) : SV_Target0\n
 	if (color.a < 0.05f) discard;
 	return color;
 }\n
-
-#endif\n
 );
 
 #define TEXT_BATCH_SIZE 1000
@@ -94,8 +100,8 @@ b8 render_utils_initialize()
 {
 	render = memory_allocate(sizeof(RenderUtilsData));
 
-	SV_CHECK(compile_shader(&render->vs_text, ShaderType_Vertex, TEXT_SHADER));
-	SV_CHECK(compile_shader(&render->ps_text, ShaderType_Pixel, TEXT_SHADER));
+	SV_CHECK(compile_shader(&render->vs_text, TEXT_VERTEX_SHADER));
+	SV_CHECK(compile_shader(&render->ps_text, TEXT_PIXEL_SHADER));
 
 	{
 		GPUBufferDesc desc;

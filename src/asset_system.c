@@ -401,7 +401,6 @@ void _asset_update()
 						}
 						else {
 							SV_LOG_ERROR("Asset '%s' can't be reloaded from file '%s'\n", type->name, filepath);
-							free_asset(asset_handle(i, type));
 						}
 					}
 				}

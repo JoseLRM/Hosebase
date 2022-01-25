@@ -26,6 +26,8 @@ typedef struct {
  
 static GraphicsData* gfx = NULL;
 
+///////////////////////// TEXTURE ASSET ///////////////////////////////
+
 static b8 asset_texture_load_file(void* asset, const char* filepath)
 {
 	GPUImage** pimage = asset;
@@ -75,6 +77,35 @@ static b8 asset_texture_reload_file(void* asset, const char* filepath)
 	return asset_texture_load_file(asset, filepath);
 }
 
+///////////////////////// SHADER ASSET ///////////////////////////////
+
+static b8 asset_shader_load_file(void* asset, const char* filepath)
+{
+	Shader** pshader = asset;
+	return graphics_shader_compile_fastbin_from_file(pshader, filepath, FALSE);
+}
+
+static void asset_shader_free(void* asset)
+{
+	Shader** pshader = asset;
+	graphics_destroy(*pshader);
+	*pshader = NULL;
+}
+
+static b8 asset_shader_reload_file(void* asset, const char* filepath)
+{
+	Shader** pshader = asset;
+
+	Shader* new_shader = NULL;
+	b8 res = graphics_shader_compile_fastbin_from_file(&new_shader, filepath, TRUE);
+
+	if (res) {
+		asset_shader_free(asset);
+		*pshader = new_shader;
+	}
+
+	return res;
+}
 
 b8 _graphics_initialize(const GraphicsInitializeDesc* desc)
 {
@@ -201,24 +232,41 @@ b8 _graphics_initialize(const GraphicsInitializeDesc* desc)
 
 	memory_zero(&gfx->def_compute_state, sizeof(ComputeState));
 
-	// Register texture asset
+	// Register assets
 	{
 		AssetTypeDesc desc;
 		const char* extensions[10];
 		desc.extensions = extensions;
 
-		desc.name = "texture";
-		desc.asset_size = sizeof(GPUImage*);
-		desc.extensions[0] = "png";
-		desc.extensions[1] = "jpg";
-		desc.extensions[2] = "gif";
-		desc.extension_count = 3;
-		desc.load_file_fn = asset_texture_load_file;
-		desc.reload_file_fn = asset_texture_reload_file;
-		desc.free_fn = asset_texture_free;
-		desc.unused_time = 4.f;
+		// Texture
+		{
+			desc.name = "texture";
+			desc.asset_size = sizeof(GPUImage*);
+			desc.extensions[0] = "png";
+			desc.extensions[1] = "jpg";
+			desc.extensions[2] = "gif";
+			desc.extension_count = 3;
+			desc.load_file_fn = asset_texture_load_file;
+			desc.reload_file_fn = asset_texture_reload_file;
+			desc.free_fn = asset_texture_free;
+			desc.unused_time = 4.f;
 
-		SV_CHECK(asset_register_type(&desc));
+			SV_CHECK(asset_register_type(&desc));
+		}
+
+		// Shader
+		{
+			desc.name = "shader";
+			desc.asset_size = sizeof(Shader*);
+			desc.extensions[0] = "hlsl";
+			desc.extension_count = 1;
+			desc.load_file_fn = asset_shader_load_file;
+			desc.reload_file_fn = asset_shader_reload_file;
+			desc.free_fn = asset_shader_free;
+			desc.unused_time = 10.f;
+
+			SV_CHECK(asset_register_type(&desc));
+		}
 	}
 
 	return TRUE;
@@ -1668,6 +1716,13 @@ void graphics_shader_bind(Shader* shader, CommandList cmd)
 
 		state->flags |= GraphicsPipelineState_Shader;
 	}
+}
+
+void graphics_shader_bind_asset(Asset asset, CommandList cmd)
+{
+	// TODO: Check asset type in slow mode
+	Shader* shader = asset_get_ptr(asset);
+	if (shader) graphics_shader_bind(shader, cmd);
 }
 
 void graphics_inputlayoutstate_bind(InputLayoutState* input_layout_state, CommandList cmd)

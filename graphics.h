@@ -342,7 +342,6 @@ typedef struct {
 typedef struct {
 
 	GraphicsAPI	      api;
-	ShaderType	      shader_type;
 	u32	 	          major_version;
 	u32		          minor_version;
 	const char*	      entry_point;
@@ -350,6 +349,10 @@ typedef struct {
 	u32               macro_count;
 	
 } ShaderCompileDesc;
+
+typedef struct {
+	ShaderType shader_type;
+} ShaderPreprocessorData;
 
 // Primitive Descriptors
 
@@ -622,6 +625,7 @@ void graphics_sampler_unbind_commandlist(CommandList cmd);
 void graphics_state_unbind(CommandList cmd);
 
 void graphics_shader_bind(Shader* shader, CommandList cmd);
+void graphics_shader_bind_asset(Asset asset, CommandList cmd);
 void graphics_inputlayoutstate_bind(InputLayoutState* inputLayoutState, CommandList cmd);
 void graphics_blendstate_bind(BlendState* blendState, CommandList cmd);
 void graphics_depthstencilstate_bind(DepthStencilState* depthStencilState, CommandList cmd);
@@ -693,14 +697,13 @@ void graphics_image_clear(GPUImage* image, GPUImageLayout oldLayout, GPUImageLay
 
 // Shader utils
 
-b8 graphics_shader_compile_string(const ShaderCompileDesc* desc, const char* str, u32 size, Buffer* data);
-b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* srcPath, Buffer* data);
+b8 graphics_shader_compile_string(const ShaderCompileDesc* desc, const char* str, u32 size, Buffer* data, ShaderPreprocessorData* ppdata);
 	
 /*
   Compiles the shader if doesn't exist in the bin file
 */
-b8 graphics_shader_compile_fastbin_from_string(const char* name, ShaderType shaderType, Shader** pShader, const char* src, b8 alwaisCompile);
-b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shaderType, Shader** pShader, const char* filePath, b8 alwaisCompile);
+b8 graphics_shader_compile_fastbin_from_string(const char* name, Shader** pShader, const char* src, b8 alwaisCompile);
+b8 graphics_shader_compile_fastbin_from_file(Shader** shader, const char* filepath, b8 recompile);
 
 b8 graphics_shader_include_write(const char* name, const char* str);
 

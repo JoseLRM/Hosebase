@@ -28,25 +28,7 @@ inline void compute_random_path(char* str)
 	string_append(str, random_str, FILE_PATH_SIZE);
 }
 
-b8 graphics_shader_compile_string(const ShaderCompileDesc* desc, const char* str, u32 size, Buffer* data)
-{
-	char filepath[FILE_PATH_SIZE];
-	compute_random_path(filepath);
-	
-	b8 res = file_write_text(filepath, str, size, FALSE, TRUE);
-	if (!res) return FALSE;
-
-	res = graphics_shader_compile_file(desc, filepath, data);
-
-	if (!res) {
-		file_remove(filepath);
-		return FALSE;
-	}
-
-	res = file_remove(filepath);
-
-	return res;
-}
+////////////////////////////// DXC CALLS ///////////////////////////////
 
 #define BAT_SIZE 701
 
@@ -62,8 +44,8 @@ inline void append_bat(char* bat, u32* offset, const char* src)
 	memory_copy((void*)(bat + *offset), src, size);
 	*offset += size;
 }
-    
-b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_path, Buffer* data)
+
+static b8 dxc_call(const ShaderCompileDesc* desc, const ShaderPreprocessorData* ppdata, const char* src_path, Buffer* data)
 {
 	char filepath[FILE_PATH_SIZE];
 	compute_random_path(filepath);
@@ -73,29 +55,29 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 
 	// .exe path
 	append_bat(bat, &offset, "dxc.exe ");
-	
+
 	// API Specific
 	switch (desc->api)
 	{
 	case GraphicsAPI_Vulkan:
 	{
 		append_bat(bat, &offset, "-spirv ");
-		
+
 		char shift_str[20];
-		
+
 		// Shift resources
 		u32 shift = GraphicsLimit_ConstantBuffer;
 		string_from_u32(shift_str, shift);
 		append_bat(bat, &offset, "-fvk-t-shift ");
 		append_bat(bat, &offset, shift_str);
 		append_bat(bat, &offset, " all ");
-		
+
 		shift += GraphicsLimit_ShaderResource;
 		string_from_u32(shift_str, shift);
 		append_bat(bat, &offset, "-fvk-u-shift ");
 		append_bat(bat, &offset, shift_str);
 		append_bat(bat, &offset, " all ");
-		
+
 		shift += GraphicsLimit_UnorderedAccessView;
 		string_from_u32(shift_str, shift);
 		append_bat(bat, &offset, "-fvk-s-shift ");
@@ -107,7 +89,7 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 
 	// Target
 	append_bat(bat, &offset, "-T ");
-	switch (desc->shader_type)
+	switch (ppdata->shader_type)
 	{
 	case ShaderType_Vertex:
 		append_bat(bat, &offset, "vs_");
@@ -126,15 +108,15 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 
 	{
 		char version_str[20];
-		
+
 		string_from_u32(version_str, desc->major_version);
 		append_bat(bat, &offset, version_str);
-		
+
 		append_bat(bat, &offset, "_");
 
 		string_from_u32(version_str, desc->minor_version);
 		append_bat(bat, &offset, version_str);
-		
+
 		append_bat(bat, &offset, " ");
 	}
 
@@ -162,7 +144,7 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 
 	// Shader Macro
 
-	switch (desc->shader_type)
+	switch (ppdata->shader_type)
 	{
 	case ShaderType_Vertex:
 		append_bat(bat, &offset, "-D ");
@@ -216,7 +198,7 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 	append_bat(bat, &offset, " 2> shader_log.txt ");
 
 	bat[offset] = '\0';
-	
+
 	// Execute
 	system(bat);
 
@@ -224,7 +206,7 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 	{
 		u8* file_data;
 		u32 file_size;
-		if (!file_read_binary(filepath, &file_data, &file_size)) 
+		if (!file_read_binary(filepath, &file_data, &file_size))
 			return FALSE;
 
 		buffer_set(data, file_data, file_size);
@@ -239,46 +221,186 @@ b8 graphics_shader_compile_file(const ShaderCompileDesc* desc, const char* src_p
 	return TRUE;
 }
 
-b8 graphics_shader_compile_fastbin_from_string(const char* name, ShaderType shader_type, Shader** shader, const char* src, b8 alwais_compile)
+////////////////////////////// PREPROCESSOR /////////////////////////
+
+static void preprocess_shader(const char* shader, u32 src_size, char** out_, u32* size_, ShaderPreprocessorData* pp)
 {
-	Buffer data = buffer_init(1.f);
+	u32 size = src_size;
+	char* str = memory_allocate(src_size + 100);
+
+	pp->shader_type = ShaderType_Vertex;
+	
+	char* it0 = str;
+	const char* it1 = shader;
+
+	while (*it1 != '\0') {
+
+		const char* start_line = it1;
+
+		it1 = line_jump_spaces(it1);
+
+		if (*it1 == '#') {
+
+			it1++;
+
+			if (string_begins(it1, "shader ")) {
+
+				start_line = NULL;
+
+				it1 += string_size("shader ");
+				it1 = line_jump_spaces(it1);
+				
+				if (string_begins(it1, "vertex")) {
+					pp->shader_type = ShaderType_Vertex;
+				}
+				else if (string_begins(it1, "pixel")) {
+					pp->shader_type = ShaderType_Pixel;
+				}
+				else if (string_begins(it1, "geometry")) {
+					pp->shader_type = ShaderType_Geometry;
+				}
+				else if (string_begins(it1, "compute")) {
+					pp->shader_type = ShaderType_Compute;
+				}
+			}
+		}
+		
+		if (start_line != NULL) {
+
+			it1 = start_line;
+
+			while (*it1 != '\0' && *it1 != '\n') {
+
+				// TODO: Safe
+				*it0 = *it1;
+
+				++it0;
+				++it1;
+			}
+
+			if (*it1 != '\0') {
+				*it0 = *it1;
+				++it0;
+				++it1;
+			}
+		}
+		else it1 = line_next(it1);
+	}
+
+	*size_ = (u32)(it0 - str) + 1;
+	*out_ = str;
+}
+
+/////////////////////////// COMPILE CALLS //////////////////////////////
+
+b8 graphics_shader_compile_string(const ShaderCompileDesc* desc, const char* str, u32 size, Buffer* data, ShaderPreprocessorData* ppdata)
+{
+	ShaderPreprocessorData pp;
+	char* shader;
+	u32 shader_size;
+	preprocess_shader(str, size, &shader, &shader_size, &pp);
+
+	char filepath[FILE_PATH_SIZE];
+	compute_random_path(filepath);
+	
+	b8 res = file_write_text(filepath, shader, shader_size, FALSE, TRUE);
+
+	if (!res) {
+		memory_free(shader);
+		return FALSE;
+	}
+
+	res = dxc_call(desc, &pp, filepath, data);
+
+	if (!res) {
+		file_remove(filepath);
+		memory_free(shader);
+		return FALSE;
+	}
+
+	res = file_remove(filepath);
+
+	if (ppdata) {
+		*ppdata = pp;
+	}
+
+	memory_free(shader);
+	return res;
+}
+
+//////////////////////////////////////// FAST BIN COMPILE CALLS /////////////////////////////////
+
+b8 graphics_shader_compile_fastbin_from_string(const char* name, Shader** shader, const char* src, b8 alwais_compile)
+{
+	u8* data;
+	u32 size;
 	u64 hash = hash_string(name);
-	hash = hash_combine(hash, (u64)shader_type);
 
+	ShaderPreprocessorData pp;
 	ShaderDesc desc;
-	desc.shader_type = shader_type;
 
-	if (alwais_compile || !bin_read(hash, &data))
+	// TODO
+
+	if (TRUE)
 	{
 		ShaderCompileDesc c;
 		c.api = graphics_api();
 		c.entry_point = "main";
 		c.major_version = 6u;
 		c.minor_version = 0u;
-		c.shader_type = shader_type;
 		c.macro_count = 0u;
 
-		SV_CHECK(graphics_shader_compile_string(&c, src, (u32)string_size(src), &data));
-		SV_CHECK(bin_write(hash, data.data, data.size));
+		Buffer buf = buffer_init(1.f);;
+
+		SV_CHECK(graphics_shader_compile_string(&c, src, (u32)string_size(src), &buf, &pp));
+
+		data = buf.data;
+		size = buf.size;
+
+		desc.shader_type = pp.shader_type;
 
 		SV_LOG_INFO("Shader Compiled: '%s'\n", name);
 	}
 
-	desc.bin_data_size = data.size;
-	desc.bin_data = data.data;
+	desc.bin_data_size = size;
+	desc.bin_data = data;
 	return graphics_shader_create(shader, &desc);
 }
 	
-b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shader_type, Shader** shader, const char* filepath, b8 alwais_compile)
+b8 graphics_shader_compile_fastbin_from_file(Shader** shader, const char* filepath, b8 recompile)
 {
-	Buffer data = buffer_init(1.f);
-	u64 hash = hash_string(name);
-	hash = hash_combine(hash, (u64)shader_type);
-
+	u64 hash = hash_string(filepath);
+	ShaderPreprocessorData pp;
 	ShaderDesc desc;
-	desc.shader_type = shader_type;
 
-	if (alwais_compile || !bin_read(hash, &data))
+	u8* bin = NULL;
+	u32 bin_size = 0;
+
+	// Try to read from bin data
+	if (!recompile) {
+
+		u8* data;
+		u32 size;
+
+		if (bin_read(hash, &data, &size))
+		{
+			Deserializer s;
+			deserializer_begin_buffer(&s, data, size);
+
+			deserialize_u32(&s, (u32*)(&desc.shader_type));
+			deserialize_u32(&s, &bin_size);
+
+			bin = memory_allocate(bin_size);
+
+			deserializer_read(&s, bin, bin_size);
+
+			deserializer_end_buffer(&s);
+
+			memory_free(data);
+		}
+	}
+
+	if (bin == NULL)
 	{
 		u8* file_data = NULL;
 		u32 file_size = 0;
@@ -292,25 +414,52 @@ b8 graphics_shader_compile_fastbin_from_file(const char* name, ShaderType shader
 		c.entry_point = "main";
 		c.major_version = 6u;
 		c.minor_version = 0u;
-		c.shader_type = shader_type;
 		c.macro_count = 0u;
 
-		if (!graphics_shader_compile_string(&c, (const char*)file_data, file_size, &data)) {
+		// TODO: Use simple buffer
+		Buffer data;
+		data = buffer_init(1.f);
+
+		if (!graphics_shader_compile_string(&c, (const char*)file_data, file_size, &data, &pp)) {
 			SV_LOG_ERROR("Can't compile the shader '%s'\n", filepath);
 			return FALSE;
 		}
 
+		desc.shader_type = pp.shader_type;
+
 		if (file_data)
 			memory_free(file_data);
 
-		SV_CHECK(bin_write(hash, data.data, data.size));
+		bin = data.data;
+		bin_size = data.size;
 
-		SV_LOG_INFO("Shader Compiled: '%s'\n", name);
+		// Save bin data
+		{
+			u8 buff[10000];
+
+			Serializer s;
+			serializer_begin_buffer(&s, buff, 10000);
+
+			serialize_u32(&s, (u32)desc.shader_type);
+			serialize_u32(&s, data.size);
+
+			serializer_write(&s, data.data, data.size);
+
+			SV_CHECK(bin_write(hash, s.data, s.cursor));
+
+			serializer_end_buffer(&s);
+		}
+
+		SV_LOG_INFO("Shader Compiled: '%s'\n", filepath);
 	}
 
-	desc.bin_data_size = data.size;
-	desc.bin_data = data.data;
-	return graphics_shader_create(shader, &desc);
+	desc.bin_data_size = bin_size;
+	desc.bin_data = bin;
+	b8 res = graphics_shader_create(shader, &desc);
+
+	memory_free(bin);
+
+	return res;
 }
 
 #endif

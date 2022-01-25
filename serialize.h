@@ -6,7 +6,7 @@ SV_BEGIN_C_HEADER
 
 b8 load_image(const char* filepath, void** pdata, u32* width, u32* height);
 
-b8 bin_read(u64 hash, Buffer* data);
+b8 bin_read(u64 hash, u8** data, u32* size);
 //b8 bin_read(u64 hash, Deserializer& deserializer, b8 system); // Begins the deserializer
 
 b8 bin_write(u64 hash, const void* data, u32 size);
