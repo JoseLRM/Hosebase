@@ -774,14 +774,18 @@ v2_u32 desktop_size()
 
 void cursor_hide()
 {
-	ShowCursor(FALSE);
-	platform->show_cursor = FALSE;
+	if (platform->show_cursor) {
+		ShowCursor(FALSE);
+		platform->show_cursor = FALSE;
+	}
 }
 
 void cursor_show()
 {
-	ShowCursor(TRUE);
-	platform->show_cursor = TRUE;
+	if (!platform->show_cursor) {
+		ShowCursor(TRUE);
+		platform->show_cursor = TRUE;
+	}
 }
 
 // File Management
