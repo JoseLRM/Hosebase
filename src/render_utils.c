@@ -56,6 +56,7 @@ float4 main(Input input) : SV_Target0\n
 	f32 char_color = tex.Sample(sam, input.texcoord).r;
 	color = char_color * input.color;
 	if (color.a < 0.05f) discard;
+	color = input.color;
 	return color;
 }\n
 );
