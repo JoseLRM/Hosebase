@@ -188,16 +188,31 @@ static void draw_parent(GuiParent* parent)
 	v4 b = parent->widget_bounds;
 	imrend_push_scissor(b.x, b.y, b.z, b.w, FALSE, gui->cmd);
 
-	gui_draw_sprite(b, parent->background.color, parent->background.image, parent->background.texcoord);
+	// Background
+	{
+		gui_draw_sprite(b, parent->background.color, parent->background.image, parent->background.texcoord);
+	}
 
-	u8* it = parent->widget_buffer;
+	// Draw childs
+	foreach(i, gui->parent_count) {
 
-	foreach(i, parent->widget_count) {
+		GuiParent* child = gui->parents + i;
 
-		GuiWidget* widget = (GuiWidget*)it;
+		if (child->parent == parent)
+			draw_parent(child);
+	}
 
-		gui_widget_draw(widget);
-		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+	// Draw widgets
+	{
+		u8* it = parent->widget_buffer;
+
+		foreach(i, parent->widget_count) {
+
+			GuiWidget* widget = (GuiWidget*)it;
+
+			gui_widget_draw(widget);
+			it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+		}
 	}
 
 	imrend_pop_scissor(gui->cmd);
@@ -561,12 +576,6 @@ void gui_draw(GPUImage* image, CommandList cmd)
 
 	imrend_begin_batch(image, NULL, cmd);
 	imrend_camera(ImRendCamera_Normal, cmd);
-
-	foreach(i, gui->parent_count) {
-
-		GuiParent* parent = gui->parents + i;
-		draw_parent(parent);
-	}
 
 	draw_parent(&gui->root);
 
