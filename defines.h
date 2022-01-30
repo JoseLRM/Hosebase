@@ -100,12 +100,12 @@ void throw_assertion(const char* title, u32 line, const char* file);
 
 #else
 
-#define assert(x) {}
-#define assert_title(x, title) {}
+#define assert(x) {;}
+#define assert_title(x, title) {;}
 
-#define SV_LOG_INFO(x, ...) {}
-#define SV_LOG_WARNING(x, ...) {}
-#define SV_LOG_ERROR(x, ...) {}
+#define SV_LOG_INFO(x, ...) {;}
+#define SV_LOG_WARNING(x, ...) {;}
+#define SV_LOG_ERROR(x, ...) {;}
 
 #endif
 

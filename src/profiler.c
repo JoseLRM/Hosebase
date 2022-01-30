@@ -241,4 +241,8 @@ void profiler_gui()
 	gui_end_parent();
 }
 
+#else
+
+void profiler_gui() {}
+
 #endif

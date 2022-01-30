@@ -680,9 +680,9 @@ b8 _os_recive_input()
 
 		WindowState state = window_state();
 
-		if (state == WindowState_Fullscreen) SV_LOG_INFO("State: Fullscreen\n");
-		else if (state == WindowState_Maximized) SV_LOG_INFO("State: Maximized\n");
-		else SV_LOG_INFO("State: Normal\n");
+		if (state == WindowState_Fullscreen) { SV_LOG_INFO("State: Fullscreen\n"); }
+		else if (state == WindowState_Maximized) { SV_LOG_INFO("State: Maximized\n"); }
+		else { SV_LOG_INFO("State: Normal\n"); }
 
 		set_window_fullscreen(state != WindowState_Fullscreen);
 	}

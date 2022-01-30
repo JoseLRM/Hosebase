@@ -580,6 +580,8 @@ namespace sv {
 				SV_LOG_ERROR("Can't find valid graphics card for Vulkan\n");
 				return false;
 			}
+
+			SV_LOG_INFO("Using '%s'\n", g_API->card.properties.deviceName);
 		}
 		
 		// Create logical device
