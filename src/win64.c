@@ -72,6 +72,8 @@ typedef struct {
 	v2_i32 last_raw_mouse_dragging;
 	v2_i32 raw_mouse_dragging;
 
+	b8 has_focus;
+
 	b8 in_fullscreen;
 	u8 fullscreen_request;
 	LONG style_before_fullscreen;
@@ -240,8 +242,15 @@ LRESULT CALLBACK window_proc (
 	}
 	break;
 	
-	case WM_ACTIVATEAPP:
+	case WM_SETFOCUS:
 	{
+		platform->has_focus = TRUE;
+	}
+	break;
+
+	case WM_KILLFOCUS:
+	{
+		platform->has_focus = FALSE;
 	}
 	break;
 
@@ -657,7 +666,7 @@ b8 _os_recive_input()
 
 	// Mouse clipping
 	{
-		if (!platform->show_cursor) {
+		if (!platform->show_cursor && platform->has_focus) {
 			RECT rect;
 			if (GetWindowRect(platform->handle, &rect)) {
 
