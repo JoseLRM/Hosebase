@@ -58,6 +58,8 @@ typedef struct {
 
 	LARGE_INTEGER clock_frequency;
 	LARGE_INTEGER begin_time;
+	f64 last_time;
+	f64 add_time;
 	
 	HINSTANCE   hinstance;
 	HINSTANCE   user_lib;
@@ -497,6 +499,8 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	}
 
 	QueryPerformanceCounter(&platform->begin_time);
+	platform->add_time = 0.0;
+	platform->last_time = 0.0;
 
 	configure_thread(GetCurrentThread(), "main", 1ULL, THREAD_PRIORITY_HIGHEST);
 	
@@ -1022,7 +1026,19 @@ f64 timer_now()
 	elapsed.QuadPart *= 1000000000;
 	elapsed.QuadPart /= platform->clock_frequency.QuadPart;
 
-	return (f64)(elapsed.QuadPart) / 1000000000.0;
+	f64 time = (f64)(elapsed.QuadPart) / 1000000000.0;
+
+	if (time < 0.0) {
+
+		platform->add_time = platform->last_time;
+		QueryPerformanceCounter(&platform->begin_time);
+		return timer_now();
+	}
+
+	time += platform->add_time;
+
+	platform->last_time = time;
+	return time;
 }
 
 b8 file_date(const char* filepath_, Date* create, Date* last_write, Date* last_access)
