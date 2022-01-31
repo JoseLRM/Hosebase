@@ -1407,8 +1407,14 @@ namespace sv {
 			// copy
 			DynamicAllocation allocation = allocate_gpu(size, 1u, cmd_);
 			
-			memcpy(allocation.data, pData, u64(size));
-			graphics_vulkan_buffer_copy(cmd, allocation.buffer, buffer.buffer, VkDeviceSize(allocation.offset), VkDeviceSize(offset), VkDeviceSize(size));
+			if (allocation.data == NULL) {
+
+				SV_LOG_ERROR("Can't allocate %u in the GPU to perform a buffer copy\n", size);
+			}
+			else {
+				memcpy(allocation.data, pData, u64(size));
+				graphics_vulkan_buffer_copy(cmd, allocation.buffer, buffer.buffer, VkDeviceSize(allocation.offset), VkDeviceSize(offset), VkDeviceSize(size));
+			}
 
 			// Memory Barrier
 
