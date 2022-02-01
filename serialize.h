@@ -117,10 +117,10 @@ typedef struct {
 
 	// Textures
 	
-	char diffuse_map_path[FILE_PATH_SIZE];
-	char normal_map_path[FILE_PATH_SIZE];
-	char specular_map_path[FILE_PATH_SIZE];
-	char emissive_map_path[FILE_PATH_SIZE];
+	char diffuse_map[FILE_PATH_SIZE];
+	char normal_map[FILE_PATH_SIZE];
+	char specular_map[FILE_PATH_SIZE];
+	char emissive_map[FILE_PATH_SIZE];
 
 } MaterialInfo;
 

@@ -529,16 +529,16 @@ inline void read_mtl(const char* filepath, ModelInfo* model_info)
 					char* str = NULL;
 
 					if (it[0] == 'K' && it[1] == 'd') { // Diffuse map
-						str = mat->diffuse_map_path;
+						str = mat->diffuse_map;
 					}
 					else if (it[0] == 'K' && it[1] == 's') { // Specular map
-						str = mat->specular_map_path;
+						str = mat->specular_map;
 					}
 					else if (it[0] == 'K' && it[1] == 'a') { // TODO: Ambient map
 						str = NULL;
 					}
 					else if (it[0] == 'K' && it[1] == 'n') { // Normal map
-						str = mat->normal_map_path;
+						str = mat->normal_map;
 					}
 
 					if (str) {
@@ -1608,6 +1608,8 @@ typedef struct {
 	Color emissive_color;
 	Color specular_color;
 	Color ambient_color;
+	
+	char diffuse_map[FILE_PATH_SIZE];
 } DaeEffectInfo;
 
 typedef struct {
@@ -2944,16 +2946,28 @@ static b8 dae_load_effects(DaeModelInfo* model_info, XMLElement root, const char
 
 							b8 res = FALSE;
 
-							XMLElement color = diffuse;
-							if (xml_enter_child(&color, "color")) {
+							XMLElement value = diffuse;
+							
+							if (xml_enter_child(&value, "color")) {
 
 								const char* begin;
 								const char* end;
 
-								if (xml_element_content(&color, &begin, &end)) {
+								if (xml_element_content(&value, &begin, &end)) {
 
 									dae_read_color(begin, &effect.diffuse_color, &res);
 								}
+							}
+							else if (xml_enter_child(&value, "texture")) {
+
+								xml_get_attribute(&value, effect.diffuse_map, FILE_PATH_SIZE, "texture");
+								
+								u8* c = effect.diffuse_map;
+								while (*c != '\0' && *c != '-')
+									++c;
+
+								if (*c == '-')
+									*c = '\0';
 							}
 						}
 					}
@@ -2971,6 +2985,62 @@ static b8 dae_load_effects(DaeModelInfo* model_info, XMLElement root, const char
 				}
 
 			} while(xml_next(&effect_xml));
+		}
+	}
+
+	// Parse image ids to real paths
+	XMLElement images = root;
+	if (xml_enter_child(&images, "library_images")) {
+
+		XMLElement image = images;
+
+		if (xml_enter_child(&image, "image")) {
+			do {
+
+				char id[FILE_PATH_SIZE];
+				char path[FILE_PATH_SIZE];
+
+				// Read from xml
+				{
+					if (!xml_get_attribute(&image, id, FILE_PATH_SIZE, "id")) {
+						SV_LOG_ERROR("Can't get the ID of a texture\n");
+						continue;
+					}
+
+					XMLElement init_form = image;
+
+					if (!xml_enter_child(&init_form, "init_from")) {
+						SV_LOG_ERROR("Can't get the path of a texture\n");
+						continue;
+					}
+
+					{
+						const char* begin;
+						const char* end;
+						if (!xml_element_content(&init_form, &begin, &end)) {
+							SV_LOG_ERROR("Can't get the path of a texture\n");
+							continue;
+						}
+
+						string_set(path, begin, end - begin, FILE_PATH_SIZE);
+					}
+				}
+
+				// Parse
+				{
+					foreach(i, model_info->material_count) {
+
+						DaeMaterialInfo* mat = model_info->materials + i;
+
+						char* p = mat->effect.diffuse_map;
+
+						if (string_equals(p, id)) {
+							string_copy(p, path, FILE_PATH_SIZE);
+						}
+					}
+				}
+
+			} while (xml_next(&image));
 		}
 	}
 
@@ -3227,6 +3297,11 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 			m1->specular_color = m0->effect.specular_color;
 			m1->ambient_color = m0->effect.ambient_color;
 			m1->emissive_color = m0->effect.emissive_color;
+
+			string_copy(m1->diffuse_map, m0->effect.diffuse_map, FILE_PATH_SIZE);
+			string_copy(m1->normal_map, "", FILE_PATH_SIZE);
+			string_copy(m1->specular_map, "", FILE_PATH_SIZE);
+			string_copy(m1->emissive_map, "", FILE_PATH_SIZE);
 		}
 		model_info->material_count = dae_model_info->material_count;
 
