@@ -475,11 +475,11 @@ void draw_text(const DrawTextDesc* desc, CommandList cmd)
 		graphics_rasterizerstate_unbind(cmd);
 		graphics_depthstencilstate_unbind(cmd);
 
-		graphics_constant_buffer_bind(render->cbuffer_text, 0u, ShaderType_Vertex, cmd);
+		graphics_resource_bind(ResourceType_ConstantBuffer, render->cbuffer_text, 0u, ShaderType_Vertex, cmd);
 		graphics_buffer_update(render->cbuffer_text, GPUBufferState_Constant, &desc->transform_matrix, sizeof(m4), 0, cmd);
 
-		graphics_shader_resource_bind_image(font->image, 0u, ShaderType_Pixel, cmd);
-		graphics_sampler_bind(render->sampler_text, 0u, ShaderType_Pixel, cmd);
+		graphics_resource_bind(ResourceType_ShaderResource, font->image, 0u, ShaderType_Pixel, cmd);
+		graphics_resource_bind(ResourceType_Sampler, render->sampler_text, 0u, ShaderType_Pixel, cmd);
 
 		graphics_shader_bind(render->vs_text, cmd);
 		graphics_shader_bind(render->ps_text, cmd);

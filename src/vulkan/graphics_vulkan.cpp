@@ -1393,11 +1393,11 @@ namespace sv {
 				stages |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 				break;
 			case GPUBufferState_ShaderResource:
-				bufferBarrier.dstAccessMask |= VK_ACCESS_SHADER_READ_BIT;
-				// TODO stages |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+				bufferBarrier.srcAccessMask |= VK_ACCESS_SHADER_READ_BIT;
+				stages |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 				break;
 			case GPUBufferState_UnorderedAccessView:
-				bufferBarrier.dstAccessMask |= VK_ACCESS_SHADER_WRITE_BIT;
+				bufferBarrier.srcAccessMask |= VK_ACCESS_SHADER_WRITE_BIT;
 				// TODO stages |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 				break;
 			}

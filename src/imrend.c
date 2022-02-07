@@ -607,13 +607,13 @@ void imrend_flush(CommandList cmd)
 			case ImRendDrawCall_Triangle:
 			case ImRendDrawCall_Line:
 			{
-				graphics_constant_buffer_bind(state->gfx.cbuffer_primitive, 0u, ShaderType_Vertex, cmd);
+				graphics_resource_bind(ResourceType_ConstantBuffer, state->gfx.cbuffer_primitive, 0u, ShaderType_Vertex, cmd);
 
 				graphics_blendstate_bind(gfx->bs_transparent, cmd);
 				graphics_inputlayoutstate_unbind(cmd);
 				graphics_rasterizerstate_unbind(cmd);
 
-				graphics_sampler_bind(gfx->sampler_def_nearest, 0u, ShaderType_Pixel, cmd);
+				graphics_resource_bind(ResourceType_Sampler, gfx->sampler_def_nearest, 0u, ShaderType_Pixel, cmd);
 		    
 				graphics_shader_bind(gfx->vs_primitive, cmd);
 				graphics_shader_bind(gfx->ps_primitive, cmd);
@@ -664,7 +664,7 @@ void imrend_flush(CommandList cmd)
 					vertices[2u] = (ImRendVertex){ p2, (v2){tc.x, tc.w}, color };
 					vertices[3u] = (ImRendVertex){ p3, (v2){tc.z, tc.w}, color };
 
-					graphics_shader_resource_bind_image(image, 0u, ShaderType_Pixel, cmd);
+					graphics_resource_bind(ResourceType_ShaderResource, image, 0u, ShaderType_Pixel, cmd);
 
 					graphics_buffer_update(state->gfx.cbuffer_primitive, GPUBufferState_Constant, vertices, sizeof(ImRendVertex) * 4u, 0u, cmd);
 
@@ -698,7 +698,7 @@ void imrend_flush(CommandList cmd)
 					vertices[1u] = (ImRendVertex){ c1, (v2){0.f, 0.f}, color };
 					vertices[2u] = (ImRendVertex){ c2, (v2){0.f, 0.f}, color };
 
-					graphics_shader_resource_bind_image(get_white_image(), 0u, ShaderType_Pixel, cmd);
+					graphics_resource_bind(ResourceType_ShaderResource, get_white_image(), 0u, ShaderType_Pixel, cmd);
 
 					graphics_buffer_update(state->gfx.cbuffer_primitive, GPUBufferState_Constant, vertices, sizeof(ImRendVertex) * 3u, 0u, cmd);
 
@@ -721,7 +721,7 @@ void imrend_flush(CommandList cmd)
 					vertices[0u] = (ImRendVertex){ c0, (v2){0.f, 0.f}, color };
 					vertices[1u] = (ImRendVertex){ c1, (v2){0.f, 0.f}, color };
 
-					graphics_shader_resource_bind_image(get_white_image(), 0u, ShaderType_Pixel, cmd);
+					graphics_resource_bind(ResourceType_ShaderResource, get_white_image(), 0u, ShaderType_Pixel, cmd);
 
 					graphics_buffer_update(state->gfx.cbuffer_primitive, GPUBufferState_Constant, vertices, sizeof(ImRendVertex) * 2u, 0u, cmd);
 
@@ -738,7 +738,7 @@ void imrend_flush(CommandList cmd)
 				graphics_shader_bind(imgfx.vs_mesh_wireframe, cmd);
 				graphics_shader_bind(imgfx.ps_primitive, cmd);
 				graphics_topology_set(GraphicsTopology_Triangles, cmd);
-				graphics_constant_buffer_bind(state.gfx.cbuffer_mesh, 0u, ShaderType_Vertex, cmd);
+				graphics_resource_bind(ResourceType_ConstantBuffer, state.gfx.cbuffer_mesh, 0u, ShaderType_Vertex, cmd);
 				graphics_rasterizerstate_bind(gfx.rs_wireframe, cmd);
 				graphics_blendstate_bind(gfx.bs_transparent, cmd);
 

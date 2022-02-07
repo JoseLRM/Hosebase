@@ -584,41 +584,16 @@ void graphics_vertex_buffer_unbind_commandlist(CommandList cmd);
 void graphics_index_buffer_bind(GPUBuffer* buffer, u32 offset, CommandList cmd);
 void graphics_index_buffer_unbind(CommandList cmd);
 
-// Constant Buffers
-
-void graphics_constant_buffer_bind_array(GPUBuffer** buffers, u32 count, u32 beginSlot, ShaderType shaderType, CommandList cmd);
-void graphics_constant_buffer_bind(GPUBuffer* buffer, u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_constant_buffer_unbind(u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_constant_buffer_unbind_shader(ShaderType shaderType, CommandList cmd);
-void graphics_constant_buffer_unbind_commandlist(CommandList cmd);
-
 // Shader Resources
 
-void graphics_shader_resource_bind_buffer_array(GPUBuffer** buffers, u32 count, u32 beginSlot, ShaderType shaderType, CommandList cmd);
-void graphics_shader_resource_bind_buffer(GPUBuffer* buffer, u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_shader_resource_bind_image_array(GPUImage** images, u32 count, u32 beginSlot, ShaderType shaderType, CommandList cmd);
-void graphics_shader_resource_bind_image(GPUImage* image, u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_shader_resource_unbind(u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_shader_resource_unbind_shader(ShaderType shaderType, CommandList cmd);
-void graphics_shader_resource_unbind_commandlist(CommandList cmd);
+typedef enum {
+	ResourceType_ShaderResource,
+	ResourceType_ConstantBuffer,
+	ResourceType_UnorderedAccessView,
+	ResourceType_Sampler,
+} ResourceType;
 
-// Unordered Access Views
-
-void graphics_unordered_access_view_bind_buffer_array(GPUBuffer** buffers, u32 count, u32 beginSlot, ShaderType shaderType, CommandList cmd);
-void graphics_unordered_access_view_bind_buffer(GPUBuffer* buffer, u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_unordered_access_view_bind_image_array(GPUImage** images, u32 count, u32 beginSlot, ShaderType shaderType, CommandList cmd);
-void graphics_unordered_access_view_bind_image(GPUImage* image, u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_unordered_access_view_unbind(u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_unordered_access_view_unbind_shader(ShaderType shaderType, CommandList cmd);
-void graphics_unordered_access_view_unbind_commandlist(CommandList cmd);
-
-// Samplers
-
-void graphics_sampler_bind_array(Sampler** samplers, u32 count, u32 beginSlot, ShaderType shaderType, CommandList cmd);
-void graphics_sampler_bind(Sampler* sampler, u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_sampler_unbind(u32 slot, ShaderType shaderType, CommandList cmd);
-void graphics_sampler_unbind_shader(ShaderType shaderType, CommandList cmd);
-void graphics_sampler_unbind_commandlist(CommandList cmd);
+void graphics_resource_bind(ResourceType type, void* primitive, u32 slot, ShaderType shader_type, CommandList cmd);
 
 // State functions
 

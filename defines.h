@@ -94,6 +94,9 @@ void throw_assertion(const char* title, u32 line, const char* file);
 #define assert(x) do { if (!(x)) { throw_assertion(#x, __LINE__, __FILE__); } } while(0)
 #define assert_title(x, title) do { if (!(x)) { throw_assertion(title, __LINE__, __FILE__); } } while(0)
 
+inline b8 throw_assertion_and_return_false(const char* title, u32 line, const char* file) { throw_assertion(title, line, file); return FALSE; }
+#define if_assert(x) if ((x) ? TRUE : (throw_assertion_and_return_false(#x, __LINE__, __FILE__)))
+
 #define SV_LOG_INFO(x, ...) print("[INFO]" x, __VA_ARGS__)
 #define SV_LOG_WARNING(x, ...) print("[WARNING]" x, __VA_ARGS__)
 #define SV_LOG_ERROR(x, ...) print("[ERROR]" x, __VA_ARGS__)
@@ -102,6 +105,7 @@ void throw_assertion(const char* title, u32 line, const char* file);
 
 #define assert(x) {;}
 #define assert_title(x, title) {;}
+#define if_assert(x) if (x)
 
 #define SV_LOG_INFO(x, ...) {;}
 #define SV_LOG_WARNING(x, ...) {;}

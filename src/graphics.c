@@ -1075,10 +1075,10 @@ void graphics_resources_unbind(CommandList cmd)
 {
 	graphics_vertex_buffer_unbind_commandlist(cmd);
 	graphics_index_buffer_unbind(cmd);
-	graphics_constant_buffer_unbind_commandlist(cmd);
-	graphics_shader_resource_unbind_commandlist(cmd);
-	graphics_unordered_access_view_unbind_commandlist(cmd);
-	graphics_sampler_unbind_commandlist(cmd);
+	// graphics_constant_buffer_unbind_commandlist(cmd);
+	// graphics_shader_resource_unbind_commandlist(cmd);
+	// graphics_unordered_access_view_unbind_commandlist(cmd);
+	// graphics_sampler_unbind_commandlist(cmd);
 }
 
 void graphics_vertex_buffer_bind_array(GPUBuffer** buffers, u32* offsets, u32 count, u32 begin_slot, CommandList cmd)
@@ -1146,526 +1146,251 @@ void graphics_index_buffer_unbind(CommandList cmd)
 	state->flags |= GraphicsPipelineState_IndexBuffer;
 }
 
-void graphics_constant_buffer_bind_array(GPUBuffer** buffers, u32 count, u32 begin_slot, ShaderType shader_type, CommandList cmd)
+/////////////////////////// SHADER RESOURCES ////////////////
+
+void graphics_resource_bind(ResourceType type, void* primitive, u32 slot, ShaderType shader_type, CommandList cmd)
 {
 	if (shader_type == ShaderType_Compute) {
-			
+
 		ComputeState* state = &gfx->pipeline_state.compute[cmd];
 
-		state->constant_buffer_count = SV_MAX(state->constant_buffer_count, begin_slot + count);
+		switch (type) {
 
-		memory_copy(state->constant_buffers, buffers, sizeof(GPUBuffer*) * count);
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
+		case ResourceType_ShaderResource:
+		{
+			if (primitive != NULL) {
+				
+				state->shader_resources[slot] = primitive;
+				state->shader_resource_count = SV_MAX(state->shader_resource_count, slot + 1u);
+			}
+			else {
 
-		state->constant_buffer_count[shader_type] = SV_MAX(state->constant_buffer_count[shader_type], begin_slot + count);
+				state->shader_resources[slot] = NULL;
 
-		memory_copy(state->constant_buffers[shader_type], buffers, sizeof(GPUBuffer*) * count);
-		state->flags |= GraphicsPipelineState_ConstantBuffer;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
+				// Compute Images Count
+				u32* count = &state->shader_resource_count;
 
-void graphics_constant_buffer_bind(GPUBuffer* buffer, u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->constant_buffers[slot] = buffer;
-		state->constant_buffer_count = SV_MAX(state->constant_buffer_count, slot + 1u);
-		   
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->constant_buffers[shader_type][slot] = buffer;
-		state->constant_buffer_count[shader_type] = SV_MAX(state->constant_buffer_count[shader_type], slot + 1u);
-			
-		state->flags |= GraphicsPipelineState_ConstantBuffer;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_constant_buffer_unbind(u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->constant_buffers[slot] = NULL;
-
-		// Compute Constant Buffer Count
-		u32* count = &state->constant_buffer_count;
-
-		for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
-			if (state->constant_buffers[i] != NULL) {
-				*count = i + 1;
-				break;
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->shader_resources[i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
 			}
 		}
+		break;
 
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-			
-		state->constant_buffers[shader_type][slot] = NULL;
+		case ResourceType_ConstantBuffer:
+		{
+			if (primitive != NULL) {
 
-		// Compute Constant Buffer Count
-		u32* count = &state->constant_buffer_count[shader_type];
+				GPUBuffer* buffer = primitive;
 
-		for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
-			if (state->constant_buffers[shader_type][i] != NULL) {
-				*count = i + 1;
-				break;
+				if_assert(buffer->primitive.type == GraphicsPrimitiveType_Buffer) {
+
+					state->constant_buffers[slot] = buffer;
+					state->constant_buffer_count = SV_MAX(state->constant_buffer_count, slot + 1u);
+				}
+			}
+			else {
+
+				state->constant_buffers[slot] = NULL;
+
+				// Compute Constant Buffer Count
+				u32* count = &state->constant_buffer_count;
+
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->constant_buffers[i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
 			}
 		}
+		break;
 
-		state->flags |= GraphicsPipelineState_ConstantBuffer;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
+		case ResourceType_UnorderedAccessView:
+		{
+			if (primitive != NULL) {
 
-void graphics_constant_buffer_unbind_shader(ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-		state->constant_buffer_count = 0u;
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
+				state->unordered_access_views[slot] = primitive;
+				state->unordered_access_view_count = SV_MAX(state->unordered_access_view_count, slot + 1u);
+			}
+			else {
 
-		state->constant_buffer_count[shader_type] = 0u;
-		state->flags |= GraphicsPipelineState_ConstantBuffer;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
+				state->unordered_access_views[slot] = NULL;
 
-void graphics_constant_buffer_unbind_commandlist(CommandList cmd)
-{
-	{
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
+				// Compute Constant Buffer Count
+				u32* count = &state->unordered_access_view_count;
 
-		for (u32 i = 0; i < ShaderType_GraphicsCount; ++i) {
-			state->constant_buffer_count[i] = 0u;
-			state->flags |= get_resource_shader_flag((ShaderType)i);
-		}
-		state->flags |= GraphicsPipelineState_ConstantBuffer;
-	}
-	{
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-		state->constant_buffer_count = 0u;
-		state->update_resources = TRUE;
-	}
-}
-
-void graphics_shader_resource_bind_array(GPUImage** images, u32 count, u32 begin_slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->shader_resource_count = SV_MAX(state->shader_resource_count, begin_slot + count);
-		
-		memory_copy(state->shader_resources + begin_slot, images, sizeof(GPUImage*) * count);
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->shader_resource_count[shader_type] = SV_MAX(state->shader_resource_count[shader_type], begin_slot + count);
-
-		memory_copy(state->shader_resources[shader_type] + begin_slot, images, sizeof(GPUImage*) * count);
-		state->flags |= GraphicsPipelineState_ShaderResource;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_shader_resource_bind_image(GPUImage* image, u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->shader_resources[slot] = image;
-		state->shader_resource_count = SV_MAX(state->shader_resource_count, slot + 1u);
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->shader_resources[shader_type][slot] = image;
-		state->shader_resource_count[shader_type] = SV_MAX(state->shader_resource_count[shader_type], slot + 1u);
-		state->flags |= GraphicsPipelineState_ShaderResource;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_shader_resource_bind_buffer_array(GPUBuffer** buffers, u32 count, u32 begin_slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->shader_resource_count = SV_MAX(state->shader_resource_count, begin_slot + count);
-
-		memory_copy(state->shader_resources + begin_slot, buffers, sizeof(GPUBuffer*) * count);
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->shader_resource_count[shader_type] = SV_MAX(state->shader_resource_count[shader_type], begin_slot + count);
-
-		memory_copy(state->shader_resources[shader_type] + begin_slot, buffers, sizeof(GPUBuffer*) * count);
-		state->flags |= GraphicsPipelineState_ShaderResource;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_shader_resource_bind_buffer(GPUBuffer* buffer, u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->shader_resources[slot] = buffer;
-		state->shader_resource_count = SV_MAX(state->shader_resource_count, slot + 1u);
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->shader_resources[shader_type][slot] = buffer;
-		state->shader_resource_count[shader_type] = SV_MAX(state->shader_resource_count[shader_type], slot + 1u);
-		state->flags |= GraphicsPipelineState_ShaderResource;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_shader_resource_unbind(u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-	state->shader_resources[shader_type][slot] = NULL;
-
-	// Compute Images Count
-	u32* count = &state->shader_resource_count[shader_type];
-
-	for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
-		if (state->shader_resources[shader_type][i] != NULL) {
-			*count = i + 1;
-			break;
-		}
-	}
-
-	state->flags |= GraphicsPipelineState_ShaderResource;
-	state->flags |= get_resource_shader_flag(shader_type);
-}
-
-void graphics_shader_resource_unbind_shader(ShaderType shader_type, CommandList cmd)
-{
-	GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-	memory_zero(state->shader_resources[shader_type], state->shader_resource_count[shader_type] * sizeof(GPUImage*));
-	state->shader_resource_count[shader_type] = 0u;
-
-	state->flags |= GraphicsPipelineState_ShaderResource;
-	state->flags |= get_resource_shader_flag(shader_type);
-}
-	
-void graphics_shader_resource_unbind_commandlist(CommandList cmd)
-{
-	GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-	for (u32 i = 0; i < ShaderType_GraphicsCount; ++i) {
-		state->shader_resource_count[i] = 0u;
-		state->flags |= get_resource_shader_flag((ShaderType)i);
-	}
-	state->flags |= GraphicsPipelineState_ShaderResource;
-}
-
-void graphics_unordered_access_view_bind_buffer_array(GPUBuffer** buffers, u32 count, u32 begin_slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->unordered_access_view_count = SV_MAX(state->unordered_access_view_count, begin_slot + count);
-
-		memory_copy(state->unordered_access_views, buffers, sizeof(GPUBuffer*) * count);
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->unordered_access_view_count[shader_type] = SV_MAX(state->unordered_access_view_count[shader_type], begin_slot + count);
-
-		memory_copy(state->unordered_access_views[shader_type], buffers, sizeof(GPUBuffer*) * count);
-		state->flags |= GraphicsPipelineState_UnorderedAccessView;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_unordered_access_view_bind_buffer(GPUBuffer* buffer, u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->unordered_access_views[slot] = buffer;
-		state->unordered_access_view_count = SV_MAX(state->unordered_access_view_count, slot + 1u);
-		   
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->unordered_access_views[shader_type][slot] = buffer;
-		state->unordered_access_view_count[shader_type] = SV_MAX(state->unordered_access_view_count[shader_type], slot + 1u);
-			
-		state->flags |= GraphicsPipelineState_UnorderedAccessView;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_unordered_access_view_bind_image_array(GPUImage** images, u32 count, u32 begin_slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->unordered_access_view_count = SV_MAX(state->unordered_access_view_count, begin_slot + count);
-
-		memory_copy(state->unordered_access_views, images, sizeof(GPUImage*) * count);
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->unordered_access_view_count[shader_type] = SV_MAX(state->unordered_access_view_count[shader_type], begin_slot + count);
-
-		memory_copy(state->unordered_access_views[shader_type], images, sizeof(GPUImage*) * count);
-		state->flags |= GraphicsPipelineState_UnorderedAccessView;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_unordered_access_view_bind_image(GPUImage* image, u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->unordered_access_views[slot] = image;
-		state->unordered_access_view_count = SV_MAX(state->unordered_access_view_count, slot + 1u);
-		   
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->unordered_access_views[shader_type][slot] = image;
-		state->unordered_access_view_count[shader_type] = SV_MAX(state->unordered_access_view_count[shader_type], slot + 1u);
-			
-		state->flags |= GraphicsPipelineState_UnorderedAccessView;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_unordered_access_view_unbind(u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->unordered_access_views[slot] = NULL;
-
-		// Compute Constant Buffer Count
-		u32* count = &state->unordered_access_view_count;
-
-		for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
-			if (state->unordered_access_views[i] != NULL) {
-				*count = i + 1;
-				break;
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->unordered_access_views[i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
 			}
 		}
+		break;
 
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-			
-		state->unordered_access_views[shader_type][slot] = NULL;
+		case ResourceType_Sampler:
+		{
+			if (primitive != NULL) {
 
-		// Compute Constant Buffer Count
-		u32* count = &state->unordered_access_view_count[shader_type];
+				Sampler* sampler = primitive;
 
-		for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
-			if (state->unordered_access_views[shader_type][i] != NULL) {
-				*count = i + 1;
-				break;
+				if_assert(sampler->primitive.type == GraphicsPrimitiveType_Sampler) {
+
+					state->samplers[slot] = sampler;
+					state->sampler_count = SV_MAX(state->sampler_count, slot + 1u);
+				}
+			}
+			else {
+
+				state->samplers[slot] = NULL;
+
+				// Compute Constant Buffer Count
+				u32* count = &state->sampler_count;
+
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->samplers[i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
 			}
 		}
+		break;
 
-		state->flags |= GraphicsPipelineState_UnorderedAccessView;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_unordered_access_view_unbind_shader(ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-			
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-		state->unordered_access_view_count = 0u;
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		state->unordered_access_view_count[shader_type] = 0u;
-		state->flags |= GraphicsPipelineState_UnorderedAccessView;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_unordered_access_view_unbind_commandlist(CommandList cmd)
-{
-	{
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-
-		for (u32 i = 0; i < ShaderType_GraphicsCount; ++i) {
-			state->unordered_access_view_count[i] = 0u;
-			state->flags |= get_resource_shader_flag((ShaderType)i);
 		}
-		state->flags |= GraphicsPipelineState_UnorderedAccessView;
-	}
-	{
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-		state->unordered_access_view_count = 0u;
-		state->update_resources = TRUE;
-	}
-}
 
-void graphics_sampler_bind_array(Sampler** samplers, u32 count, u32 begin_slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->sampler_count = SV_MAX(state->sampler_count, begin_slot + count);
-
-		memory_copy(state->samplers, samplers, sizeof(Sampler*) * count);
 		state->update_resources = TRUE;
 	}
 	else {
+
 		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
 
-		state->sampler_count[shader_type] = SV_MAX(state->sampler_count[shader_type], begin_slot + count);
+		switch (type) {
 
-		memory_copy(state->samplers, samplers, sizeof(Sampler*) * count);
-		state->flags |= GraphicsPipelineState_Sampler;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
+		case ResourceType_ShaderResource:
+		{
+			if (primitive != NULL) {
 
-void graphics_sampler_bind(Sampler* sampler, u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->samplers[slot] = sampler;
-		state->sampler_count = SV_MAX(state->sampler_count, slot + 1u);
-		   
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-			
-		state->samplers[shader_type][slot] = sampler;
-		state->sampler_count[shader_type] = SV_MAX(state->sampler_count[shader_type], slot + 1u);
-		state->flags |= GraphicsPipelineState_Sampler;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
-
-void graphics_sampler_unbind(u32 slot, ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
-
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-
-		state->samplers[slot] = NULL;
-
-		// Compute Constant Buffer Count
-		u32* count = &state->sampler_count;
-
-		for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
-			if (state->samplers[i] != NULL) {
-				*count = i + 1;
-				break;
+				state->shader_resources[shader_type][slot] = primitive;
+				state->shader_resource_count[shader_type] = SV_MAX(state->shader_resource_count[shader_type], slot + 1u);
 			}
-		}
+			else {
 
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-			
-		state->samplers[shader_type][slot] = NULL;
-			
-		// Compute Images Count
-		u32* count = &state->sampler_count[shader_type];
-			
-		for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
-			if (state->samplers[shader_type][i] != NULL) {
-				*count = i + 1;
-				break;
+				state->shader_resources[shader_type][slot] = NULL;
+
+				// Compute Images Count
+				u32* count = &state->shader_resource_count[shader_type];
+
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->shader_resources[shader_type][i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
 			}
+
+			state->flags |= GraphicsPipelineState_ShaderResource;
+			state->flags |= get_resource_shader_flag(shader_type);
 		}
+		break;
 
-		state->flags |= GraphicsPipelineState_Sampler;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
+		case ResourceType_ConstantBuffer:
+		{
+			if (primitive != NULL) {
 
-void graphics_sampler_unbind_shader(ShaderType shader_type, CommandList cmd)
-{
-	if (shader_type == ShaderType_Compute) {
+				GPUBuffer* buffer = primitive;
 
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-		state->sampler_count = 0u;
-		state->update_resources = TRUE;
-	}
-	else {
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
-			
-		state->sampler_count[shader_type] = 0u;
-			
-		state->flags |= GraphicsPipelineState_Sampler;
-		state->flags |= get_resource_shader_flag(shader_type);
-	}
-}
+				if_assert(buffer->primitive.type == GraphicsPrimitiveType_Buffer) {
 
-void graphics_sampler_unbind_commandlist(CommandList cmd)
-{
-	{
-		GraphicsState* state = &gfx->pipeline_state.graphics[cmd];
+					state->constant_buffers[shader_type][slot] = buffer;
+					state->constant_buffer_count[shader_type] = SV_MAX(state->constant_buffer_count[shader_type], slot + 1u);
+				}
+			}
+			else {
 
-		for (u32 i = 0; i < ShaderType_GraphicsCount; ++i) {
-			state->sampler_count[i] = 0u;
-			state->flags |= get_resource_shader_flag((ShaderType)i);
+				state->constant_buffers[shader_type][slot] = NULL;
+
+				// Compute Constant Buffer Count
+				u32* count = &state->constant_buffer_count[shader_type];
+
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->constant_buffers[shader_type][i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
+			}
+
+			state->flags |= GraphicsPipelineState_ConstantBuffer;
+			state->flags |= get_resource_shader_flag(shader_type);
 		}
-		state->flags |= GraphicsPipelineState_Sampler;
-	}
-	{
-		ComputeState* state = &gfx->pipeline_state.compute[cmd];
-		state->sampler_count = 0u;
-		state->update_resources = TRUE;
+		break;
+
+		case ResourceType_UnorderedAccessView:
+		{
+			if (primitive != NULL) {
+
+				state->unordered_access_views[shader_type][slot] = primitive;
+				state->unordered_access_view_count[shader_type] = SV_MAX(state->unordered_access_view_count[shader_type], slot + 1u);
+			}
+			else {
+
+				state->unordered_access_views[shader_type][slot] = NULL;
+
+				// Compute Constant Buffer Count
+				u32* count = &state->unordered_access_view_count[shader_type];
+
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->unordered_access_views[shader_type][i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
+			}
+
+			state->flags |= GraphicsPipelineState_UnorderedAccessView;
+			state->flags |= get_resource_shader_flag(shader_type);
+		}
+		break;
+
+		case ResourceType_Sampler:
+		{
+			if (primitive != NULL) {
+
+				Sampler* sampler = primitive;
+
+				if_assert(sampler->primitive.type == GraphicsPrimitiveType_Sampler) {
+
+					state->samplers[shader_type][slot] = sampler;
+					state->sampler_count[shader_type] = SV_MAX(state->sampler_count[shader_type], slot + 1u);
+				}
+			}
+			else {
+
+				state->samplers[shader_type][slot] = NULL;
+
+				// Compute Images Count
+				u32* count = &state->sampler_count[shader_type];
+
+				for (i32 i = (i32)(*count) - 1; i >= 0; --i) {
+					if (state->samplers[shader_type][i] != NULL) {
+						*count = i + 1;
+						break;
+					}
+				}
+			}
+
+			state->flags |= GraphicsPipelineState_Sampler;
+			state->flags |= get_resource_shader_flag(shader_type);
+		}
+		break;
+
+		}
 	}
 }
 
