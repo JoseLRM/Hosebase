@@ -118,6 +118,36 @@ inline f32 math_smooth(f32 n, f32 falloff)
 	return math_exp(-n * falloff) * (n - 1.f) + 1.f;
 }
 
+inline f32 math_fade_in(f32 n, f32 k)
+{
+	f32 r = (1.f - n) / (1.f + n * k);
+	return 1.f - r;
+}
+
+inline f32 math_fade_out(f32 n, f32 k)
+{
+	f32 r = n / (1.f + (1.f - n) * k);
+	return 1.f - r;
+}
+
+inline f32 math_fade_inout(f32 n, f32 k)
+{
+	if (n < 0.5f) {
+
+		n *= 2.f;
+
+		f32 r = n / (1.f + (1.f - n) * k);
+		return r * 0.5f;
+	}
+	else {
+
+		n = (n - 0.5f) * 2.f;
+
+		f32 r = (1.f - n) / (1.f + n * k);
+		return (1.f - r) * 0.5f + 0.5f;
+	}
+}
+
 // Vector
 
 inline v2 v2_set(f32 x, f32 y)
