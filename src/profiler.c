@@ -2,8 +2,6 @@
 
 #if SV_SLOW
 
-#include "Hosebase/imgui.h"
-
 #define FN_NAME_SIZE 100
 #define THREAD_FN_MAX 200
 
@@ -133,8 +131,10 @@ static b8 function_less_than(const FunctionData* f0, const FunctionData* f1)
 	return f0->total_time > f1->total_time;
 }
 
+// TODO: fix
 void profiler_gui()
 {
+/*
 	static b8 only_functions = TRUE;
 	static b8 sort = TRUE;
 
@@ -239,6 +239,7 @@ void profiler_gui()
 	mutex_unlock(profiler->mutex);
 
 	gui_end_parent();
+*/
 }
 
 #else
