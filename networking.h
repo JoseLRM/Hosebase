@@ -4,9 +4,7 @@
 
 #if SV_NETWORKING
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SV_BEGIN_C_HEADER
 
 // WEB
 
@@ -48,8 +46,6 @@ u32 web_client_id();
 b8 _net_initialize();
 void _net_close();
 
-#endif
+SV_END_C_HEADER
 
-#ifdef __cplusplus
-}
 #endif

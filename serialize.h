@@ -166,7 +166,7 @@ inline void serializer_write(Serializer* s, const void* data, u32 size)
 	if (s->cursor + size > s->capacity) {
 
 		u32 new_capacity = SV_MAX(s->cursor + size, s->capacity + SERIALIZER_ALLOCATE);
-		u8* new_data = memory_allocate(new_capacity);
+		u8* new_data = (u8*)memory_allocate(new_capacity);
 
 		if (s->cursor) {
 			memory_copy(new_data, s->data, s->cursor);
@@ -186,7 +186,7 @@ inline void serializer_write(Serializer* s, const void* data, u32 size)
 inline void serializer_begin_file(Serializer* s, u32 initial_capacity)
 {
 	s->capacity = SV_MAX(initial_capacity, SERIALIZER_ALLOCATE);
-	s->data = memory_allocate(s->capacity);
+	s->data = (u8*)memory_allocate(s->capacity);
 	s->cursor = 0u;
 	s->extern_data = FALSE;
 
@@ -197,7 +197,7 @@ inline void serializer_begin_file(Serializer* s, u32 initial_capacity)
 inline void serializer_begin_buffer(Serializer* s, void* buffer, u32 size)
 {
 	s->capacity = size;
-	s->data = buffer;
+	s->data = (u8*)buffer;
 	s->cursor = 0u;
 	s->extern_data = buffer != NULL;
 }
@@ -387,7 +387,7 @@ inline void deserializer_begin_buffer(Deserializer* s, void* buffer, u32 size)
 {
 	s->cursor = 0;
 	s->extern_data = TRUE;
-	s->data = buffer;
+	s->data = (u8*)buffer;
 	s->size = size;
 	s->version = SERIALIZER_VERSION;
 }
