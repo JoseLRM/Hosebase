@@ -11,6 +11,7 @@
 #include "Hosebase/networking.h"
 #include "Hosebase/profiler.h"
 #include "Hosebase/render_utils.h"
+#include "Hosebase/imgui.h"
 
 typedef struct {
 	OSInitializeDesc os;
@@ -78,6 +79,11 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		return FALSE;
 	}
 
+	if (!gui_initialize()) {
+		SV_LOG_ERROR("Can't initialize ImGui\n");
+		return FALSE;
+	}
+
 #endif
 
 	return TRUE;
@@ -86,6 +92,7 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 inline void hosebase_close()
 {
 #if SV_GRAPHICS
+	gui_close();
 	render_utils_close();
 #endif
 
