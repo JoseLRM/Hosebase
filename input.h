@@ -2,6 +2,8 @@
 
 #include "Hosebase/math.h"
 
+SV_BEGIN_C_HEADER
+
 typedef enum {
 	MouseButton_Left,
 	MouseButton_Right,
@@ -145,3 +147,5 @@ void _input_text_add(const char* text);
 void _input_mouse_wheel_set(f32 value);
 void _input_mouse_position_set(v2 value);
 void _input_mouse_dragging_set(v2 value);
+
+SV_END_C_HEADER
