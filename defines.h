@@ -87,6 +87,8 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 	
 // TODO
 
+SV_BEGIN_C_HEADER
+
 #if SV_SLOW
 
 void throw_assertion(const char* title, u32 line, const char* file);
@@ -112,8 +114,6 @@ inline b8 throw_assertion_and_return_false(const char* title, u32 line, const ch
 #define SV_LOG_ERROR(x, ...) {;}
 
 #endif
-
-SV_BEGIN_C_HEADER
 
 typedef struct {
 	f32 delta_time;

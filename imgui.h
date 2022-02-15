@@ -6,9 +6,11 @@ SV_BEGIN_C_HEADER
 
 // TODO: Dynamic
 #define _GUI_PARENT_WIDGET_BUFFER_SIZE (500 * 30)
-#define _GUI_PARENT_LAYOUT_STACK_SIZE (500 * 30)
 
 #define _GUI_LAYOUT_DATA_SIZE 500
+#define _GUI_LAYOUT_STACK_SIZE (500 * 30)
+
+#define _GUI_WIDGET_STACK_SIZE (500 * 30)
 
 typedef enum {
 	GuiUnit_Relative,
@@ -38,6 +40,9 @@ typedef struct {
 typedef struct {
 	u32 type;
 	u8 data[_GUI_LAYOUT_DATA_SIZE];
+
+	u8 stack[_GUI_LAYOUT_STACK_SIZE];
+	u32 stack_size;
 } GuiLayout;
 
 typedef struct {
@@ -58,8 +63,6 @@ struct GuiParent {
 	u32 widget_buffer_size;
 	u32 widget_count;
 
-	u8 layout_stack[_GUI_PARENT_LAYOUT_STACK_SIZE];
-	u32 layout_stack_size;
 	GuiLayout layout;
 
 	GuiParent* parent;
@@ -113,6 +116,8 @@ typedef struct {
 	u8* (*read_fn)(GuiWidget* widget, u8* it);
 	void (*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
 	void (*draw_fn)(GuiWidget* widget);
+	b8(*property_read_fn)(u32 property, u8* it, u32 size, u8* pop_data);
+	u16(*property_id_fn)(const char* name);
 	u32 size;
 } GuiRegisterWidgetDesc;
 
@@ -161,40 +166,16 @@ GuiParent* gui_current_parent();
 f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dimension);
 f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimension);
 
-// Default widgets
-
-void gui_text(const char* text, ...);
-
-b8 gui_button(const char* text, u64 flags);
-
-b8 gui_text_field(char* buffer, u32 buffer_size, u64 flags);
-
-typedef enum {
-	GuiSliderType_f32,
-	GuiSliderType_u32,
-} GuiSliderType;
-
-b8 gui_slider_ex(const char* text, void* n, const void* min, const void* max, GuiSliderType type, u64 flags);
-
-inline b8 gui_slider(const char* text, f32* n, f32 min, f32 max, u64 flags)
-{
-	return gui_slider_ex(text, n, &min, &max, GuiSliderType_f32, 0);
-}
-inline b8 gui_slider_u32(const char* text, u32* n, u32 min, u32 max, u64 flags)
-{
-	return gui_slider_ex(text, n, &min, &max, GuiSliderType_u32, 0);
-}
-
-b8 gui_checkbox(const char* text, b8* n, u64 flags);
-
-typedef void(*GuiDrawableFn)(GuiWidget* widget, const void* data);
-void gui_drawable(GuiDrawableFn fn, const void* data, u32 size, u64 flags);
-
-// Layout stack
+// Layout property stack
 
 void gui_layout_push_ex(const char* name, const void* data, u16 size);
 void gui_layout_set_ex(const char* name, const void* data, u16 size);
 void gui_layout_pop(u32 count);
+
+// Widget property stack
+
+void gui_widget_push_ex(u32 widget_id, const char* name, const void* data, u16 size);
+void gui_widget_pop(u32 widget_id, u32 count);
 
 // Stack layout
 
