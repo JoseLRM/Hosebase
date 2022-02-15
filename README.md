@@ -4,6 +4,7 @@ The base of my projects.
 <p>- Multiplatform initialization</p>
 <p>- Graphics API</p>
 <p>- Audio Engine (With stereo and 3D effects)</p>
+<p>- Immediate Mode Graphical User Interface</p>
 <p>- Immediate Mode Rendering</p>
 <p>- Linear algebra libarary</p>
 <p>- Web Network</p>
