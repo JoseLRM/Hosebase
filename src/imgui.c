@@ -68,11 +68,7 @@ typedef struct {
 	u32 layout_register_count;
 
 	struct {
-		u32 widget_button;
-
-		u32 layout_stack;
 		u32 layout_free;
-		u32 layout_grid;
 	} register_ids;
 	
 } GUI;
@@ -842,6 +838,19 @@ u32 gui_register_widget(const GuiRegisterWidgetDesc* desc)
 	return i;
 }
 
+u32 gui_register_layout(const GuiRegisterLayoutDesc* desc)
+{
+	u32 i = gui->layout_register_count++;
+
+	string_copy(gui->layout_registers[i].name, desc->name, NAME_SIZE);
+	gui->layout_registers[i].initialize_fn = desc->initialize_fn;
+	gui->layout_registers[i].compute_bounds_fn = desc->compute_bounds_fn;
+	gui->layout_registers[i].property_read_fn = desc->property_read_fn;
+	gui->layout_registers[i].property_id_fn = desc->property_id_fn;
+
+	return i;
+}
+
 //////////////////////////////// WIDGET UTILS //////////////////////////////////
 
 Font* gui_font()
@@ -1096,111 +1105,6 @@ void gui_widget_pop(u32 widget_id, u32 count)
 	gui_write(count);
 }
 
-///////////////////////////////// STACK LAYOUT ///////////////////////////////
-
-typedef struct {
-	GuiStackLayoutData data;
-	f32 offset;
-} GuiStackLayoutInternal;
-
-static void stack_layout_initialize(GuiParent* parent)
-{
-	GuiLayout* layout = &parent->layout;
-	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
-	d->data.width = (GuiDimension){ 0.9f, GuiUnit_Relative };
-	d->data.height = (GuiDimension){ 50.f, GuiUnit_Pixel };
-	d->data.margin = (GuiDimension){ 0.05f, GuiUnit_Relative };
-	d->data.padding = (GuiDimension){ 10.f, GuiUnit_Pixel };
-	d->offset = gui_compute_dimension(d->data.margin, TRUE, parent->widget_bounds.w);
-}
-
-static v4 stack_layout_compute_bounds(GuiParent* parent)
-{
-	GuiLayout* layout = &parent->layout;
-	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
-
-	f32 width = gui_compute_dimension(d->data.width, FALSE, parent->widget_bounds.z);
-	f32 height = gui_compute_dimension(d->data.height, TRUE, parent->widget_bounds.w);
-	f32 margin = gui_compute_dimension(d->data.margin, TRUE, parent->widget_bounds.w);
-	f32 padding = gui_compute_dimension(d->data.padding, TRUE, parent->widget_bounds.w);
-
-	f32 y = 1.f - d->offset - height * 0.5f;
-	d->offset += height + padding;
-	
-	return v4_set(0.5f, y, width, height);
-}
-
-static b8 stack_layout_property_read(GuiParent* parent, u32 property, u8* it, u32 size, u8* pop_data)
-{
-	GuiLayout* layout = &parent->layout;
-	GuiStackLayoutInternal* d = (GuiStackLayoutInternal*)layout->data;
-
-	u8* dst = NULL;
-
-	switch (property)
-	{
-	case 1:
-		if_assert(size == sizeof(d->data.margin))
-			dst = (u8*)&d->data.margin;
-		break;
-
-	case 2:
-		if_assert(size == sizeof(d->data.padding))
-			dst = (u8*)&d->data.padding;
-		break;
-
-	case 3:
-		if_assert(size == sizeof(d->data.width))
-			dst = (u8*)&d->data.width;
-		break;
-
-	case 4:
-		if_assert(size == sizeof(d->data.height))
-			dst = (u8*)&d->data.height;
-		break;
-
-	case 5:
-		if_assert(size == sizeof(GuiDimension)) {
-
-			GuiDimension dim = *(GuiDimension*)it;
-			d->offset += gui_compute_dimension(dim, TRUE, parent->widget_bounds.w);
-		}
-		break;
-	}
-
-	if (dst != NULL) {
-
-		if (pop_data)
-			memory_copy(pop_data, dst, size);
-		gui_read_(&it, dst, size);
-
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
-static u16 stack_layout_property_id(const char* name)
-{
-	if (string_equals(name, "margin")) {
-		return 1;
-	}
-	if (string_equals(name, "padding")) {
-		return 2;
-	}
-	if (string_equals(name, "width")) {
-		return 3;
-	}
-	if (string_equals(name, "height")) {
-		return 4;
-	}
-	if (string_equals(name, "space")) {
-		return 5;
-	}
-
-	return 0;
-}
-
 ////////////////////////////////////////////////// FREE LAYOUT ///////////////////////////////////////////////
 
 typedef struct {
@@ -1290,104 +1194,14 @@ static b8 free_layout_property_read(GuiParent* parent, u32 property, u8* it, u32
 	return FALSE;
 }
 
-/////////////////////////// GRID LAYOUT //////////////////////////////
-
-typedef struct {
-	GuiGridLayoutData data;
-	u32 count;
-} GuiGridLayoutInternal;
-
-static void grid_layout_initialize(GuiParent* parent)
-{
-	GuiLayout* layout = &parent->layout;
-	GuiGridLayoutInternal* d = (GuiGridLayoutInternal*)layout->data;
-	d->data.height = (GuiDimension){ 1.f, GuiUnit_Aspect };
-	d->data.horizontal_margin = (GuiDimension){ 10.f, GuiUnit_Pixel };
-	d->data.vertical_margin = (GuiDimension){ 10.f, GuiUnit_Pixel };
-	d->data.horizontal_padding = (GuiDimension){ 5.f, GuiUnit_Pixel };
-	d->data.vertical_padding = (GuiDimension){ 5.f, GuiUnit_Pixel };
-	d->data.columns = 5;
-	d->count = 0;
-}
-
-static v4 grid_layout_compute_bounds(GuiParent* parent)
-{
-	GuiLayout* layout = &parent->layout;
-	GuiGridLayoutInternal* d = (GuiGridLayoutInternal*)layout->data;
-
-	f32 row = (f32)(d->count / d->data.columns);
-	f32 column = (f32)(d->count % d->data.columns);
-
-	f32 h_margin = gui_compute_dimension(d->data.horizontal_margin, FALSE, parent->widget_bounds.z);
-	f32 v_margin = gui_compute_dimension(d->data.vertical_margin, TRUE, parent->widget_bounds.w);
-	f32 h_padding = gui_compute_dimension(d->data.horizontal_padding, FALSE, parent->widget_bounds.z);
-	f32 v_padding = gui_compute_dimension(d->data.vertical_padding, TRUE, parent->widget_bounds.w);
-
-	f32 width = (1.f - h_margin * 2.f - (f32)d->data.columns * h_padding) / (f32)d->data.columns;
-	f32 height = gui_compute_dimension(d->data.height, TRUE, parent->widget_bounds.w);
-
-	f32 x = h_margin + column * (width + h_padding) + width * 0.5f;
-	f32 y = 1.f - (v_margin + row * (height + v_padding)) - height * 0.5f;
-
-	d->count++;
-
-	return v4_set(x, y, width, height);
-}
-
-static u8* grid_layout_update(GuiParent* parent, u8* it)
-{
-	GuiLayout* layout = &parent->layout;
-	GuiGridLayoutInternal* d = (GuiGridLayoutInternal*)layout->data;
-
-	u8 update;
-	gui_read(it, update);
-
-	switch (update)
-	{
-	case 0:
-		gui_read(it, d->data);
-		break;
-
-	case 1:
-		gui_read(it, d->data.height);
-		break;
-
-	case 2:
-		gui_read(it, d->data.columns);
-		break;
-
-	}
-
-	return it;
-}
-
-static u16 grid_layout_property_id(const char* name)
-{
-	return 0;
-}
-
 static void register_default_layouts()
 {
-	gui->layout_registers[1].initialize_fn = stack_layout_initialize;
-	gui->layout_registers[1].compute_bounds_fn = stack_layout_compute_bounds;
-	gui->layout_registers[1].property_read_fn = stack_layout_property_read;
-	gui->layout_registers[1].property_id_fn = stack_layout_property_id;
-	string_copy(gui->layout_registers[1].name, "stack", NAME_SIZE);
-	gui->register_ids.layout_stack = 1;
+	GuiRegisterLayoutDesc desc;
 
-	gui->layout_registers[2].initialize_fn = free_layout_initialize;
-	gui->layout_registers[2].compute_bounds_fn = free_layout_compute_bounds;
-	gui->layout_registers[2].property_read_fn = free_layout_property_read;
-	gui->layout_registers[2].property_id_fn = free_layout_property_id;
-	string_copy(gui->layout_registers[2].name, "free", NAME_SIZE);
-	gui->register_ids.layout_free = 2;
-
-	gui->layout_registers[3].initialize_fn = grid_layout_initialize;
-	gui->layout_registers[3].compute_bounds_fn = grid_layout_compute_bounds;
-	// gui->layout_registers[3].update_fn = grid_layout_update;
-	gui->layout_registers[3].property_id_fn = grid_layout_property_id;
-	string_copy(gui->layout_registers[3].name, "grid", NAME_SIZE);
-	gui->register_ids.layout_grid = 3;
-
-	gui->layout_register_count = 4;
+	desc.name = "free";
+	desc.initialize_fn = free_layout_initialize;
+	desc.compute_bounds_fn = free_layout_compute_bounds;
+	desc.property_read_fn = free_layout_property_read;
+	desc.property_id_fn = free_layout_property_id;
+	gui->register_ids.layout_free = gui_register_layout(&desc);
 }

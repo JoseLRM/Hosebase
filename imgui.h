@@ -111,18 +111,6 @@ void gui_set_focus(GuiWidget* widget, u64 parent_id, u32 action);
 GuiFocus gui_get_focus();
 b8 gui_has_focus();
 
-typedef struct {
-	const char* name;
-	u8* (*read_fn)(GuiWidget* widget, u8* it);
-	void (*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
-	void (*draw_fn)(GuiWidget* widget);
-	b8(*property_read_fn)(u32 property, u8* it, u32 size, u8* pop_data);
-	u16(*property_id_fn)(const char* name);
-	u32 size;
-} GuiRegisterWidgetDesc;
-
-u32 gui_register_widget(const GuiRegisterWidgetDesc* desc);
-
 // Parents
 
 void gui_begin_parent(const char* layout);
@@ -176,6 +164,30 @@ void gui_layout_pop(u32 count);
 
 void gui_widget_push_ex(u32 widget_id, const char* name, const void* data, u16 size);
 void gui_widget_pop(u32 widget_id, u32 count);
+
+// Registers
+
+typedef struct {
+	const char* name;
+	u8* (*read_fn)(GuiWidget* widget, u8* it);
+	void (*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
+	void (*draw_fn)(GuiWidget* widget);
+	b8(*property_read_fn)(u32 property, u8* it, u32 size, u8* pop_data);
+	u16(*property_id_fn)(const char* name);
+	u32 size;
+} GuiRegisterWidgetDesc;
+
+u32 gui_register_widget(const GuiRegisterWidgetDesc* desc);
+
+typedef struct {
+	const char* name;
+	void(*initialize_fn)(GuiParent* parent);
+	v4(*compute_bounds_fn)(GuiParent* parent);
+	b8(*property_read_fn)(GuiParent* parent, u32 property, u8* it, u32 size, u8* pop_data);
+	u16(*property_id_fn)(const char* name);
+} GuiRegisterLayoutDesc;
+
+u32 gui_register_layout(const GuiRegisterLayoutDesc* desc);
 
 // Stack layout
 
