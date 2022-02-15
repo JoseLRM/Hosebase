@@ -2,6 +2,8 @@
 
 #include "Hosebase/asset_system.h"
 
+SV_BEGIN_C_HEADER
+
 typedef struct {
 	i16* samples[2];
 	u32 sample_count;
@@ -60,3 +62,5 @@ void music_stop(u64 id);
 
 b8 _sound_initialize(u32 samples_per_second);
 void _sound_close();
+
+SV_END_C_HEADER

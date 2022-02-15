@@ -2,6 +2,8 @@
 
 #include "Hosebase/defines.h"
 
+SV_BEGIN_C_HEADER
+
 #if SV_SLOW
 
 struct _ProfilerChrono {
@@ -32,3 +34,5 @@ void profiler_gui();
 #define profiler_function_end()
 
 #endif
+
+SV_END_C_HEADER

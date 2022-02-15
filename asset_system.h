@@ -2,6 +2,8 @@
 
 #include "serialize.h"
 
+SV_BEGIN_C_HEADER
+
 // That's only for assets attached to files
 typedef enum {
 	AssetPriority_RightNow,
@@ -48,3 +50,5 @@ void asset_free_unused();
 b8 _asset_initialize(b8 hot_reloading);
 void _asset_close();
 void _asset_update();
+
+SV_END_C_HEADER

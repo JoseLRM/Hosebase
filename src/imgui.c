@@ -15,8 +15,8 @@ typedef enum {
 typedef struct {
 	char name[NAME_SIZE];
 	u8*(*read_fn)(GuiWidget* widget, u8* it);
-	u8*(*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
-	u8*(*draw_fn)(GuiWidget* widget);
+	void(*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
+	void(*draw_fn)(GuiWidget* widget);
 	u32 size;
 } GuiWidgetRegister;
 

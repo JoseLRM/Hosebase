@@ -111,8 +111,8 @@ b8 gui_has_focus();
 typedef struct {
 	const char* name;
 	u8* (*read_fn)(GuiWidget* widget, u8* it);
-	u8* (*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
-	u8* (*draw_fn)(GuiWidget* widget);
+	void (*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
+	void (*draw_fn)(GuiWidget* widget);
 	u32 size;
 } GuiRegisterWidgetDesc;
 

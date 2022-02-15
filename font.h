@@ -2,6 +2,8 @@
 
 #include "Hosebase/defines.h"
 
+SV_BEGIN_C_HEADER
+
 #if SV_GRAPHICS
 
 #include "Hosebase/graphics.h"
@@ -47,3 +49,5 @@ b8   font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags f
 void font_destroy(Font* font);
 
 #endif
+
+SV_END_C_HEADER
