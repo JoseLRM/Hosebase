@@ -72,6 +72,9 @@ struct GuiParent {
 		v4 texcoord;
 		Color color;
 	} background;
+
+	f32 voffset;
+	f32 vrange;
 };
 
 typedef struct {

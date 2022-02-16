@@ -183,20 +183,74 @@ static void gui_pop_parent()
 static void adjust_widget_bounds(GuiParent* parent)
 {
 	v4 pb = parent->widget_bounds;
-	f32 inv_height = 1.f / gui->resolution.y;
-	
-	u8* it = parent->widget_buffer;
 
-	foreach(i, parent->widget_count) {
+	f32 vmin;
+	f32 vmax;
 
-		GuiWidget* w = (GuiWidget*)it;
+	// Adjust into parent bounds and compute min and max
+	if (parent->widget_count == 0) {
 
-		w->bounds.x = (w->bounds.x * pb.z) + pb.x - (pb.z * 0.5f);
-		w->bounds.y = (w->bounds.y * pb.w) + pb.y - (pb.w * 0.5f);
-		w->bounds.z *= pb.z;
-		w->bounds.w *= pb.w;
+		vmin = 0.f;
+		vmax = 0.f;
+	}
+	else {
 
-		it += sizeof(GuiWidget) + gui_widget_size(w->type);
+		vmin = pb.y - pb.w * 0.5f;
+		vmax = pb.y + pb.w * 0.5f;
+
+		u8* it = parent->widget_buffer;
+
+		foreach(i, parent->widget_count) {
+
+			GuiWidget* w = (GuiWidget*)it;
+
+			w->bounds.x = (w->bounds.x * pb.z) + pb.x - (pb.z * 0.5f);
+			w->bounds.y = (w->bounds.y * pb.w) + pb.y - (pb.w * 0.5f);
+			w->bounds.z *= pb.z;
+			w->bounds.w *= pb.w;
+
+			vmin = SV_MIN(vmin, w->bounds.y - w->bounds.w * 0.5f);
+			vmax = SV_MAX(vmax, w->bounds.y + w->bounds.w * 0.5f);
+
+			it += sizeof(GuiWidget) + gui_widget_size(w->type);
+		}
+	}
+
+	// Adjust offsets
+	{
+		parent->vrange = vmax - vmin;
+
+		f32 voffset_range = SV_MAX(parent->vrange - parent->bounds.w, 0.f);
+
+		// TEMP
+		static f32 o = 0.f;
+
+		if (voffset_range > 0.001f) {
+
+			// TODO: Take in account priority
+			o -= input_mouse_wheel() * 0.1f;
+			parent->voffset = o;
+		}
+
+		parent->voffset = SV_MAX(SV_MIN(voffset_range, parent->voffset), 0.f);
+
+		// TEMP
+		if (voffset_range > 0.001f) o = parent->voffset;
+	}
+
+	// Move by offset
+	if (fabs(parent->voffset) > 0.001f) {
+
+		u8* it = parent->widget_buffer;
+
+		foreach(i, parent->widget_count) {
+
+			GuiWidget* w = (GuiWidget*)it;
+
+			w->bounds.y += parent->voffset;
+
+			it += sizeof(GuiWidget) + gui_widget_size(w->type);
+		}
 	}
 }
 
