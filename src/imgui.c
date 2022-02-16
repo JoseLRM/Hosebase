@@ -94,8 +94,11 @@ static void gui_widget_update(GuiParent* parent, GuiWidget* widget, b8 has_focus
 {
 	u32 type = widget->type;
 	if (type >= gui->widget_register_count) return;
-	if (gui->widget_registers[type].update_fn)
-		gui->widget_registers[type].update_fn(parent, widget, has_focus);
+	if (gui->widget_registers[type].update_fn) {
+
+		if (gui_bounds_inside_bounds(widget->bounds, parent->bounds))
+			gui->widget_registers[type].update_fn(parent, widget, has_focus);
+	}
 }
 
 static void gui_widget_draw(GuiWidget* widget)
@@ -187,6 +190,14 @@ static void adjust_widget_bounds(GuiParent* parent)
 	f32 vmin;
 	f32 vmax;
 
+	// TEMP
+	static f32 o = 0.f;
+	{
+		if (parent->widget_count > 10) {
+			parent->voffset = o;
+		}
+	}
+
 	// Adjust into parent bounds and compute min and max
 	if (parent->widget_count == 0) {
 
@@ -195,8 +206,11 @@ static void adjust_widget_bounds(GuiParent* parent)
 	}
 	else {
 
-		vmin = pb.y - pb.w * 0.5f;
-		vmax = pb.y + pb.w * 0.5f;
+		vmin = pb.y - pb.w * 0.5f + parent->voffset;
+		vmax = pb.y + pb.w * 0.5f + parent->voffset;
+
+		f32 parent_left = pb.x - (pb.z * 0.5f);
+		f32 parent_bottom = pb.y - (pb.w * 0.5f) + parent->voffset;
 
 		u8* it = parent->widget_buffer;
 
@@ -204,8 +218,8 @@ static void adjust_widget_bounds(GuiParent* parent)
 
 			GuiWidget* w = (GuiWidget*)it;
 
-			w->bounds.x = (w->bounds.x * pb.z) + pb.x - (pb.z * 0.5f);
-			w->bounds.y = (w->bounds.y * pb.w) + pb.y - (pb.w * 0.5f);
+			w->bounds.x = (w->bounds.x * pb.z) + parent_left;
+			w->bounds.y = (w->bounds.y * pb.w) + parent_bottom;
 			w->bounds.z *= pb.z;
 			w->bounds.w *= pb.w;
 
@@ -222,35 +236,17 @@ static void adjust_widget_bounds(GuiParent* parent)
 
 		f32 voffset_range = SV_MAX(parent->vrange - parent->bounds.w, 0.f);
 
-		// TEMP
-		static f32 o = 0.f;
-
 		if (voffset_range > 0.001f) {
 
 			// TODO: Take in account priority
 			o -= input_mouse_wheel() * 0.1f;
-			parent->voffset = o;
 		}
-
-		parent->voffset = SV_MAX(SV_MIN(voffset_range, parent->voffset), 0.f);
 
 		// TEMP
-		if (voffset_range > 0.001f) o = parent->voffset;
-	}
+		if (voffset_range > 0.001f)
 
-	// Move by offset
-	if (fabs(parent->voffset) > 0.001f) {
 
-		u8* it = parent->widget_buffer;
-
-		foreach(i, parent->widget_count) {
-
-			GuiWidget* w = (GuiWidget*)it;
-
-			w->bounds.y += parent->voffset;
-
-			it += sizeof(GuiWidget) + gui_widget_size(w->type);
-		}
+		o = SV_MAX(SV_MIN(voffset_range, o), 0.f);
 	}
 }
 
@@ -258,20 +254,25 @@ static void update_parent(GuiParent* parent)
 {
 	u8* it = parent->widget_buffer;
 
+	u32 focus_widget_type = gui->focus.type;
+	u64 focus_widget_id = gui->focus.id;
+
 	foreach(i, parent->widget_count) {
 
 		GuiWidget* widget = (GuiWidget*)it;
 
-		if (widget->type == gui->focus.type && widget->id == gui->focus.id)
-			continue;
+		if (widget->type != focus_widget_type || widget->id != focus_widget_id)
+			gui_widget_update(parent, widget, FALSE);
 
-		gui_widget_update(parent, widget, FALSE);
 		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
 	}
 }
 
 static void draw_parent(GuiParent* parent)
 {
+	if (!gui_bounds_inside(parent->bounds))
+		return;
+
 	v4 b = parent->widget_bounds;
 	imrend_push_scissor(b.x, b.y, b.z, b.w, FALSE, gui->cmd);
 
@@ -297,7 +298,10 @@ static void draw_parent(GuiParent* parent)
 
 			GuiWidget* widget = (GuiWidget*)it;
 
-			gui_widget_draw(widget);
+			if (gui_bounds_inside(widget->bounds)) {
+				gui_widget_draw(widget);
+			}
+
 			it += sizeof(GuiWidget) + gui_widget_size(widget->type);
 		}
 	}
@@ -949,6 +953,21 @@ b8 gui_mouse_in_bounds(v4 bounds)
 	return(fabs(gui->mouse_position.x - bounds.x) <= bounds.z * 0.5f && fabs(gui->mouse_position.y - bounds.y) <= bounds.w * 0.5f);
 }
 
+b8 gui_bounds_inside(v4 bounds)
+{
+	f32 half_width = bounds.z * 0.5f;
+	f32 half_height = bounds.w * 0.5f;
+	return bounds.x - half_width <= 1.f && bounds.x + half_width >= 0.f && bounds.y - half_height <= 1.f && bounds.y + half_height >= 0.f;
+}
+
+b8 gui_bounds_inside_bounds(v4 child, v4 parent)
+{
+	b8 h = (fabs(child.x - parent.x) < (child.z + parent.z) * 0.5f);
+	b8 v = (fabs(child.y - parent.y) < (child.w + parent.w) * 0.5f);
+
+	return h && v;
+}
+
 void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc)
 {
 	imrend_draw_sprite(v3_set(bounds.x, bounds.y, 0.f), v2_set(bounds.z, bounds.w), color, image, GPUImageLayout_ShaderResource, tc, gui->cmd);
@@ -978,16 +997,33 @@ void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment)
 
 GuiWidget* gui_find_widget(u32 type, u64 id, GuiParent* parent)
 {
-	// TODO: Optimize?
-
 	if (parent == NULL)
 		return NULL;
 	
-	u8* it = parent->widget_buffer;
-	foreach(i, parent->widget_count) {
+	u8* it = parent->widget_buffer + parent->last_widget_search_byte;
+
+	for (u32 i = parent->last_widget_search_i; i < parent->widget_count; ++i) {
 
 		GuiWidget* widget = (GuiWidget*)it;
 		if (widget->type == type && widget->id == id) {
+
+			parent->last_widget_search_byte = it - parent->widget_buffer;
+			parent->last_widget_search_i = i;
+			return widget;
+		}
+
+		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+	}
+
+	it = parent->widget_buffer;
+
+	for (u32 i = 0; i < parent->last_widget_search_i; ++i) {
+
+		GuiWidget* widget = (GuiWidget*)it;
+		if (widget->type == type && widget->id == id) {
+
+			parent->last_widget_search_byte = it - parent->widget_buffer;
+			parent->last_widget_search_i = i;
 			return widget;
 		}
 

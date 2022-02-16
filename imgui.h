@@ -5,7 +5,7 @@
 SV_BEGIN_C_HEADER
 
 // TODO: Dynamic
-#define _GUI_PARENT_WIDGET_BUFFER_SIZE (500 * 30)
+#define _GUI_PARENT_WIDGET_BUFFER_SIZE (1500 * 30)
 
 #define _GUI_LAYOUT_DATA_SIZE 500
 #define _GUI_LAYOUT_STACK_SIZE (500 * 30)
@@ -62,6 +62,11 @@ struct GuiParent {
 	u8 widget_buffer[_GUI_PARENT_WIDGET_BUFFER_SIZE];
 	u32 widget_buffer_size;
 	u32 widget_count;
+
+	// This values are used to know the last widget found.
+	// In the 99% of the cases the widget that is trying to find it's the next one.
+	u64 last_widget_search_byte;
+	u32 last_widget_search_i;
 
 	GuiLayout layout;
 
@@ -149,6 +154,8 @@ void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc);
 void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment);
 
 b8 gui_mouse_in_bounds(v4 bounds);
+b8 gui_bounds_inside(v4 bounds);
+b8 gui_bounds_inside_bounds(v4 child, v4 parent);
 
 GuiWidget* gui_find_widget(u32 type, u64 id, GuiParent* parent);
 GuiParent* gui_find_parent(u64 parent_id);
