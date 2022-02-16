@@ -149,6 +149,7 @@ Thread thread_create(ThreadMainFn main, void* data);
 void   thread_destroy(Thread thread);
 void   thread_wait(Thread thread);
 void   thread_sleep(u64 millis);
+void   thread_yield();
 u64    thread_id();
 
 typedef struct {

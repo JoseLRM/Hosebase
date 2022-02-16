@@ -580,6 +580,11 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	return TRUE;
 }
 
+b8 input_focus()
+{
+	return platform->has_focus;
+}
+
 b8 _os_recive_input()
 {
 	/*if (platform->resize_request) {
@@ -1321,6 +1326,11 @@ void thread_wait(Thread thread)
 void thread_sleep(u64 millis)
 {
 	Sleep(millis);
+}
+
+void thread_yield()
+{
+	SwitchToThread();
 }
 
 u64 thread_id()

@@ -126,11 +126,10 @@ inline b8 hosebase_frame_begin()
 	// Compute delta time
 	{
 		static f64 fps_cache = 0.0;
-		static f64 last = 0.0;
 		f64 now = timer_now();
 		
-		core.delta_time = SV_MIN((f32)(now - last), 0.15f);
-		last = now;
+		core.delta_time = SV_MIN((f32)(now - core.last_update), 0.15f);
+		core.last_update = now;
 
 		fps_cache = fps_cache * 0.9f + core.delta_time * 0.1f;
 		core.FPS = (u32)(1.0 / fps_cache);
@@ -143,10 +142,6 @@ inline b8 hosebase_frame_begin()
 	_input_update();
 	if (!_os_recive_input()) return FALSE; // Close request
 
-#if SV_GRAPHICS
-	_graphics_begin();
-#endif
-
 	_asset_update();
 
 	profiler_function_end();
@@ -156,13 +151,5 @@ inline b8 hosebase_frame_begin()
 
 inline void hosebase_frame_end()
 {
-	profiler_function_begin();
-
-#if SV_GRAPHICS
-	_graphics_end();
-#endif
-
 	++core.frame_count;
-
-	profiler_function_end();
 }

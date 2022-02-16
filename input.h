@@ -121,6 +121,9 @@ typedef enum {
 	TextCommand_Paste,
 } TextCommand;
 
+b8 input_any();
+b8 input_focus();
+
 b8 input_key(Key key, InputState input_state);
 b8 input_mouse_button(MouseButton mouse_button, InputState input_state);
 

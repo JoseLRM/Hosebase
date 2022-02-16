@@ -4,6 +4,8 @@
 
 typedef struct {
 
+	b8 any;
+
 	InputState keys[Key_MaxEnum];
 	InputState mouse_buttons[MouseButton_MaxEnum];
 
@@ -32,6 +34,11 @@ static b8 validate_input_state(InputState actual, InputState input_state)
 		return actual == InputState_Pressed || actual == InputState_Hold || actual == InputState_Released;
 	}
 	else return actual == input_state;
+}
+
+b8 input_any()
+{
+	return input->any;
 }
 
 b8 input_key(Key key, InputState input_state)
@@ -97,12 +104,18 @@ void _input_close()
 
 void _input_update()
 {
+	input->any = FALSE;
+
 	foreach(i, Key_MaxEnum) {
 
 		InputState* state = input->keys + i;
 		
 		if (*state == InputState_Pressed) {
 			*state = InputState_Hold;
+			input->any = TRUE;
+		}
+		else if (*state == InputState_Hold) {
+			input->any = TRUE;
 		}
 		else if (*state == InputState_Released) {
 			*state = InputState_None;
@@ -122,6 +135,10 @@ void _input_update()
 		
 		if (*state == InputState_Pressed) {
 			*state = InputState_Hold;
+			input->any = TRUE;
+		}
+		else if (*state == InputState_Hold) {
+			input->any = TRUE;
 		}
 		else if (*state == InputState_Released) {
 			*state = InputState_None;
@@ -144,6 +161,7 @@ void _input_update()
 void _input_key_set_pressed(Key key)
 {
 	input->keys[key] = InputState_Pressed;
+	input->any = TRUE;
 }
 
 void _input_key_set_released(Key key)
@@ -153,11 +171,14 @@ void _input_key_set_released(Key key)
 		input->release_keys[input->release_key_count++] = key;
 	}
 	else input->keys[key] = InputState_Released;
+
+	input->any = TRUE;
 }
 
 void _input_mouse_button_set_pressed(MouseButton mouse_button)
 {
 	input->mouse_buttons[mouse_button] = InputState_Pressed;
+	input->any = TRUE;
 }
 
 void _input_mouse_button_set_released(MouseButton mouse_button)
@@ -167,21 +188,26 @@ void _input_mouse_button_set_released(MouseButton mouse_button)
 		input->release_mouse_buttons[input->release_mouse_button_count++] = mouse_button;
 	}
 	else input->mouse_buttons[mouse_button] = InputState_Released;
+
+	input->any = TRUE;
 }
 
 void _input_text_command_add(TextCommand text_command)
 {
 	array_push(&input->text_commands, text_command);
+	input->any = TRUE;
 }
 
 void _input_text_add(const char* text)
 {
 	string_append(input->text, text, INPUT_TEXT_SIZE);
+	input->any = TRUE;
 }
 
 void _input_mouse_wheel_set(f32 value)
 {
 	input->mouse_wheel = value;
+	input->any = TRUE;
 }
 
 void _input_mouse_position_set(v2 value)
@@ -192,4 +218,7 @@ void _input_mouse_position_set(v2 value)
 void _input_mouse_dragging_set(v2 value)
 {
 	input->mouse_dragging = value;
+
+	if (fabs(value.x) > 0.0001f || fabs(value.y) > 0.0001f)
+	input->any = TRUE;
 }

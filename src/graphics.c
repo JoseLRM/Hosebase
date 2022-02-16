@@ -523,7 +523,7 @@ static void destroy_primitives()
 	mutex_unlock(gfx->primitives_to_destroy_mutex);
 }
 
-void _graphics_begin()
+void graphics_begin()
 {
 	if (core.frame_count % 200u == 0u) {
 		destroy_primitives();
@@ -534,7 +534,7 @@ void _graphics_begin()
 	gfx->device.frame_begin();
 }
 
-void _graphics_end()
+void graphics_end()
 {
 	gfx->device.frame_end();
 }

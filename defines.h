@@ -116,6 +116,7 @@ inline b8 throw_assertion_and_return_false(const char* title, u32 line, const ch
 #endif
 
 typedef struct {
+	f64 last_update;
 	f32 delta_time;
 	f32 time_step;
 	u32 frame_count;
