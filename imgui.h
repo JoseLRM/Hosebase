@@ -163,6 +163,7 @@ void gui_layout_pop(u32 count);
 // Widget property stack
 
 void gui_widget_push_ex(u32 widget_id, const char* name, const void* data, u16 size);
+void gui_widget_set_ex(u32 widget_id, const char* name, const void* data, u16 size);
 void gui_widget_pop(u32 widget_id, u32 count);
 
 // Registers

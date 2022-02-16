@@ -430,6 +430,13 @@ void gui_end()
 		gui->parent_stack_count = 1;
 
 		free_parents();
+
+		// Reset widget stacks
+		{
+			foreach(i, gui->widget_register_count) {
+				gui->widget_registers[i].stack_size = 0;
+			}
+		}
 	}
 	
 	// Read buffer
@@ -1094,6 +1101,12 @@ void gui_widget_push_ex(u32 widget_id, const char* name, const void* data, u16 s
 		gui_write(size);
 		gui_write_(data, size);
 	}
+}
+
+void gui_widget_set_ex(u32 widget_id, const char* name, const void* data, u16 size)
+{
+	u16 property_id = gui_widget_property_id(widget_id, name);
+	gui_widget_property_read(widget_id, property_id, (void*)data, size, NULL);
 }
 
 void gui_widget_pop(u32 widget_id, u32 count)
