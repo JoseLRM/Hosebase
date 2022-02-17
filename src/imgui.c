@@ -185,7 +185,7 @@ static void gui_initialize_layout(GuiParent* parent)
 	memory_zero(&parent->layout.data, _GUI_LAYOUT_DATA_SIZE);
 	u32 type = parent->layout.type;
 
-	if (type >= gui->layout_register_count) return;
+	if (type >= gui->layout_register_count || type == 0) return;
 	gui->layout_registers[type].initialize_fn(parent);
 }
 
@@ -193,7 +193,7 @@ static v4 gui_compute_bounds(GuiParent* parent)
 {
 	u32 type = parent->layout.type;
 
-	if (type >= gui->layout_register_count) return v4_zero();
+	if (type >= gui->layout_register_count || type == 0) return v4_zero();
 	return gui->layout_registers[type].compute_bounds_fn(parent);
 }
 
@@ -201,7 +201,7 @@ static b8 gui_layout_property_read(GuiParent* parent, u32 property, u8* it, u32 
 {
 	u32 type = parent->layout.type;
 
-	if (type >= gui->layout_register_count) return FALSE;
+	if (type >= gui->layout_register_count || type == 0) return FALSE;
 	return gui->layout_registers[type].property_read_fn(parent, property, it, size, pop_data);
 }
 
@@ -209,7 +209,7 @@ static u32 gui_layout_property_id(GuiParent* parent, const char* name)
 {
 	u32 type = parent->layout.type;
 
-	if (type >= gui->layout_register_count) return 0;
+	if (type >= gui->layout_register_count || type == 0) return 0;
 	return gui->layout_registers[type].property_id_fn(name);
 }
 
@@ -571,6 +571,7 @@ void gui_end()
 		gui->root.widget_bounds = gui->root.bounds;
 		gui->root.state = gui_parent_state_find("root", 0x39485763293ULL, TRUE);
 		gui->root.child_count = 0;
+		gui->root.parent = NULL;
 		gui_initialize_layout(&gui->root);
 
 		gui->parent_stack[0] = &gui->root;
@@ -1344,17 +1345,20 @@ void gui_widget_pop(u32 widget_id, u32 count)
 ////////////////////////////////////////////////// FREE LAYOUT ///////////////////////////////////////////////
 
 typedef struct {
-	GuiFreeLayoutData data;
+	GuiCoord x;
+	GuiCoord y;
+	GuiDimension width;
+	GuiDimension height;
 } GuiFreeLayoutInternal;
 
 static void free_layout_initialize(GuiParent* parent)
 {
 	GuiLayout* layout = &parent->layout;
 	GuiFreeLayoutInternal* d = (GuiFreeLayoutInternal*)layout->data;
-	d->data.x = (GuiCoord) { 0.5f, GuiUnit_Relative, GuiCoordAlign_Center };
-	d->data.y = (GuiCoord) { 0.5f, GuiUnit_Relative, GuiCoordAlign_Center };
-	d->data.width = (GuiDimension) { 1.f, GuiUnit_Relative };
-	d->data.height = (GuiDimension) { 1.f, GuiUnit_Relative };
+	d->x = (GuiCoord) { 0.5f, GuiUnit_Relative, GuiCoordAlign_Center };
+	d->y = (GuiCoord) { 0.5f, GuiUnit_Relative, GuiCoordAlign_Center };
+	d->width = (GuiDimension) { 1.f, GuiUnit_Relative };
+	d->height = (GuiDimension) { 1.f, GuiUnit_Relative };
 }
 
 static v4 free_layout_compute_bounds(GuiParent* parent)
@@ -1362,10 +1366,10 @@ static v4 free_layout_compute_bounds(GuiParent* parent)
 	GuiLayout* layout = &parent->layout;
 	GuiFreeLayoutInternal* d = (GuiFreeLayoutInternal*)layout->data;
 
-	f32 width = gui_compute_dimension(d->data.width, FALSE, parent->widget_bounds.z);
-	f32 height = gui_compute_dimension(d->data.height, TRUE, parent->widget_bounds.w);
-	f32 x = gui_compute_coord(d->data.x, FALSE, width, parent->widget_bounds.z);
-	f32 y = gui_compute_coord(d->data.y, TRUE, height, parent->widget_bounds.w);
+	f32 width = gui_compute_dimension(d->width, FALSE, parent->widget_bounds.z);
+	f32 height = gui_compute_dimension(d->height, TRUE, parent->widget_bounds.w);
+	f32 x = gui_compute_coord(d->x, FALSE, width, parent->widget_bounds.z);
+	f32 y = gui_compute_coord(d->y, TRUE, height, parent->widget_bounds.w);
 	
 	return v4_set(x, y, width, height);
 }
@@ -1384,6 +1388,9 @@ static u16 free_layout_property_id(const char* name)
 	if (string_equals(name, "height")) {
 		return 4;
 	}
+	if (string_equals(name, "bounds")) {
+		return 5;
+	}
 
 	return 0;
 }
@@ -1398,24 +1405,32 @@ static b8 free_layout_property_read(GuiParent* parent, u32 property, u8* it, u32
 	switch (property)
 	{
 	case 1:
-		if_assert(size == sizeof(d->data.x))
-			dst = (u8*)&d->data.x;
+		if_assert(size == sizeof(d->x))
+			dst = (u8*)&d->x;
 		break;
 
 	case 2:
-		if_assert(size == sizeof(d->data.y))
-			dst = (u8*)&d->data.y;
+		if_assert(size == sizeof(d->y))
+			dst = (u8*)&d->y;
 		break;
 
 	case 3:
-		if_assert(size == sizeof(d->data.width))
-			dst = (u8*)&d->data.width;
+		if_assert(size == sizeof(d->width))
+			dst = (u8*)&d->width;
 		break;
 
 	case 4:
-		if_assert(size == sizeof(d->data.height))
-			dst = (u8*)&d->data.height;
+		if_assert(size == sizeof(d->height))
+			dst = (u8*)&d->height;
 		break;
+
+	case 5:
+		if_assert(size == sizeof(v4)) {
+
+			// TODO
+		}
+		break;
+
 	}
 
 	if (dst != NULL) {
