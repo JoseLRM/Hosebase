@@ -153,6 +153,8 @@ v2 gui_mouse_position();
 
 f32 gui_aspect();
 
+b8 gui_scrolling();
+
 void gui_draw_bounds(v4 bounds, Color color);
 void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc);
 void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment);

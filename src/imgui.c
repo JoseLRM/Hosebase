@@ -42,6 +42,7 @@ typedef struct {
 	char name[NAME_SIZE];
 
 	f32 voffset;
+	f32 voffset_target;
 } GuiParentState;
 
 typedef struct {
@@ -56,6 +57,8 @@ typedef struct {
 	GuiParent* parent_stack[PARENTS_MAX];
 	u32 parent_stack_count;
 
+	GuiParent* parent_in_mouse;
+
 	DynamicArray(u64) id_stack;
 	u64 current_id;
 
@@ -68,6 +71,7 @@ typedef struct {
 	v2 resolution;
 	v2 pixel;
 	v2 mouse_position;
+	b8 scrolling;
 
 	GuiWidgetRegister widget_registers[100];
 	u32 widget_register_count;
@@ -303,13 +307,31 @@ static void adjust_widget_bounds(GuiParent* parent)
 
 			f32 voffset_range = SV_MAX(parent->vrange - parent->bounds.w, 0.f);
 
-			if (voffset_range > 0.001f) {
+			if (gui->parent_in_mouse == parent && voffset_range > 0.001f) {
 
-				// TODO: Take in account priority
-				state->voffset -= input_mouse_wheel() * 0.1f;
+				state->voffset_target -= input_mouse_wheel() * 0.1f;
 			}
 
-			state->voffset = SV_MAX(SV_MIN(voffset_range, state->voffset), 0.f);
+			state->voffset_target = SV_MAX(SV_MIN(voffset_range, state->voffset_target), 0.f);
+
+			f32 dif = state->voffset_target - state->voffset;
+
+			f32 dt = core.delta_time;
+
+			const f32 min_vel = 0.005f;
+			const f32 max_vel = 3.f;
+
+			f32 vel = SV_MAX(SV_MIN(fabs(dif) * 7.f, max_vel), min_vel) * dt;
+
+			f32 add;
+
+			if (dif < 0.f) add = SV_MAX(-vel, dif);
+			else add = SV_MIN(vel, dif);
+
+			if (fabs(add) > 0.0001f)
+				gui->scrolling = TRUE;
+
+			state->voffset += add;
 		}
 	}
 }
@@ -517,6 +539,8 @@ void gui_begin(const char* layout, Font* default_font)
 	gui->aspect = gui->resolution.x / gui->resolution.y;
 	gui->pixel = v2_set(1.f / gui->resolution.x, 1.f / gui->resolution.y);
 	gui->mouse_position = v2_add_scalar(input_mouse_position(), 0.5f);
+
+	gui->scrolling = FALSE;
 
 	gui->parent_stack[0] = &gui->root;
 	gui->parent_stack_count = 1;
@@ -739,12 +763,12 @@ void gui_end()
 						}
 						else break;
 
-						if_assert(size && stack - layout->stack >= size) {
+if_assert(size&& stack - layout->stack >= size) {
 
-							stack -= size;
+	stack -= size;
 
-							gui_layout_property_read(parent, property, stack, size, NULL);
-						}
+	gui_layout_property_read(parent, property, stack, size, NULL);
+}
 						else break;
 					}
 
@@ -832,9 +856,35 @@ void gui_end()
 				assert_title(FALSE, "GUI buffer corrupted");
 			}
 			break;
-			
+
 			}
 		}
+	}
+
+	// Compute parent in mouse
+	{
+		GuiParent* p = &gui->root;
+
+		while (1) {
+
+			b8 keep = FALSE;
+
+			foreach(i, p->child_count) {
+
+				GuiParent* c = p->childs[i];
+
+				if (gui_mouse_in_bounds(c->widget_bounds)) {
+					p = c;
+					keep = TRUE;
+					break;
+				}
+			}
+
+			if (!keep)
+				break;
+		}
+
+		gui->parent_in_mouse = p;
 	}
 
 	// Adjust widget bounds
@@ -1019,6 +1069,11 @@ v2 gui_mouse_position()
 f32 gui_aspect()
 {
 	return gui->aspect;
+}
+
+b8 gui_scrolling()
+{
+	return gui->scrolling;
 }
 
 void gui_draw_bounds(v4 bounds, Color color)
