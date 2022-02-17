@@ -71,6 +71,9 @@ struct GuiParent {
 	GuiLayout layout;
 
 	GuiParent* parent;
+	// TODO: Dynamic
+	GuiParent* childs[1000];
+	u32 child_count;
 
 	struct {
 		GPUImage* image;
@@ -78,8 +81,9 @@ struct GuiParent {
 		Color color;
 	} background;
 
-	f32 voffset;
 	f32 vrange;
+
+	u32 state;
 };
 
 typedef struct {
@@ -121,8 +125,8 @@ b8 gui_has_focus();
 
 // Parents
 
-void gui_begin_parent(const char* layout);
-void gui_end_parent();
+void gui_parent_begin(const char* name, const char* layout);
+void gui_parent_end();
 
 void gui_set_background(GPUImage* image, v4 texcoord, Color color);
 

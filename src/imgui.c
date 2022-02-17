@@ -1,6 +1,7 @@
 #include "Hosebase/imgui.h"
 
-#define PARENTS_MAX 100
+// TODO
+#define PARENTS_MAX 1000
 
 typedef enum {
 	GuiHeader_Widget,
@@ -37,6 +38,13 @@ typedef struct {
 } GuiLayoutRegister;
 
 typedef struct {
+	u64 id;
+	char name[NAME_SIZE];
+
+	f32 voffset;
+} GuiParentState;
+
+typedef struct {
 
 	Buffer buffer;
 	
@@ -70,10 +78,55 @@ typedef struct {
 	struct {
 		u32 layout_free;
 	} register_ids;
+
+	GuiParentState* parent_states;
+	u32 parent_state_count;
+	u32 parent_state_capacity;
 	
 } GUI;
 
 static GUI* gui;
+
+/////////////////////////////// PARENT STATE ////////////////////////////
+
+GuiParentState* gui_parent_state_get(u32 index)
+{
+	if (index >= gui->parent_state_count)
+		return NULL;
+
+	return gui->parent_states + index;
+}
+
+u32 gui_parent_state_find(const char* name, u64 id, b8 create)
+{
+	u32 len = string_size(name);
+
+	if (id == 0 || len == 0)
+		return u32_max;
+
+	u32 index = u32_max;
+
+	foreach(i, gui->parent_state_count) {
+
+		if (gui->parent_states[i].id == id) {
+			index = i;
+			break;
+		}
+	}
+	
+	if (create && index == u32_max) {
+
+		array_prepare(&gui->parent_states, &gui->parent_state_count, &gui->parent_state_capacity, gui->parent_state_capacity + 50, 1, sizeof(GuiParentState));
+
+		index = gui->parent_state_count++;
+		GuiParentState* state = gui->parent_states + index;
+		
+		state->id = id;
+		string_copy(state->name, name, NAME_SIZE);
+	}
+
+	return index;
+}
 
 /////////////////////////////// WIDGET UTILS ///////////////////////////
 
@@ -183,20 +236,22 @@ static void gui_pop_parent()
 	else assert_title(FALSE, "Parent stack error");
 }
 
+static void gui_parent_add_child(GuiParent* parent, GuiParent* child)
+{
+	child->parent = parent;
+
+	// TODO: Dynamic
+	parent->childs[parent->child_count++] = child;
+}
+
 static void adjust_widget_bounds(GuiParent* parent)
 {
+	GuiParentState* state = gui_parent_state_get(parent->state);
+
 	v4 pb = parent->widget_bounds;
 
 	f32 vmin;
 	f32 vmax;
-
-	// TEMP
-	static f32 o = 0.f;
-	{
-		if (parent->widget_count > 10) {
-			parent->voffset = o;
-		}
-	}
 
 	// Adjust into parent bounds and compute min and max
 	if (parent->widget_count == 0) {
@@ -206,11 +261,13 @@ static void adjust_widget_bounds(GuiParent* parent)
 	}
 	else {
 
-		vmin = pb.y - pb.w * 0.5f + parent->voffset;
-		vmax = pb.y + pb.w * 0.5f + parent->voffset;
+		f32 voffset = (state != NULL) ? state->voffset : 0.f;
+
+		vmin = pb.y - pb.w * 0.5f + voffset;
+		vmax = pb.y + pb.w * 0.5f + voffset;
 
 		f32 parent_left = pb.x - (pb.z * 0.5f);
-		f32 parent_bottom = pb.y - (pb.w * 0.5f) + parent->voffset;
+		f32 parent_bottom = pb.y - (pb.w * 0.5f) + voffset;
 
 		u8* it = parent->widget_buffer;
 
@@ -228,25 +285,32 @@ static void adjust_widget_bounds(GuiParent* parent)
 
 			it += sizeof(GuiWidget) + gui_widget_size(w->type);
 		}
+
+		foreach(i, parent->child_count) {
+
+			GuiParent* p = parent->childs[i];
+
+			vmin = SV_MIN(vmin, p->bounds.y - p->bounds.w * 0.5f);
+			vmax = SV_MAX(vmax, p->bounds.y + p->bounds.w * 0.5f);
+		}
 	}
 
 	// Adjust offsets
 	{
 		parent->vrange = vmax - vmin;
 
-		f32 voffset_range = SV_MAX(parent->vrange - parent->bounds.w, 0.f);
+		if (state != NULL) {
 
-		if (voffset_range > 0.001f) {
+			f32 voffset_range = SV_MAX(parent->vrange - parent->bounds.w, 0.f);
 
-			// TODO: Take in account priority
-			o -= input_mouse_wheel() * 0.1f;
+			if (voffset_range > 0.001f) {
+
+				// TODO: Take in account priority
+				state->voffset -= input_mouse_wheel() * 0.1f;
+			}
+
+			state->voffset = SV_MAX(SV_MIN(voffset_range, state->voffset), 0.f);
 		}
-
-		// TEMP
-		if (voffset_range > 0.001f)
-
-
-		o = SV_MAX(SV_MIN(voffset_range, o), 0.f);
 	}
 }
 
@@ -270,11 +334,11 @@ static void update_parent(GuiParent* parent)
 
 static void draw_parent(GuiParent* parent)
 {
-	if (!gui_bounds_inside(parent->bounds))
+	if (!gui_bounds_inside_bounds(parent->bounds, (parent->parent != NULL) ? parent->parent->bounds : (v4) {0.5f, 0.5f, 1.f, 1.f}))
 		return;
 
 	v4 b = parent->widget_bounds;
-	imrend_push_scissor(b.x, b.y, b.z, b.w, FALSE, gui->cmd);
+	imrend_push_scissor(b.x, b.y, b.z, b.w, TRUE, gui->cmd);
 
 	// Background
 	{
@@ -282,12 +346,11 @@ static void draw_parent(GuiParent* parent)
 	}
 
 	// Draw childs
-	foreach(i, gui->parent_count) {
+	foreach(i, parent->child_count) {
 
-		GuiParent* child = gui->parents + i;
+		GuiParent* child = parent->childs[i];
 
-		if (child->parent == parent)
-			draw_parent(child);
+		draw_parent(child);
 	}
 
 	// Draw widgets
@@ -482,6 +545,8 @@ void gui_end()
 		gui->root.widget_count = 0;
 		gui->root.bounds = v4_set(0.5f, 0.5f, 1.f, 1.f);
 		gui->root.widget_bounds = gui->root.bounds;
+		gui->root.state = gui_parent_state_find("root", 0x39485763293ULL, TRUE);
+		gui->root.child_count = 0;
 		gui_initialize_layout(&gui->root);
 
 		gui->parent_stack[0] = &gui->root;
@@ -545,17 +610,26 @@ void gui_end()
 				GuiParent* current = gui_current_parent();
 
 				GuiParent* parent = allocate_parent();
-				parent->parent = current;
+				gui_parent_add_child(current, parent);
+
+				const char* name;
+
+				gui_read_text(it, name);
 				gui_read(it, parent->id);
 				gui_read(it, parent->layout.type);
 				parent->bounds = gui_compute_bounds(current);
 
+				parent->state = gui_parent_state_find(name, parent->id, TRUE);
+
 				if (current) {
 					v4 pb = parent->bounds;
 					v4 b = current->bounds;
+
+					GuiParentState* state = gui_parent_state_get(current->state);
+					f32 voffset = (state != NULL) ? state->voffset : 0.f;
 		
 					pb.x = (pb.x * b.z) + b.x - (b.z * 0.5f);
-					pb.y = (pb.y * b.w) + b.y - (b.w * 0.5f);
+					pb.y = (pb.y * b.w) + b.y - (b.w * 0.5f) + voffset;
 					pb.z *= b.z;
 					pb.w *= b.w;
 
@@ -847,11 +921,15 @@ void gui_pop_id(u32 count)
 	}
 }
 
-void gui_begin_parent(const char* layout)
+void gui_parent_begin(const char* name, const char* layout)
 {
+	name = string_validate(name);
+
 	GuiHeader header = GuiHeader_BeginParent;
 	gui_write(header);
-	u64 id = hash_combine(0x83487, gui->current_id);
+
+	gui_write_text(name);
+	u64 id = hash_combine(0x83487ULL ^ hash_string(name), gui->current_id);
 	gui_write(id);
 
 	u32 layout_index = gui_find_layout_index(layout);
@@ -868,7 +946,7 @@ void gui_begin_parent(const char* layout)
 	gui_push_id(id);
 }
 
-void gui_end_parent()
+void gui_parent_end()
 {
 	GuiHeader header = GuiHeader_EndParent;
 	gui_write(header);
