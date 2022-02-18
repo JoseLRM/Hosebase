@@ -235,7 +235,16 @@ static void gui_pop_parent()
 {
 	if (gui->parent_stack_count != 0) {
 		gui->parent_stack_count--;
-		gui->parent_stack[gui->parent_stack_count] = NULL;
+		
+		GuiParent* parent = gui->parent_stack[gui->parent_stack_count];
+
+		if (parent != NULL) {
+
+			assert(parent->layout.stack_size == 0);
+			parent->layout.stack_size = 0;
+
+			gui->parent_stack[gui->parent_stack_count] = NULL;
+		}
 	}
 	else assert_title(FALSE, "Parent stack error");
 }
@@ -874,7 +883,7 @@ if_assert(size&& stack - layout->stack >= size) {
 
 				GuiParent* c = p->childs[i];
 
-				if (gui_mouse_in_bounds(c->widget_bounds)) {
+				if (c->state != u32_max && gui_mouse_in_bounds(c->widget_bounds)) {
 					p = c;
 					keep = TRUE;
 					break;
