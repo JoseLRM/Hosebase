@@ -172,14 +172,22 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 
 // Layout property stack
 
-void gui_layout_push_ex(const char* name, const void* data, u16 size);
-void gui_layout_set_ex(const char* name, const void* data, u16 size);
+void gui_layout_push_ex(u16 property_id, const void* data, u16 size);
+void gui_layout_set_ex(u16 property_id, const void* data, u16 size);
 void gui_layout_pop(u32 count);
+
+typedef enum {
+	GuiFreeLayout_X,
+	GuiFreeLayout_Y,
+	GuiFreeLayout_Width,
+	GuiFreeLayout_Height,
+	GuiFreeLayout_Bounds,
+} GuiFreeLayout;
 
 // Widget property stack
 
-void gui_widget_push_ex(u32 widget_id, const char* name, const void* data, u16 size);
-void gui_widget_set_ex(u32 widget_id, const char* name, const void* data, u16 size);
+void gui_widget_push_ex(u32 widget_id, u16 property_id, const void* data, u16 size);
+void gui_widget_set_ex(u32 widget_id, u16 property_id, const void* data, u16 size);
 void gui_widget_pop(u32 widget_id, u32 count);
 
 // Registers
@@ -190,7 +198,6 @@ typedef struct {
 	void (*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
 	void (*draw_fn)(GuiWidget* widget);
 	b8(*property_read_fn)(u32 property, u8* it, u32 size, u8* pop_data);
-	u16(*property_id_fn)(const char* name);
 	u32 size;
 } GuiRegisterWidgetDesc;
 
@@ -201,7 +208,6 @@ typedef struct {
 	void(*initialize_fn)(GuiParent* parent);
 	v4(*compute_bounds_fn)(GuiParent* parent);
 	b8(*property_read_fn)(GuiParent* parent, u32 property, u8* it, u32 size, u8* pop_data);
-	u16(*property_id_fn)(const char* name);
 } GuiRegisterLayoutDesc;
 
 u32 gui_register_layout(const GuiRegisterLayoutDesc* desc);

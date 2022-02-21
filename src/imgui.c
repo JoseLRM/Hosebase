@@ -21,7 +21,6 @@ typedef struct {
 	void(*update_fn)(GuiParent* parent, GuiWidget* widget, b8 has_focus);
 	void(*draw_fn)(GuiWidget* widget);
 	b8(*property_read_fn)(u32 property, u8* it, u32 size, u8* pop_data);
-	u16(*property_id_fn)(const char* name);
 	u32 size;
 
 	u8 stack[_GUI_WIDGET_STACK_SIZE];
@@ -33,7 +32,6 @@ typedef struct {
 	void(*initialize_fn)(GuiParent* parent);
 	v4(*compute_bounds_fn)(GuiParent* parent);
 	b8(*property_read_fn)(GuiParent* parent, u32 property, u8* it, u32 size, u8* pop_data);
-	u16(*property_id_fn)(const char* name);
 	char name[NAME_SIZE];
 } GuiLayoutRegister;
 
@@ -172,12 +170,6 @@ static b8 gui_widget_property_read(u32 type, u32 property, u8* it, u32 size, u8*
 	return gui->widget_registers[type].property_read_fn(property, it, size, pop_data);
 }
 
-static u16 gui_widget_property_id(u32 type, const char* name)
-{
-	if (type >= gui->widget_register_count) return 0;
-	return gui->widget_registers[type].property_id_fn(name);
-}
-
 //////////////////////////////// LAYOUT UTILS //////////////////////
 
 static void gui_initialize_layout(GuiParent* parent)
@@ -203,14 +195,6 @@ static b8 gui_layout_property_read(GuiParent* parent, u32 property, u8* it, u32 
 
 	if (type >= gui->layout_register_count || type == 0) return FALSE;
 	return gui->layout_registers[type].property_read_fn(parent, property, it, size, pop_data);
-}
-
-static u32 gui_layout_property_id(GuiParent* parent, const char* name)
-{
-	u32 type = parent->layout.type;
-
-	if (type >= gui->layout_register_count || type == 0) return 0;
-	return gui->layout_registers[type].property_id_fn(name);
 }
 
 static u32 gui_find_layout_index(const char* name)
@@ -708,39 +692,36 @@ void gui_end()
 				u16 size;
 				gui_read(it, property);
 
-				if (property != 0) {
+				gui_read(it, size);
 
-					gui_read(it, size);
+				GuiParent* parent = gui_current_parent();
+				if (parent) {
 
-					GuiParent* parent = gui_current_parent();
-					if (parent) {
+					GuiLayout* layout = &parent->layout;
 
-						GuiLayout* layout = &parent->layout;
+					if (header == GuiHeader_LayoutPush) {
 
-						if (header == GuiHeader_LayoutPush) {
+						u8* stack = layout->stack + layout->stack_size;
+						b8 res = gui_layout_property_read(parent, property, it, size, stack);
 
-							u8* stack = layout->stack + layout->stack_size;
-							b8 res = gui_layout_property_read(parent, property, it, size, stack);
-
-							if (!res) {
-								size = 0;
-							}
-
-							stack += size;
-
-							SV_BUFFER_WRITE(stack, property);
-							SV_BUFFER_WRITE(stack, size);
-
-							layout->stack_size = stack - layout->stack;
+						if (!res) {
+							size = 0;
 						}
-						else {
 
-							gui_layout_property_read(parent, property, it, size, NULL);
-						}
+						stack += size;
+
+						SV_BUFFER_WRITE(stack, property);
+						SV_BUFFER_WRITE(stack, size);
+
+						layout->stack_size = stack - layout->stack;
 					}
+					else {
 
-					it += size;
+						gui_layout_property_read(parent, property, it, size, NULL);
+					}
 				}
+
+				it += size;
 			}
 			break;
 
@@ -795,30 +776,27 @@ if_assert(size&& stack - layout->stack >= size) {
 				gui_read(it, type);
 				gui_read(it, property);
 
-				if (property != 0) {
+				gui_read(it, size);
 
-					gui_read(it, size);
+				u8* stack = gui->widget_registers[type].stack;
+				u32 stack_size = gui->widget_registers[type].stack_size;
 
-					u8* stack = gui->widget_registers[type].stack;
-					u32 stack_size = gui->widget_registers[type].stack_size;
+				u8* s = stack + stack_size;
 
-					u8* s = stack + stack_size;
+				b8 res = gui_widget_property_read(type, property, it, size, s);
 
-					b8 res = gui_widget_property_read(type, property, it, size, s);
-
-					if (!res) {
-						size = 0;
-					}
-
-					s += size;
-
-					SV_BUFFER_WRITE(s, property);
-					SV_BUFFER_WRITE(s, size);
-
-					gui->widget_registers[type].stack_size = s - stack;
-
-					it += size;
+				if (!res) {
+					size = 0;
 				}
+
+				s += size;
+
+				SV_BUFFER_WRITE(s, property);
+				SV_BUFFER_WRITE(s, size);
+
+				gui->widget_registers[type].stack_size = s - stack;
+
+				it += size;
 			}
 			break;
 
@@ -1034,7 +1012,6 @@ u32 gui_register_widget(const GuiRegisterWidgetDesc* desc)
 	gui->widget_registers[i].read_fn = desc->read_fn;
 	gui->widget_registers[i].update_fn = desc->update_fn;
 	gui->widget_registers[i].draw_fn = desc->draw_fn;
-	gui->widget_registers[i].property_id_fn = desc->property_id_fn;
 	gui->widget_registers[i].property_read_fn = desc->property_read_fn;
 	gui->widget_registers[i].size = desc->size;
 
@@ -1049,7 +1026,6 @@ u32 gui_register_layout(const GuiRegisterLayoutDesc* desc)
 	gui->layout_registers[i].initialize_fn = desc->initialize_fn;
 	gui->layout_registers[i].compute_bounds_fn = desc->compute_bounds_fn;
 	gui->layout_registers[i].property_read_fn = desc->property_read_fn;
-	gui->layout_registers[i].property_id_fn = desc->property_id_fn;
 
 	return i;
 }
@@ -1267,43 +1243,31 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 
 ///////////////////////////////// LAYOUT STACK ///////////////////////////////
 
-void gui_layout_push_ex(const char* name, const void* data, u16 size)
+void gui_layout_push_ex(u16 property_id, const void* data, u16 size)
 {
 	GuiParent* parent = gui_current_parent();
 
 	if (parent != NULL) {
-
-		u16 property_id = gui_layout_property_id(parent, name);
 
 		GuiHeader header = GuiHeader_LayoutPush;
 		gui_write(header);
 		gui_write(property_id);
-
-		if (property_id != 0) {
-
-			gui_write(size);
-			gui_write_(data, size);
-		}
+		gui_write(size);
+		gui_write_(data, size);
 	}
 }
 
-void gui_layout_set_ex(const char* name, const void* data, u16 size)
+void gui_layout_set_ex(u16 property_id, const void* data, u16 size)
 {
 	GuiParent* parent = gui_current_parent();
 
 	if (parent != NULL) {
 
-		u16 property_id = gui_layout_property_id(parent, name);
-
 		GuiHeader header = GuiHeader_LayoutSet;
 		gui_write(header);
 		gui_write(property_id);
-
-		if (property_id != 0) {
-
-			gui_write(size);
-			gui_write_(data, size);
-		}
+		gui_write(size);
+		gui_write_(data, size);
 	}
 }
 
@@ -1319,26 +1283,20 @@ void gui_layout_pop(u32 count)
 	}
 }
 
-void gui_widget_push_ex(u32 widget_id, const char* name, const void* data, u16 size)
+void gui_widget_push_ex(u32 widget_id, u16 property_id, const void* data, u16 size)
 {
 	u16 type_ = widget_id;
-	u16 property_id = gui_widget_property_id(widget_id, name);
 
 	GuiHeader header = GuiHeader_WidgetPush;
 	gui_write(header);
 	gui_write(type_);
 	gui_write(property_id);
-
-	if (property_id != 0) {
-
-		gui_write(size);
-		gui_write_(data, size);
-	}
+	gui_write(size);
+	gui_write_(data, size);
 }
 
-void gui_widget_set_ex(u32 widget_id, const char* name, const void* data, u16 size)
+void gui_widget_set_ex(u32 widget_id, u16 property_id, const void* data, u16 size)
 {
-	u16 property_id = gui_widget_property_id(widget_id, name);
 	gui_widget_property_read(widget_id, property_id, (void*)data, size, NULL);
 }
 
@@ -1383,27 +1341,6 @@ static v4 free_layout_compute_bounds(GuiParent* parent)
 	return v4_set(x, y, width, height);
 }
 
-static u16 free_layout_property_id(const char* name)
-{
-	if (string_equals(name, "x")) {
-		return 1;
-	}
-	if (string_equals(name, "y")) {
-		return 2;
-	}
-	if (string_equals(name, "width")) {
-		return 3;
-	}
-	if (string_equals(name, "height")) {
-		return 4;
-	}
-	if (string_equals(name, "bounds")) {
-		return 5;
-	}
-
-	return 0;
-}
-
 static b8 free_layout_property_read(GuiParent* parent, u32 property, u8* it, u32 size, u8* pop_data)
 {
 	GuiLayout* layout = &parent->layout;
@@ -1413,27 +1350,27 @@ static b8 free_layout_property_read(GuiParent* parent, u32 property, u8* it, u32
 
 	switch (property)
 	{
-	case 1:
+	case GuiFreeLayout_X:
 		if_assert(size == sizeof(d->x))
 			dst = (u8*)&d->x;
 		break;
 
-	case 2:
+	case GuiFreeLayout_Y:
 		if_assert(size == sizeof(d->y))
 			dst = (u8*)&d->y;
 		break;
 
-	case 3:
+	case GuiFreeLayout_Width:
 		if_assert(size == sizeof(d->width))
 			dst = (u8*)&d->width;
 		break;
 
-	case 4:
+	case GuiFreeLayout_Height:
 		if_assert(size == sizeof(d->height))
 			dst = (u8*)&d->height;
 		break;
 
-	case 5:
+	case GuiFreeLayout_Bounds:
 		if_assert(size == sizeof(v4)) {
 
 			// TODO
@@ -1462,6 +1399,5 @@ static void register_default_layouts()
 	desc.initialize_fn = free_layout_initialize;
 	desc.compute_bounds_fn = free_layout_compute_bounds;
 	desc.property_read_fn = free_layout_property_read;
-	desc.property_id_fn = free_layout_property_id;
 	gui->register_ids.layout_free = gui_register_layout(&desc);
 }
