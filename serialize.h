@@ -159,10 +159,8 @@ typedef struct {
 	b8 extern_data;
 } Serializer;
 
-inline void serializer_write(Serializer* s, const void* data, u32 size)
+inline void serializer_prepare(Serializer* s, u32 size)
 {
-	assert(data && size);
-
 	if (s->cursor + size > s->capacity) {
 
 		u32 new_capacity = SV_MAX(s->cursor + size, s->capacity + SERIALIZER_ALLOCATE);
@@ -178,6 +176,13 @@ inline void serializer_write(Serializer* s, const void* data, u32 size)
 		s->capacity = new_capacity;
 		s->extern_data = FALSE;
 	}
+}
+
+inline void serializer_write(Serializer* s, const void* data, u32 size)
+{
+	assert(data && size);
+
+	serializer_prepare(s, size);
 
 	memory_copy(s->data + s->cursor, data, size);
 	s->cursor += size;

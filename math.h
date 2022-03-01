@@ -418,6 +418,11 @@ inline v3 v3_reflection(v3 v, v3 normal)
 	return v3_mul_scalar(v3_sub(normal, v), s);
 }
 
+inline b8 v2_i32_equals(v2_i32 v0, v2_i32 v1)
+{
+	return v0.x == v1.x && v0.y == v1.y;
+}
+
 inline b8 v3_i32_equals(v3_i32 v0, v3_i32 v1)
 {
 	return v0.x == v1.x && v0.y == v1.y && v0.z == v1.z;

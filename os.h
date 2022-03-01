@@ -145,12 +145,22 @@ struct _LockGuard {
 
 #endif
 
+typedef enum {
+	ThreadPrority_Highest,
+	ThreadPrority_High,
+	ThreadPrority_Normal,
+	ThreadPrority_Low,
+	ThreadPrority_Lowest
+} ThreadPrority;
+
 Thread thread_create(ThreadMainFn main, void* data);
 void   thread_destroy(Thread thread);
 void   thread_wait(Thread thread);
 void   thread_sleep(u64 millis);
 void   thread_yield();
 u64    thread_id();
+
+void thread_configure(Thread thread, const char* name, u64 affinity_mask, ThreadPrority priority);
 
 typedef struct {
 	TaskFn fn;

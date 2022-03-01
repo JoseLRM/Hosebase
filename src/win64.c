@@ -1338,6 +1338,37 @@ u64 thread_id()
 	return (u64)GetCurrentThreadId();
 }
 
+void thread_configure(Thread thread, const char* name, u64 affinity_mask, ThreadPrority priority)
+{
+	u32 win_priority;
+
+	switch (priority) {
+
+	case ThreadPrority_Highest:
+		win_priority = THREAD_PRIORITY_HIGHEST;
+		break;
+
+	case ThreadPrority_High:
+		win_priority = THREAD_PRIORITY_ABOVE_NORMAL;
+		break;
+
+	case ThreadPrority_Normal:
+		win_priority = THREAD_PRIORITY_NORMAL;
+	default:
+
+	case ThreadPrority_Low:
+		win_priority = THREAD_PRIORITY_BELOW_NORMAL;
+		break;
+
+	case ThreadPrority_Lowest:
+		win_priority = THREAD_PRIORITY_LOWEST;
+		break;
+
+	}
+
+	configure_thread((HANDLE)thread, name, affinity_mask, win_priority);
+}
+
 #define WRITE_BARRIER _WriteBarrier(); _mm_sfence()
 #define READ_BARRIER _ReadBarrier()
 #define GENERAL_BARRIER WRITE_BARRIER; READ_BARRIER
@@ -1473,13 +1504,13 @@ static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
 
 	TaskSystemData* data = &platform->task_system;
 
-	TaskData* task = data->tasks + data->task_count % TASK_QUEUE_SIZE;
+	WRITE_BARRIER;
+	++data->task_count;
+
+	TaskData* task = data->tasks + (data->task_count - 1) % TASK_QUEUE_SIZE;
 	task->fn = desc.fn;
 	task->context = ctx;
 	if (desc.data) memory_copy(task->user_data, desc.data, desc.size);
-
-	WRITE_BARRIER;
-	++data->task_count;
 
 	ReleaseSemaphore(data->semaphore, 1, 0);
 }
