@@ -31,8 +31,9 @@ typedef struct {
 typedef struct {
 
 	TaskContext* context;
-	TaskFn fn;
+	void* fn;
 	b8 user_data[TASK_DATA_SIZE];
+	u8 type;
 
 } TaskData;
 
@@ -1289,6 +1290,18 @@ void mutex_lock(Mutex mutex)
 
 	assert_title(mutex, "The mutex must be valid");
 }
+
+b8 mutex_try_lock(Mutex mutex)
+{
+	b8 lock = FALSE;
+
+	if (mutex) {
+		lock = WaitForSingleObject((HANDLE)mutex, 0) != WAIT_TIMEOUT;
+	}
+
+	assert_title(mutex, "The mutex must be valid");
+	return lock;
+}
     
 void mutex_unlock(Mutex mutex)
 {
@@ -1470,12 +1483,28 @@ inline b8 _task_thread_do_work()
 
 			TaskData task = data->tasks[task_index % TASK_QUEUE_SIZE];
 
-			assert(task.fn != NULL);
-			task.fn(task.user_data);
+			// Task function
+			if (task.type == 1) {
 
-			InterlockedIncrement((volatile LONG*)& data->task_completed);
-			if (task.context) InterlockedIncrement((volatile LONG*)& task.context->completed);
-			done = TRUE;
+				assert(task.fn != NULL);
+
+				TaskFn fn = task.fn;
+				fn(task.user_data);
+
+				InterlockedIncrement((volatile LONG*)&data->task_completed);
+				if (task.context) InterlockedIncrement((volatile LONG*)&task.context->completed);
+				done = TRUE;
+			}
+			// Reserve thread
+			else if (task.type == 2) {
+
+				ThreadMainFn fn = task.fn;
+				void* main_data = *(void**)task.user_data;
+
+				fn(main_data);
+
+				InterlockedIncrement((volatile LONG*)&data->task_completed);
+			}
 		}
 	}
 
@@ -1504,13 +1533,14 @@ static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
 
 	TaskSystemData* data = &platform->task_system;
 
-	WRITE_BARRIER;
-	++data->task_count;
-
-	TaskData* task = data->tasks + (data->task_count - 1) % TASK_QUEUE_SIZE;
+	TaskData* task = data->tasks + data->task_count % TASK_QUEUE_SIZE;
 	task->fn = desc.fn;
 	task->context = ctx;
 	if (desc.data) memory_copy(task->user_data, desc.data, desc.size);
+	task->type = 1;
+
+	WRITE_BARRIER;
+	++data->task_count;
 
 	ReleaseSemaphore(data->semaphore, 1, 0);
 }
@@ -1527,6 +1557,22 @@ void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context)
 	foreach(i, task_count) {
 		_task_add_queue(tasks[i], context);
 	}
+}
+
+void task_reserve_thread(ThreadMainFn main_fn, void* main_data)
+{
+	TaskSystemData* data = &platform->task_system;
+
+	TaskData* task = data->tasks + data->task_count % TASK_QUEUE_SIZE;
+	task->fn = main_fn;
+	task->context = NULL;
+	memory_copy(task->user_data, &main_data, sizeof(void*));
+	task->type = 2;
+
+	WRITE_BARRIER;
+	++data->task_count;
+
+	ReleaseSemaphore(data->semaphore, 1, 0);
 }
 
 void task_wait(TaskContext* context)

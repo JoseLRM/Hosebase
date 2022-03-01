@@ -131,6 +131,7 @@ Mutex mutex_create();
 void  mutex_destroy(Mutex mutex);
 
 void mutex_lock(Mutex mutex);
+b8 mutex_try_lock(Mutex mutex);
 void mutex_unlock(Mutex mutex);
 
 #ifdef __cplusplus
@@ -171,6 +172,8 @@ typedef struct {
 void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context);
 void task_wait(TaskContext* context);
 b8 task_running(TaskContext* context);
+
+void task_reserve_thread(ThreadMainFn main_fn, void* main_data);
 
 u32 interlock_increment_u32(volatile u32* n);
 u32 interlock_decrement_u32(volatile u32* n);
