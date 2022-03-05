@@ -101,6 +101,8 @@ void throw_assertion(const char* title, u32 line, const char* file);
 inline b8 throw_assertion_and_return_false(const char* title, u32 line, const char* file) { throw_assertion(title, line, file); return FALSE; }
 #define if_assert(x) if ((x) ? TRUE : (throw_assertion_and_return_false(#x, __LINE__, __FILE__)))
 
+#define assert_static(x) _STATIC_ASSERT(x)
+
 #define SV_LOG_INFO(x, ...) print("[INFO]" x, __VA_ARGS__)
 #define SV_LOG_WARNING(x, ...) print("[WARNING]" x, __VA_ARGS__)
 #define SV_LOG_ERROR(x, ...) print("[ERROR]" x, __VA_ARGS__)

@@ -32,7 +32,10 @@ typedef struct {
 	u32 current_frame;
 	b8 is_function;
 
+	u64 flags;
+
 	f64 total_time; // Accumulation of frames
+	f64 max_time;
 
 	char name[PROFILER_FN_NAME_SIZE];
 	u64 hash;
@@ -47,6 +50,8 @@ typedef struct {
 
 void profiler_lock();
 void profiler_unlock();
+
+void profiler_function_compute_total_time();
 
 u32 profiler_function_count();
 ProfilerFunctionData* profiler_function_get(u32 index);

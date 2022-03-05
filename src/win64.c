@@ -512,7 +512,7 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	platform->add_time = 0.0;
 	platform->last_time = 0.0;
 
-	configure_thread(GetCurrentThread(), "main", 1ULL, THREAD_PRIORITY_HIGHEST);
+	configure_thread(GetCurrentThread(), "main_thread", 1ULL, THREAD_PRIORITY_HIGHEST);
 	
 	platform->hinstance = GetModuleHandle(NULL);
 	

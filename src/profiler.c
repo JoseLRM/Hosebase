@@ -111,6 +111,28 @@ void profiler_unlock()
 	mutex_unlock(profiler->mutex);
 }
 
+void profiler_function_compute_total_time()
+{
+	foreach(i, profiler->function_count) {
+
+		ProfilerFunctionData* fn = profiler->functions + i;
+
+		f64 total_time = 0.0;
+
+		u32 add = SV_MIN(20, fn->current_frame);
+
+		for (u32 i = fn->current_frame - add; i <= fn->current_frame; ++i) {
+
+			const ProfilerFunctionFrame* frame = fn->frames + (i % PROFILER_FUNCTION_CACHE);
+
+			total_time += frame->total_time / (f64)add;
+			fn->max_time = SV_MAX(fn->max_time, frame->total_time);
+		}
+
+		fn->total_time = total_time;
+	}
+}
+
 u32 profiler_function_count()
 {
 	return profiler->function_count;
