@@ -7,8 +7,14 @@ SV_BEGIN_C_HEADER
 
 void filepath_resolve(char* dst, const char* src);
 void filepath_user(char* dst);
-	
-void print(const char* str, ...);
+
+typedef enum {
+	PrintStyle_Info,
+	PrintStyle_Warning,
+	PrintStyle_Error,
+} PrintStyle;
+
+void print(PrintStyle style, const char* str, ...);
 
 void show_message(const char* title, const char* content, b8 error);
 b8   show_dialog_yesno(const char* title, const char* content); // Returns true if yes

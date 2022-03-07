@@ -103,9 +103,9 @@ inline b8 throw_assertion_and_return_false(const char* title, u32 line, const ch
 
 #define assert_static(x) _STATIC_ASSERT(x)
 
-#define SV_LOG_INFO(x, ...) print("[INFO]" x, __VA_ARGS__)
-#define SV_LOG_WARNING(x, ...) print("[WARNING]" x, __VA_ARGS__)
-#define SV_LOG_ERROR(x, ...) print("[ERROR]" x, __VA_ARGS__)
+#define SV_LOG_INFO(x, ...) print(PrintStyle_Info, x, __VA_ARGS__)
+#define SV_LOG_WARNING(x, ...) print(PrintStyle_Warning, x, __VA_ARGS__)
+#define SV_LOG_ERROR(x, ...) print(PrintStyle_Error, x, __VA_ARGS__)
 
 #else
 

@@ -63,6 +63,7 @@ typedef struct {
 	f64 add_time;
 	
 	HINSTANCE   hinstance;
+	HANDLE console;
 	HINSTANCE   user_lib;
 	HWND        handle;
 
@@ -515,6 +516,7 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 	configure_thread(GetCurrentThread(), "main_thread", 1ULL, THREAD_PRIORITY_HIGHEST);
 	
 	platform->hinstance = GetModuleHandle(NULL);
+	platform->console = GetStdHandle(STD_OUTPUT_HANDLE);
 	
     {
 		WNDCLASSA c;
@@ -526,7 +528,7 @@ b8 _os_initialize(const OSInitializeDesc* desc)
 		c.hInstance = platform->hinstance;
 	    
 		if (!RegisterClassA(&c)) {
-			print("Can't register window class");
+			SV_LOG_ERROR("Can't register window class");
 			return 1;
 		}
     }
@@ -725,12 +727,40 @@ void _os_close()
 	}
 }
 
-void print(const char* str, ...)
+void print(PrintStyle style, const char* str, ...)
 {
 	va_list args;
 	va_start(args, str);
 
+	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+    WORD saved_attributes;
+
+    // Save current attributes
+    GetConsoleScreenBufferInfo(platform->console, &consoleInfo);
+    saved_attributes = consoleInfo.wAttributes;
+
+	i32 att;
+
+	switch (style) {
+
+	case PrintStyle_Warning:
+		att = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+		break;
+	
+	case PrintStyle_Error:
+		att = FOREGROUND_RED | FOREGROUND_INTENSITY;
+		break;
+
+	default:
+		att = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+
+	}
+
+	SetConsoleTextAttribute(platform->console, att);
 	vprintf(str, args);
+
+	// Restore attributes
+	SetConsoleTextAttribute(platform->console, saved_attributes);
 	
 	va_end(args);
 }
