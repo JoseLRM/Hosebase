@@ -180,8 +180,6 @@ inline void serializer_prepare(Serializer* s, u32 size)
 
 inline void serializer_write(Serializer* s, const void* data, u32 size)
 {
-	assert(data && size);
-
 	serializer_prepare(s, size);
 
 	memory_copy(s->data + s->cursor, data, size);
@@ -372,6 +370,15 @@ inline void deserializer_read(Deserializer* s, void* data, u32 size)
 	else {
 		assert_title(FALSE, "Deserializer overflow");
 		memory_zero(data, size);
+	}
+}
+
+inline void deserializer_ignore(Deserializer* s, u32 size)
+{
+	s->cursor += size;
+	if (s->cursor > s->size) {
+		assert_title(FALSE, "Deserializer overflow");
+		s->cursor = s->size;
 	}
 }
 

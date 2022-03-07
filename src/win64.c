@@ -1518,7 +1518,7 @@ static DWORD WINAPI task_thread(void* arg)
 
 	while (data->running) {
 
-		if (!_task_thread_do_work(thread) && !task_running(NULL)) {
+		if (!_task_thread_do_work() && !task_running(NULL)) {
 			WaitForSingleObjectEx(data->semaphore, INFINITE, FALSE);
 		}
 	}
@@ -1540,9 +1540,12 @@ static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
 	task->type = 1;
 
 	WRITE_BARRIER;
-	++data->task_count;
+	volatile u32 task_index = data->task_count++;
 
 	ReleaseSemaphore(data->semaphore, 1, 0);
+
+	while (task_index >= data->task_next)
+		SwitchToThread();
 }
 
 void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context)
