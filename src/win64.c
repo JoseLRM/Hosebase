@@ -1583,8 +1583,7 @@ void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context)
 	TaskSystemData* data = &platform->task_system;
 	
 	if (context) {
-		context->completed = 0;
-		context->dispatched = task_count;
+		context->dispatched += task_count;
 	}
 
 	foreach(i, task_count) {

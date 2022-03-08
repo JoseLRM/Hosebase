@@ -175,9 +175,31 @@ typedef struct {
 	u32 size;
 } TaskDesc;
 
+typedef struct
+{
+	void *data;
+	u32 index;
+} ForeachTask;
+
 void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context);
 void task_wait(TaskContext* context);
 b8 task_running(TaskContext* context);
+
+#define foreach_multithreaded(_fn, _count, _data, _ctx) \
+	do                                                  \
+	{                                                   \
+		foreach (i, (_count))                           \
+		{                                               \
+			ForeachTask task;                           \
+			task.data = (_data);                        \
+			task.index = i;                             \
+			TaskDesc desc;                              \
+			desc.fn = _fn;                              \
+			desc.size = sizeof(ForeachTask);            \
+			desc.data = &task;                          \
+			task_dispatch(&desc, 1, _ctx);              \
+		}                                               \
+	} while (0)
 
 void task_reserve_thread(ThreadMainFn main_fn, void* main_data);
 
