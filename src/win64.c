@@ -43,6 +43,7 @@ typedef struct {
 	volatile u32 task_count;
 	volatile u32 task_completed;
 	volatile u32 task_next;
+	volatile u32 reserved_threads;
 
 	HANDLE semaphore;
 
@@ -1528,12 +1529,15 @@ inline b8 _task_thread_do_work()
 			// Reserve thread
 			else if (task.type == 2) {
 
+				InterlockedIncrement((volatile LONG*)&data->task_completed);
+				InterlockedIncrement((volatile LONG*)&data->reserved_threads);
+
 				ThreadMainFn fn = task.fn;
 				void* main_data = *(void**)task.user_data;
 
 				fn(main_data);
 
-				InterlockedIncrement((volatile LONG*)&data->task_completed);
+				InterlockedDecrement((volatile LONG*)&data->reserved_threads);
 			}
 		}
 	}
@@ -1605,6 +1609,17 @@ void task_reserve_thread(ThreadMainFn main_fn, void* main_data)
 	++data->task_count;
 
 	ReleaseSemaphore(data->semaphore, 1, 0);
+}
+
+void task_join()
+{
+	TaskSystemData* data = &platform->task_system;
+
+	task_wait(NULL);
+
+	while (data->reserved_threads) {
+		Sleep(10);
+	}
 }
 
 void task_wait(TaskContext* context)

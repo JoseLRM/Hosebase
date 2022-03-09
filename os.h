@@ -203,6 +203,8 @@ b8 task_running(TaskContext* context);
 
 void task_reserve_thread(ThreadMainFn main_fn, void* main_data);
 
+void task_join();
+
 u32 interlock_increment_u32(volatile u32* n);
 u32 interlock_decrement_u32(volatile u32* n);
 
