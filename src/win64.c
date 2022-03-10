@@ -1574,12 +1574,9 @@ static void _task_add_queue(TaskDesc desc, TaskContext* ctx)
 	task->type = 1;
 
 	WRITE_BARRIER;
-	volatile u32 task_index = data->task_count++;
+	++data->task_count;
 
 	ReleaseSemaphore(data->semaphore, 1, 0);
-
-	while (task_index >= data->task_next)
-		SwitchToThread();
 }
 
 void task_dispatch(TaskDesc* tasks, u32 task_count, TaskContext* context)
@@ -1606,9 +1603,12 @@ void task_reserve_thread(ThreadMainFn main_fn, void* main_data)
 	task->type = 2;
 
 	WRITE_BARRIER;
-	++data->task_count;
+	volatile u32 task_index = data->task_count++;
 
 	ReleaseSemaphore(data->semaphore, 1, 0);
+
+	while (task_index >= data->task_next)
+		SwitchToThread();
 }
 
 void task_join()
