@@ -48,6 +48,7 @@ inline b8 date_equals(Date d0, Date d1)
 }
 
 f64  timer_now();
+u64  timer_seed();
 Date timer_date();
 
 // Window

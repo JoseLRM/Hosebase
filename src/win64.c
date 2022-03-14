@@ -1087,6 +1087,18 @@ f64 timer_now()
 	return time;
 }
 
+u64 timer_seed()
+{
+	LARGE_INTEGER now, elapsed;
+	QueryPerformanceCounter(&now);
+	
+	elapsed.QuadPart = now.QuadPart - platform->begin_time.QuadPart;
+	elapsed.QuadPart *= 1000000000;
+	elapsed.QuadPart /= platform->clock_frequency.QuadPart;
+
+	return elapsed.QuadPart;
+}
+
 b8 file_date(const char* filepath_, Date* create, Date* last_write, Date* last_access)
 {
 	char filepath[MAX_PATH];

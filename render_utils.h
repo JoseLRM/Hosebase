@@ -77,6 +77,12 @@ void imrend_draw_line(v3 p0, v3 p1, Color color, CommandList cmd);
 void imrend_draw_triangle(v3 p0, v3 p1, v3 p2, Color color, CommandList cmd);
 void imrend_draw_sprite(v3 position, v2 size, Color color, GPUImage* image, GPUImageLayout layout, v4 texcoord, CommandList cmd);
 
+// Custom
+
+typedef void(*ImRendDrawCustomFn)(const void* data, CommandList cmd);
+
+void imrend_draw_custom(ImRendDrawCustomFn fn, const void* data, u32 size, CommandList cmd);
+
 // void imrend_draw_mesh_wireframe(Mesh* mesh, Color color, CommandList cmd);
 
 // TODO: Font, color and alignment in stack

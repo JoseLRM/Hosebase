@@ -149,6 +149,7 @@ typedef enum {
 	ImRendHeader_CustomCamera,
 
 	ImRendHeader_DrawCall,
+	ImRendHeader_CustomDraw,
 } ImRendHeader;
 
 typedef enum {
@@ -346,6 +347,12 @@ void imrend_close()
 
 #define imrend_write(state, data) buffer_write_back(&(state)->buffer, &(data), sizeof(data))
 
+inline void imrend_write_buffer(ImRendState* state, const void* data, u32 size)
+{
+	imrend_write(state, size);
+	buffer_write_back(&state->buffer, data, size);
+}
+
 inline void imrend_write_text(ImRendState* state, const char* text)
 {
 	buffer_write_back(&state->buffer, text, string_size(string_validate(text)) + 1u);
@@ -360,6 +367,13 @@ void* _imrend_read(u8** it, u32 size)
 
 #define imrend_read(T, it) *(T*)_imrend_read(&it, sizeof(T))
 #define imrend_read_text(it) (const char*)it; it += (string_size((const char*)it) + 1)
+
+inline void imrend_read_buffer(u8** it, const void** ptr, u32* size)
+{
+	*size = imrend_read(u32, *it);
+	*ptr = *it;
+	*it += *size;
+}
 
 inline void update_current_matrix(ImRendState* state)
 {
@@ -814,7 +828,21 @@ void imrend_flush(CommandList cmd)
 		}
 		break;
 		
-		
+		case ImRendHeader_CustomDraw:
+		{
+			ImRendDrawCustomFn fn = imrend_read(ImRendDrawCustomFn, it);
+
+			const void* data;
+			u32 size;
+			imrend_read_buffer(&it, &data, &size);
+
+			graphics_renderpass_end(cmd);
+			
+			fn(data, cmd);
+
+			graphics_renderpass_begin(render_pass, att, NULL, 1.f, 0, cmd);
+		}
+		break;
 		
 		}
 	}
@@ -959,6 +987,17 @@ void imrend_draw_sprite(v3 position, v2 size, Color color, GPUImage* image, GPUI
 	imrend_write(state, image);
 	imrend_write(state, layout);
 	imrend_write(state, texcoord);
+}
+
+void imrend_draw_custom(ImRendDrawCustomFn fn, const void* data, u32 size, CommandList cmd)
+{
+	SV_IMREND();
+
+	ImRendHeader header = ImRendHeader_CustomDraw;
+	imrend_write(state, header);
+
+	imrend_write(state, fn);
+	imrend_write_buffer(state, data, size);
 }
 
 /*void imrend_draw_mesh_wireframe(Mesh* mesh, Color color, CommandList cmd)

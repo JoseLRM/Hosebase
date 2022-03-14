@@ -983,11 +983,14 @@ inline m4 m4_projection_orthographic(f32 right, f32 left, f32 top, f32 bottom, f
 {
 	m4 m = m4_zero();
 	m.v[0][0] = 2.f / (right - left);
-	m.v[0][3] = - ((right + left) / (right - left));
+
 	m.v[1][1] = 2.f / (top - bottom);
-	m.v[1][3] = - ((top + bottom) / (top - bottom));
-	m.v[2][2] = -2.f / (far - near);
-	m.v[2][3] = - ((top + bottom) / (top - bottom));
+
+	m.v[2][2] = 2.f / (far - near);
+
+	m.v[0][3] = -(right + left) / (right - left);
+	m.v[1][3] = -(top + bottom) / (top - bottom);
+	m.v[2][3] = -(far + near) / (far - near);
 	m.v[3][3] = 1.f;
 	return m;
 }
@@ -1370,7 +1373,7 @@ inline Color color_white()       { return color_rgb(255u, 255u, 255u); }
 inline u32 math_random_u32(u32 seed)
 {
 	seed = seed * 0x7902854u;
-	seed = (seed << 16) ^ seed;
+	seed = ((seed >> 8) ^ seed) ^ 0x2A5F4D28;
 	return seed;
 }
 
@@ -1394,7 +1397,7 @@ inline u32 math_random_u32_max(u32 seed, u32 max)
 }
 inline u32 math_random_u32_min_max(u32 seed, u32 min, u32 max)
 {
-	return min + (math_random_u32(seed) % (max - min));
+	return min + (math_random_u32(seed) % ((i32)max - (i32)min));
 }
 
 inline f32 math_perlin_noise(u32 seed, f32 n)

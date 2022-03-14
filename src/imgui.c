@@ -984,6 +984,28 @@ void gui_parent_begin(const char* name, const char* layout)
 	gui_push_id(id);
 }
 
+f32 gui_parent_width(GuiUnit unit)
+{
+	GuiParent* parent = gui_current_parent();
+
+	if (parent == NULL)
+		return 0.f;
+
+	f32 v = parent->widget_bounds.z;
+	return gui_recompute_dimension((GuiDimension){v, unit}, FALSE);
+}
+
+f32 gui_parent_height(GuiUnit unit)
+{
+	GuiParent* parent = gui_current_parent();
+
+	if (parent == NULL)
+		return 0.f;
+
+	f32 v = parent->widget_bounds.w;
+	return gui_recompute_dimension((GuiDimension){v, unit}, TRUE);
+}
+
 void gui_parent_end()
 {
 	GuiHeader header = GuiHeader_EndParent;
@@ -1085,6 +1107,11 @@ b8 gui_bounds_inside_bounds(v4 child, v4 parent)
 	b8 v = (fabs(child.y - parent.y) < (child.w + parent.w) * 0.5f);
 
 	return h && v;
+}
+
+CommandList gui_cmd()
+{
+	return gui->cmd;
 }
 
 void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc)
@@ -1234,6 +1261,28 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 
 	case GuiUnit_Pixel:
 		value = dimension.value / parent_dimension * pixel;
+		break;
+
+	}
+
+	return value;
+}
+
+f32 gui_recompute_dimension(GuiDimension dimension, b8 vertical)
+{
+	f32 value = 0.f;
+
+	f32 pixel = vertical ? gui->pixel.y : gui->pixel.x;
+
+	switch (dimension.unit)
+	{
+
+	case GuiUnit_Relative:
+		value = dimension.value;
+		break;
+
+	case GuiUnit_Pixel:
+		value = dimension.value / pixel;
 		break;
 
 	}

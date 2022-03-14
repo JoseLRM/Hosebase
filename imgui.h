@@ -130,6 +130,9 @@ void gui_parent_end();
 
 void gui_set_background(GPUImage* image, v4 texcoord, Color color);
 
+f32 gui_parent_width(GuiUnit unit);
+f32 gui_parent_height(GuiUnit unit);
+
 // Widget utils
 
 #define gui_write(data) gui_write_(&data, sizeof(data))
@@ -155,6 +158,8 @@ f32 gui_aspect();
 
 b8 gui_scrolling();
 
+CommandList gui_cmd();
+
 void gui_draw_bounds(v4 bounds, Color color);
 void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc);
 void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment);
@@ -169,6 +174,7 @@ GuiParent* gui_current_parent();
 
 f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dimension);
 f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimension);
+f32 gui_recompute_dimension(GuiDimension dimension, b8 vertical);
 
 // Layout property stack
 
