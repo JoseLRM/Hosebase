@@ -43,30 +43,6 @@ void memory_free(void* ptr)
 		free(ptr);
 }
 
-void memory_copy(void* dst, const void* src, size_t size)
-{
-	// TODO: Optimize?
-	
-	u8* dst_it = (u8*)dst;
-	const u8* src_it = (const u8*)src;
-
-	foreach(i, size) {
-		dst_it[i] = src_it[i];
-	}
-}
-
-void memory_zero(void* dst, size_t size)
-{
-	// TODO: Optimize?
-	
-	u8* it = (u8*)dst;
-	u8* end = it + size;
-	while (it != end) {
-		*it = 0;
-		++it;
-	}
-}
-
 void memory_swap(void* p0, void* p1, size_t size)
 {
 	// TODO: Optimize?

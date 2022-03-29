@@ -66,6 +66,11 @@ inline f32 math_round(f32 n)
 	else return i;
 }
 
+inline f32 math_fractional(f32 n)
+{
+	return n - (i32)n;
+}
+
 inline f32 math_clamp(f32 min, f32 n, f32 max)
 {
 	if (n < min) n = min;

@@ -508,6 +508,7 @@ inline void deserialize_string(Deserializer* s, char* str, u32 buffer_size)
 		if (s->cursor != s->size) {
 
 			memory_copy(str, s->data + start, s->cursor - start + 1);
+			s->cursor++;
 			return;
 		}
 	}

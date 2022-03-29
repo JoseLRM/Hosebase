@@ -6,6 +6,7 @@
 
 #include "stdlib.h"
 #include "stdio.h"
+#include "string.h"
 #include "stdint.h"
 
 // types
@@ -40,8 +41,10 @@ typedef int64_t b64;
 #define u32_max 0xFFFFFFFF
 #define u64_max 0xFFFFFFFFFFFFFFFF
 
+#define i16_min -32768
 #define i32_min -2147483648
 
+#define i16_max 32767
 #define i32_max 2147483647
 
 /*constexpr i8	i8_min		= std::numeric_limits<i8>::min();
@@ -112,6 +115,7 @@ inline b8 throw_assertion_and_return_false(const char* title, u32 line, const ch
 #define assert(x) {;}
 #define assert_title(x, title) {;}
 #define if_assert(x) if (x)
+#define assert_static(x) {;}
 
 #define SV_LOG_INFO(x, ...) {;}
 #define SV_LOG_WARNING(x, ...) {;}
@@ -249,6 +253,45 @@ typedef struct {
 } v4_i32;
 
 typedef struct {
+		
+	union {
+		struct {
+			i16 x;
+			i16 y;
+		};
+		i16 v[2];
+	};
+	
+} v2_i16;
+
+typedef struct {
+
+	union {
+		struct {
+			i16 x;
+			i16 y;
+			i16 z;
+		};
+		i16 v[3];
+	};
+
+} v3_i16;
+
+typedef struct {
+
+	union {
+		struct {
+			i16 x;
+			i16 y;
+			i16 z;
+			i16 w;
+		};
+		i16 v[4];
+	};
+
+} v4_i16;
+
+typedef struct {
 
 	union {
 		struct {
@@ -259,6 +302,18 @@ typedef struct {
 	};
 
 } v2_u16;
+
+typedef struct {
+
+	union {
+		struct {
+			u8 x;
+			u8 y;
+		};
+		u8 v[2];
+	};
+
+} v2_u8;
 
 typedef struct {
 

@@ -20,8 +20,10 @@ void* memory_allocate(size_t size);
 #endif
 
 void memory_free(void* ptr);
-void memory_copy(void* dst, const void* src, size_t size);
-void memory_zero(void* dst, size_t size);
+
+#define memory_copy(dst, src, size) memcpy(dst, src, size)
+#define memory_zero(dst, size) memset(dst, 0, size)
+
 void memory_swap(void* p0, void* p1, size_t size);
 
 inline b8 array_prepare(void** data, u32* count, u32* capacity, u32 new_capacity, u32 add, u32 stride)

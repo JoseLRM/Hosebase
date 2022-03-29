@@ -158,8 +158,18 @@ b8 _send(const void* data, u32 size, SOCKET socket, struct sockaddr_in dst)
 {
 	int ok = sendto(socket, data, size, 0, (struct sockaddr*) & dst, sizeof(dst));
 
-	if (ok == SOCKET_ERROR) {
-		SV_LOG_ERROR("Can't send data\n");
+	if (ok == SOCKET_ERROR)
+	{
+		i32 error_code = WSAGetLastError();
+
+		char ip[256];
+		inet_ntop(AF_INET, &dst.sin_addr, ip, 256);
+
+		if (error_code == WSAEMSGSIZE)
+			SV_LOG_ERROR("Can't send %u bytes to '%s'. The message is too large\n", size, ip);
+		else
+			SV_LOG_ERROR("Can't send %u bytes to '%s'. Error Code: %u\n", size, ip, error_code);
+
 		return FALSE;
 	}
 
