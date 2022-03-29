@@ -28,6 +28,42 @@ typedef struct {
 } ClientRegister;
 
 typedef struct {
+	WebMessage* data;
+	u32 count;
+	u32 capacity;
+	u32 tail;
+} WebMessageQueue;
+
+inline void message_queue_push(WebMessageQueue* queue, WebMessage msg)
+{
+	array_prepare(&queue->data, &queue->count, &queue->capacity, queue->capacity + 500, 1, sizeof(WebMessage));
+	queue->data[queue->count++] = msg;
+}
+
+inline b8 message_queue_pop(WebMessageQueue* queue, WebMessage* _msg)
+{
+	if (queue->tail >= queue->count)
+		return FALSE;
+
+	*_msg = queue->data[queue->tail++];
+
+	if (queue->tail >= 100)
+	{
+		assert(queue->tail <= queue->count);
+
+		for (u32 i = queue->tail; i < queue->count; ++i)
+		{
+			queue->data[i - queue->tail] = queue->data[i];
+		}
+
+		queue->count -= queue->tail;
+		queue->tail = 0;
+	}
+
+	return TRUE;
+}
+
+typedef struct {
 	
 	SOCKET socket;
 	struct sockaddr_in hint;
@@ -43,7 +79,7 @@ typedef struct {
 	WebServerAcceptFn accept_fn;
 	WebServerDisconnectFn disconnect_fn;
 
-	DynamicArray(WebMessage) messages;
+	WebMessageQueue message_queue;
 
 	Mutex mutex_send;
 	Mutex mutex_message;
@@ -77,7 +113,7 @@ typedef struct {
 	Mutex mutex_send;
 	Mutex mutex_message;
 
-	DynamicArray(WebMessage) messages;
+	WebMessageQueue message_queue;
 
 } ClientData;
 
@@ -443,7 +479,7 @@ inline void _server_message_save(NetMessageCustom* header)
 	reg.client_id = header->client_id;
 
 	mutex_lock(s->mutex_message);
-	array_push(&s->messages, reg);
+	message_queue_push(&s->message_queue, reg);
 	mutex_unlock(s->mutex_message);
 }
 
@@ -619,8 +655,6 @@ b8 web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, Web
 		s->mutex_send = mutex_create();
 		s->mutex_message = mutex_create();
 
-		s->messages = array_init(WebMessage, 1.7f);
-
 		s->accept_fn = accept_fn;
 		s->disconnect_fn = disconnect_fn;
 	}
@@ -706,7 +740,8 @@ void web_server_close()
 	
 		thread_wait(s->thread);
 
-		array_close(&s->messages);
+		if (s->message_queue.data != NULL)
+			memory_free(s->message_queue.data);
 
 		mutex_destroy(s->mutex_send);
 		mutex_destroy(s->mutex_message);
@@ -764,15 +799,7 @@ b8 web_server_message_get(WebMessage* message)
 	b8 res;
 
 	mutex_lock(s->mutex_message);
-
-	if (s->messages.size) {
-		WebMessage* msg = array_last(&s->messages);
-		*message = *msg;
-		array_pop(&s->messages);
-		res = TRUE;
-	}
-	else res = FALSE;
-
+	res = message_queue_pop(&s->message_queue, message);
 	mutex_unlock(s->mutex_message);
 
 	return res;
@@ -804,7 +831,7 @@ inline void _client_message_save(const void* data, u32 size, u32 client_id)
 	reg.client_id = client_id;
 
 	mutex_lock(c->mutex_message);
-	array_push(&c->messages, reg);
+	message_queue_push(&c->message_queue, reg);
 	mutex_unlock(c->mutex_message);
 }
 
@@ -1008,8 +1035,6 @@ b8 web_client_initialize(const char* ip, u32 port, u32 buffer_capacity, WebClien
 		c->mutex_send = mutex_create();
 		c->mutex_message = mutex_create();
 
-		c->messages = array_init(WebMessage, 1.7f);
-
 		if (c->socket == INVALID_SOCKET) {
 			SV_LOG_ERROR("Can't create client socket\n");
 			goto error;
@@ -1095,7 +1120,8 @@ void web_client_close()
 
 		thread_wait(c->thread);
 
-		array_close(&c->messages);
+		if (c->message_queue.data != NULL)
+			memory_free(c->message_queue.data);
 
 		mutex_destroy(c->mutex_send);
 		mutex_destroy(c->mutex_message);
@@ -1139,15 +1165,7 @@ b8 web_client_message_get(WebMessage* message)
 	b8 res;
 
 	mutex_lock(c->mutex_message);
-
-	if (c->messages.size) {
-		WebMessage* msg = array_last(&c->messages);
-		*message = *msg;
-		array_pop(&c->messages);
-		res = TRUE;
-	}
-	else res = FALSE;
-
+	res = message_queue_pop(&c->message_queue, message);
 	mutex_unlock(c->mutex_message);
 
 	return res;
