@@ -220,9 +220,9 @@ u32 text_insert_dynamic(Buffer* buffer, u32 cursor, const char* src)
 	}
 }
 
-void* text_jump_lines(void* text, u32 lines)
+u32 text_jump_lines(const void* text, u32 lines)
 {
-	char* it = (char*)text;
+	const char* it = (const char*)text;
 
 	while (lines && *it != '\0') {
 		if (*it == '\n')
@@ -231,9 +231,9 @@ void* text_jump_lines(void* text, u32 lines)
 	}
 
 	if (lines != 0)
-		return NULL;
+		return u32_max;
 
-	return it;
+	return it - text;
 }
 
 u32 text_move_right(void* buffer, u32 cursor)

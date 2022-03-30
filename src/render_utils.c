@@ -345,19 +345,21 @@ inline void draw_text_batch(GPUImage* image, TextAlignment alignment, f32 font_s
 
 void draw_text(const DrawTextDesc* desc, CommandList cmd)
 {
-	void* buffer = desc->text;
-
-	char* text = (char*)buffer;
+	const char* text = (const char*)desc->text;
 
 	TextContext* ctx = desc->context;
 
 	i32 line_offset = ctx ? ctx->vertical_offset : 0;
 
 	if (!(desc->flags & DrawTextFlag_BottomTop)) {
-		text = (char*)text_jump_lines(buffer, line_offset);
-	}
 
-	if (text == NULL) return;
+		u32 adv = text_jump_lines(text, line_offset);
+
+		if (adv == u32_max)
+			return;
+
+		text += adv;
+	}
 
 	Font* font = desc->font;
 	GPUImage* render_target = desc->render_target;

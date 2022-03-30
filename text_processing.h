@@ -26,7 +26,8 @@ u32 text_jump_count(void* buffer, u32 cursor);
 // Valid chars in the whole line of the cursor
 u32 text_line_chars(void* buffer, u32 cursor);
 
-void* text_jump_lines(void* text, u32 lines);
+// Return the char count or u32_max if overflows
+u32 text_jump_lines(const void* text, u32 lines);
 
 // Edit text
 
