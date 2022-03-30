@@ -43,6 +43,8 @@ b8 web_client_message_get(WebMessage* message);
 
 u32 web_client_id();
 
+b8 web_client_exists();
+
 b8 _net_initialize();
 void _net_close();
 

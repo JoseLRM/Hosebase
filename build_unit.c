@@ -1,4 +1,6 @@
-#include "src/networking.c"
+#include "src/networking/networking.c"
+#include "src/networking/networking_server.c"
+#include "src/networking/networking_client.c"
 
 #if SV_PLATFORM_WINDOWS
 #include "src/win64_sound.c"
