@@ -112,5 +112,6 @@ void message_assertion_send_request(MessageAssertion *assertion, b8 (*sendReques
 void message_assertion_recive_request(MessageAssertion *assertion, u32 assertion_count, SOCKET socket, struct sockaddr_in hint);
 
 NetHeader* message_assertion_get_next_recived(MessageAssertion *assertion);
+b8 message_assertion_has(MessageAssertion *assertion);
 
 #endif

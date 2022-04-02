@@ -60,14 +60,18 @@ inline b8 _server_send(void *data, u32 size, ClientRegister *client, b8 assert)
 {
 	ServerData *s = server;
 
+	b8 res;
+
 	mutex_lock(s->mutex_send);
 
 	if (server_assert_message(data, client, assert))
-		winsock_send(data, size, s->socket, client->hint);
+		res = winsock_send(data, size, s->socket, client->hint);
+	else
+		res = FALSE;
 
 	mutex_unlock(s->mutex_send);
 
-	return TRUE;
+	return res;
 }
 
 inline b8 _server_send_all(void *data, u32 size, u32 *clients_to_ignore, u32 client_count, b8 assert)
@@ -79,7 +83,6 @@ inline b8 _server_send_all(void *data, u32 size, u32 *clients_to_ignore, u32 cli
 
 	foreach (i, s->client_capacity)
 	{
-
 		b8 ignore = FALSE;
 
 		if (s->clients[i].id == 0)
@@ -87,7 +90,6 @@ inline b8 _server_send_all(void *data, u32 size, u32 *clients_to_ignore, u32 cli
 
 		foreach (j, client_count)
 		{
-
 			if (s->clients[i].id == clients_to_ignore[j])
 			{
 				ignore = TRUE;
@@ -100,7 +102,6 @@ inline b8 _server_send_all(void *data, u32 size, u32 *clients_to_ignore, u32 cli
 
 		if (server_assert_message(data, s->clients + i, assert))
 		{
-
 			if (!winsock_send(data, size, s->socket, s->clients[i].hint))
 			{
 				res = FALSE;
@@ -154,6 +155,8 @@ inline void server_client_register_if_not_exists(struct sockaddr_in client)
 			memory_zero(client_ip, 256);
 			inet_ntop(AF_INET, &client.sin_addr, client_ip, 256);
 
+			s->clients[index] = reg;
+
 			b8 accept;
 
 			if (s->accept_fn)
@@ -182,9 +185,11 @@ inline void server_client_register_if_not_exists(struct sockaddr_in client)
 					mutex_lock(s->mutex_send);
 					winsock_send(&msg, sizeof(msg), s->socket, client);
 					mutex_unlock(s->mutex_send);
-
-					s->clients[index] = reg;
 				}
+			}
+			else
+			{
+				memory_zero(s->clients + index, sizeof(ClientRegister));
 			}
 		}
 		else
@@ -519,16 +524,15 @@ b8 web_server_send(u32 *clients, u32 client_count, b8 ignore, const void *data, 
 
 	if (ignore || client_count == 0)
 	{
-
 		res = _server_send_all(buffer, buffer_size, clients, ignore ? client_count : 0, assert);
 	}
 	else
 	{
-
 		foreach (i, client_count)
 		{
+			ClientRegister* c = server_client_get(clients[i]);
 
-			if (!_server_send(buffer, buffer_size, s->clients + i, assert))
+			if (!_server_send(buffer, buffer_size, c, assert))
 			{
 				res = FALSE;
 			}

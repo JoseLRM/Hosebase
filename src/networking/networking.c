@@ -326,8 +326,17 @@ NetHeader *message_assertion_get_next_recived(MessageAssertion *assertion)
 			assertion->recive.messages[index] = NULL;
 			assertion->recive.tail++;
 		}
+		else
+		{
+			assertion->send_request = TRUE;
+		}
 	}
 	return msg;
+}
+
+b8 message_assertion_has(MessageAssertion *assertion)
+{
+	return assertion->send.tail < assertion->send.head;
 }
 
 #endif

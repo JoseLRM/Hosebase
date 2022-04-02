@@ -74,12 +74,18 @@ b8 _client_send(void *data, u32 size, b8 assert)
 {
 	ClientData *c = client;
 
+	b8 res = TRUE;
+
 	mutex_lock(c->mutex_send);
+	
 	if (client_assert_message(data, assert))
-		winsock_send(data, size, c->socket, client->server_hint);
+		res = winsock_send(data, size, c->socket, client->server_hint);
+	else 
+		res = FALSE;
+
 	mutex_unlock(c->mutex_send);
 
-	return TRUE;
+	return res;
 }
 
 static void client_process_message(NetHeader *header)
@@ -136,7 +142,7 @@ static u32 client_loop(void *arg)
 {
 	ClientData *c = client;
 
-	while (c->running)
+	while (c->running || message_assertion_has(&c->assertion))
 	{
 		NetHeader *header = client_recive_message(WAIT_COUNT);
 
@@ -281,7 +287,6 @@ void web_client_close()
 
 	if (c)
 	{
-
 		c->running = FALSE;
 		memory_free(c->buffer);
 
@@ -290,7 +295,7 @@ void web_client_close()
 		msg.header.size = sizeof(NetMessageDisconnectClient) - sizeof(NetHeader);
 		msg.client_id = c->id;
 
-		_client_send(&msg, sizeof(NetMessageDisconnectClient), FALSE);
+		_client_send(&msg, sizeof(NetMessageDisconnectClient), TRUE);
 
 		thread_wait(c->thread);
 
