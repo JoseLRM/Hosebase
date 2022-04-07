@@ -36,6 +36,19 @@ typedef struct {
 		
 } Date;
 
+inline Date date_set(u32 year, u32 month, u32 day, u32 hour, u32 minute, u32 second, u32 milliseconds)
+{
+	Date date;
+	date.year = year;
+	date.month = month;
+	date.day = day;
+	date.hour = hour;
+	date.minute = minute;
+	date.second = second;
+	date.millisecond = milliseconds;
+	return date;
+}
+
 inline b8 date_equals(Date d0, Date d1)
 {
 	return d0.year == d1.year &&
@@ -45,6 +58,25 @@ inline b8 date_equals(Date d0, Date d1)
 		d0.minute == d1.minute &&
 		d0.second == d1.second &&
 		d0.millisecond == d1.millisecond;
+}
+
+inline b8 date_less_than(Date d0, Date d1)
+{
+	if (d0.year != d1.year)
+		return d0.year < d1.year;
+	if (d0.month != d1.month)
+		return d0.month < d1.month;
+	if (d0.day != d1.day)
+		return d0.day < d1.day;
+	if (d0.hour != d1.hour)
+		return d0.hour < d1.hour;
+	if (d0.minute != d1.minute)
+		return d0.minute < d1.minute;
+	if (d0.second != d1.second)
+		return d0.second < d1.second;
+	if (d0.millisecond != d1.millisecond)
+		return d0.millisecond < d1.millisecond;
+	return FALSE;
 }
 
 f64  timer_now();
@@ -202,7 +234,7 @@ b8 task_running(TaskContext* context);
 		}                                               \
 	} while (0)
 
-void task_reserve_thread(ThreadMainFn main_fn, void* main_data);
+void task_reserve_thread(ThreadMainFn main_fn, void* main_data, TaskContext* context);
 
 void task_join();
 

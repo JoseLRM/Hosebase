@@ -4,14 +4,14 @@
 
 typedef struct
 {
-
 	SOCKET socket;
 	struct sockaddr_in server_hint;
-	Thread thread;
 	b8 running;
 	u8 *buffer;
 	u32 buffer_capacity;
 	u32 id;
+
+	TaskContext task_context;
 
 	MessageAssertion assertion;
 
@@ -252,24 +252,18 @@ b8 web_client_initialize(const char *ip, u32 port, u32 buffer_capacity, WebClien
 	}
 
 	// Start thread
-	c->thread = thread_create(client_loop, NULL);
-
-	if (c->thread == NULL)
-		goto error;
+	task_reserve_thread(client_loop, NULL, &c->task_context);
 
 	goto success;
 error:
 	if (c)
 	{
-
 		c->running = FALSE;
 
 		if (c->socket != INVALID_SOCKET)
 			closesocket(c->socket);
 		if (c->buffer)
 			memory_free(c->buffer);
-		if (c->thread)
-			thread_destroy(c->thread);
 
 		memory_free(c);
 		client = NULL;
@@ -297,7 +291,7 @@ void web_client_close()
 
 		_client_send(&msg, sizeof(NetMessageDisconnectClient), TRUE);
 
-		thread_wait(c->thread);
+		task_wait(&c->task_context);
 
 		if (c->message_queue.data != NULL)
 			memory_free(c->message_queue.data);

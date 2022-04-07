@@ -959,6 +959,11 @@ b8 _sound_initialize(u32 samples_per_second)
 	// Allocate samples data
 	sound->samples = memory_allocate(sound->samples_per_second * 2.f * sizeof(f32));
 
+	// Mutex
+	sound->mutex_source = mutex_create();
+	sound->mutex_instance = mutex_create();
+	sound->mutex_listener = mutex_create();
+
 	// Run thread
 	sound->thread = thread_create(thread_main, NULL);
 
@@ -992,11 +997,6 @@ b8 _sound_initialize(u32 samples_per_second)
 		}
 #endif
 	}
-
-	// Mutex
-	sound->mutex_source = mutex_create();
-	sound->mutex_instance = mutex_create();
-	sound->mutex_listener = mutex_create();
 
 	return TRUE;
 }

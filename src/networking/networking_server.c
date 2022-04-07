@@ -15,10 +15,11 @@ typedef struct
 {
 	SOCKET socket;
 	struct sockaddr_in hint;
-	Thread thread;
 	b8 running;
 	u8 *buffer;
 	u32 buffer_capacity;
+
+	TaskContext task_context;
 
 	ClientRegister *clients;
 	u32 client_capacity;
@@ -435,22 +436,17 @@ b8 web_server_initialize(u32 port, u32 client_capacity, u32 buffer_capacity, Web
 
 	if (bind(s->socket, (struct sockaddr *)&s->hint, sizeof(struct sockaddr_in)) == SOCKET_ERROR)
 	{
-
 		SV_LOG_ERROR("Can't connect server socket\n");
 		goto error;
 	}
 
 	// Start server thread
-	s->thread = thread_create(server_loop, NULL);
-
-	if (s->thread == NULL)
-		goto error;
+	task_reserve_thread(server_loop, NULL, &s->task_context);
 
 	goto success;
 error:
 	if (s)
 	{
-
 		if (s->socket != INVALID_SOCKET)
 		{
 			closesocket(s->socket);
@@ -463,8 +459,7 @@ error:
 		if (s->clients)
 			memory_free(s->clients);
 
-		if (s->thread)
-			thread_destroy(s->thread);
+		task_join();
 
 		memory_free(s);
 		server = NULL;
@@ -488,7 +483,7 @@ void web_server_close()
 
 		_server_send_all(&header, sizeof(NetHeader), NULL, 0, FALSE);
 
-		thread_wait(s->thread);
+		task_wait(&s->task_context);
 
 		if (s->message_queue.data != NULL)
 			memory_free(s->message_queue.data);
