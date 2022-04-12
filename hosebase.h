@@ -115,7 +115,7 @@ inline void hosebase_close()
 #endif
 
 	_os_close();
-	asset_free_unused();
+	
 	_asset_close();
 	_event_close();
 }
