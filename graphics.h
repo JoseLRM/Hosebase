@@ -533,7 +533,7 @@ typedef struct {
 
 b8   _graphics_initialize(const GraphicsInitializeDesc* desc);
 void _graphics_close();
-void graphics_begin();
+b8 graphics_begin();
 void graphics_end();
 
 GraphicsAPI graphics_api();

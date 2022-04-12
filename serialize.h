@@ -351,6 +351,27 @@ inline void serialize_v4_i32(Serializer* s, v4_i32 v)
 	serialize_i32(s, v.w);
 }
 
+inline void serialize_v2_u32(Serializer* s, v2_u32 v)
+{
+	serialize_u32(s, v.x);
+	serialize_u32(s, v.y);
+}
+
+inline void serialize_v3_u32(Serializer* s, v3_u32 v)
+{
+	serialize_u32(s, v.x);
+	serialize_u32(s, v.y);
+	serialize_u32(s, v.z);
+}
+
+inline void serialize_v4_u32(Serializer* s, v4_u32 v)
+{
+	serialize_u32(s, v.x);
+	serialize_u32(s, v.y);
+	serialize_u32(s, v.z);
+	serialize_u32(s, v.w);
+}
+
 // Deserializer
 
 typedef struct {
@@ -558,6 +579,27 @@ inline void deserialize_v4_i32(Deserializer* s, v4_i32* v)
 	deserialize_i32(s, &v->y);
 	deserialize_i32(s, &v->z);
 	deserialize_i32(s, &v->w);
+}
+
+inline void deserialize_v2_u32(Deserializer* s, v2_u32* v)
+{
+	deserialize_u32(s, &v->x);
+	deserialize_u32(s, &v->y);
+}
+
+inline void deserialize_v3_u32(Deserializer* s, v3_u32* v)
+{
+	deserialize_u32(s, &v->x);
+	deserialize_u32(s, &v->y);
+	deserialize_u32(s, &v->z);
+}
+
+inline void deserialize_v4_u32(Deserializer* s, v4_u32* v)
+{
+	deserialize_u32(s, &v->x);
+	deserialize_u32(s, &v->y);
+	deserialize_u32(s, &v->z);
+	deserialize_u32(s, &v->w);
 }
 
 SV_END_C_HEADER

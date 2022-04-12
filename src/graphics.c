@@ -550,7 +550,7 @@ static void destroy_primitives()
 	mutex_unlock(gfx->primitives_to_destroy_mutex);
 }
 
-void graphics_begin()
+b8 graphics_begin()
 {
 	if (core.frame_count % 200u == 0u)
 	{
@@ -559,7 +559,16 @@ void graphics_begin()
 
 	gfx->pipeline_state.present_image = NULL;
 
+	b8 rendering = TRUE;
+
+	v2_u32 window = window_size();
+
+	if (window.x == 0 || window.y == 0)
+		rendering = FALSE;
+
 	gfx->device.frame_begin();
+
+	return rendering;
 }
 
 void graphics_end()

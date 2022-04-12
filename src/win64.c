@@ -7,6 +7,7 @@
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "Shell32.lib")
+#pragma comment(lib, "Comdlg32.lib")
 
 #include "time.h"
 
@@ -885,56 +886,65 @@ void cursor_show()
 
 // File Management
 
-/*b8 file_dialog(char* buff, u32 filterCount, const char** filters, const char* filepath_, b8 open, b8 is_file)
+b8 file_dialog(char *buff, u32 filterCount, const char **filters, const char *filepath_, b8 open, b8 is_file)
 {
 	char filepath[MAX_PATH];
 	filepath_resolve(filepath, filepath_);
 
-	// TODO: Not use classes, this should be in c in the future
-	Buffer abs_filter;
+	char abs_filter[5000] = "";
 
-	for (u32 i = 0; i < filterCount; ++i) {
-		abs_filter.write_back(filters[i * 2u], strlen(filters[i * 2u]));
-		char c = '\0';
-		abs_filter.write_back(&c, sizeof(char));
+	{
+		char* it = abs_filter;
 
-		abs_filter.write_back(filters[i * 2u + 1u], strlen(filters[i * 2u + 1u]));
-		abs_filter.write_back(&c, sizeof(char));
+		for (u32 i = 0; i < filterCount; ++i)
+		{
+			string_copy(it, filters[i * 2u], SV_ARRAY_SIZE(abs_filter));
+			it += string_size(it) + 1;
+
+			string_copy(it, filters[i * 2u + 1], SV_ARRAY_SIZE(abs_filter));
+			it += string_size(it) + 1;
+		}
+		it[0] = '\0';
+		it[1] = '\0';
 	}
 
 	OPENFILENAMEA file;
-	SV_ZERO_MEMORY(&file, sizeof(OPENFILENAMEA));
+	SV_ZERO(file);
 
 	file.lStructSize = sizeof(OPENFILENAMEA);
 	file.hwndOwner = platform->handle;
-	file.lpstrFilter = (char*)abs_filter.data();
+	file.lpstrFilter = abs_filter;
 	file.nFilterIndex = 1u;
 	file.lpstrFile = buff;
 	file.lpstrInitialDir = filepath;
 	file.nMaxFile = MAX_PATH;
 	file.Flags = OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_FILEMUSTEXIST;
 
-	B8 result;
+	b8 result;
 
-	if (open) result = GetOpenFileNameA(&file);
-	else result = GetSaveFileNameA(&file);
+	if (open)
+		result = GetOpenFileNameA(&file);
+	else
+		result = GetSaveFileNameA(&file);
 
-	if (result == TRUE) {
+	if (result == TRUE)
+	{
 		path_clear(buff);
 		return TRUE;
 	}
-	else return FALSE;
-	}
+	else
+		return FALSE;
+}
 
-b8 file_dialog_open(char* buff, u32 filterCount, const char** filters, const char* startPath)
+b8 file_dialog_open(char *buff, u32 filterCount, const char **filters, const char *startPath)
 {
 	return file_dialog(buff, filterCount, filters, startPath, TRUE, TRUE);
 }
 
-b8 file_dialog_save(char* buff, u32 filterCount, const char** filters, const char* startPath)
+b8 file_dialog_save(char *buff, u32 filterCount, const char **filters, const char *startPath)
 {
 	return file_dialog(buff, filterCount, filters, startPath, FALSE, TRUE);
-	}*/
+}
 
 b8 path_is_absolute(const char *path)
 {
@@ -1605,7 +1615,7 @@ static b8 _task_initialize()
 static void _task_close()
 {
 	task_join();
-	
+
 	TaskSystemData *data = &platform->task_system;
 	data->running = FALSE;
 
@@ -1724,7 +1734,7 @@ void task_dispatch(TaskDesc *tasks, u32 task_count, TaskContext *context)
 	}
 }
 
-void task_reserve_thread(ThreadMainFn main_fn, void *main_data, TaskContext* context)
+void task_reserve_thread(ThreadMainFn main_fn, void *main_data, TaskContext *context)
 {
 	TaskSystemData *data = &platform->task_system;
 

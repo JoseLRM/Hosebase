@@ -2286,7 +2286,7 @@ namespace sv {
     void graphics_vulkan_acquire_image()
     {
 		SwapChain_vk& sc = g_API->swapchain;
-		vkAssert(vkAcquireNextImageKHR(g_API->device, sc.swapChain, UINT64_MAX, sc.semAcquireImage, VK_NULL_HANDLE, &sc.imageIndex));
+		vkAcquireNextImageKHR(g_API->device, sc.swapChain, UINT64_MAX, sc.semAcquireImage, VK_NULL_HANDLE, &sc.imageIndex);
 
 		PipelineState& state = *graphics_state_get();
 	
@@ -2370,7 +2370,7 @@ namespace sv {
 		present_info.pImageIndices = &sc.imageIndex;
 		present_info.pResults = nullptr;
 
-		vkAssert(vkQueuePresentKHR(g_API->queueGraphics, &present_info));
+		vkQueuePresentKHR(g_API->queueGraphics, &present_info);
 
 		g_API->currentFrame++;
 		if (g_API->currentFrame == g_API->frameCount) g_API->currentFrame = 0u;

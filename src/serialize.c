@@ -3267,7 +3267,12 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 
 						DaeIndex* index = index_table + i;
 						if (index->hash != 0)
-							mesh->texcoords[index->index] = dae->texcoords[index->texcoord];
+						{
+							v2 uv = dae->texcoords[index->texcoord];
+							uv.y = 1.f - uv.y;
+							uv.x = 1.f - uv.x;
+							mesh->texcoords[index->index] = uv;
+						}
 					}
 				}
 

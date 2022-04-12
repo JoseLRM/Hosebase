@@ -185,6 +185,11 @@ inline u32 string_size(const char* str)
 	return size;
 }
 
+inline b8 string_empty(const char* str)
+{
+	return str[0] == '\0';
+}
+
 inline b8 string_begins(const char* s0, const char* s1)
 {
 	while (*s0 && *s1) {
