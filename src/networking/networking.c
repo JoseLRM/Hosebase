@@ -24,12 +24,11 @@ void _net_close()
 {
 	if (net)
 	{
-
-		if (!web_server_exists())
+		if (web_server_exists())
 		{
 			SV_LOG_ERROR("Server not closed\n");
 		}
-		if (!web_client_exists())
+		if (web_client_exists())
 		{
 			SV_LOG_ERROR("Client not closed\n");
 		}

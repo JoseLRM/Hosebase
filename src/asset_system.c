@@ -424,11 +424,13 @@ void asset_free_unused()
 				type->free_fn(asset + 1);
 
 				if (asset->flags & AssetFlag_FromFile) {
-					SV_LOG_ERROR("Asset '%s' freed from file '%s'\n", type->name, asset->text);
+					SV_LOG_INFO("Asset '%s' freed from file '%s'\n", type->name, asset->text);
 				}
 				else {
-					SV_LOG_ERROR("Asset '%s' freed\n", type->name);
+					SV_LOG_INFO("Asset '%s' freed\n", type->name);
 				}
+
+				free_asset(asset_handle(i, type));
 			}
 		}
 	}

@@ -570,6 +570,9 @@ void gui_end()
 		gui->parent_stack[0] = &gui->root;
 		gui->parent_stack_count = 1;
 
+		gui->root.last_widget_search_byte = 0;
+		gui->root.last_widget_search_i = 0;
+
 		free_parents();
 
 		// Reset widget stacks
