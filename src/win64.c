@@ -422,7 +422,7 @@ LRESULT CALLBACK window_proc(
 			char c = (char)wParam;
 
 			if (c == 9 || (c >= 32 && c <= 126))
-				_input_text_add(&c);
+				_input_text_add(c);
 		}
 		break;
 		}

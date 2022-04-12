@@ -145,7 +145,7 @@ void _input_mouse_button_set_pressed(MouseButton mouse_button);
 void _input_mouse_button_set_released(MouseButton mouse_button);
 
 void _input_text_command_add(TextCommand text_command);
-void _input_text_add(const char* text);
+void _input_text_add(char c);
 
 void _input_mouse_wheel_set(f32 value);
 void _input_mouse_position_set(v2 value);

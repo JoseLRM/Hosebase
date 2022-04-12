@@ -198,9 +198,12 @@ void _input_text_command_add(TextCommand text_command)
 	input->any = TRUE;
 }
 
-void _input_text_add(const char* text)
+void _input_text_add(char c)
 {
-	string_append(input->text, text, INPUT_TEXT_SIZE);
+	char str[2];
+	str[0] = c;
+	str[1] = '\0';
+	string_append(input->text, str, INPUT_TEXT_SIZE);
 	input->any = TRUE;
 }
 
