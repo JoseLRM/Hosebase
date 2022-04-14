@@ -14,6 +14,7 @@ SV_BEGIN_C_HEADER
 
 typedef enum {
 	GuiUnit_Relative,
+	GuiUnit_Absolute,
 	GuiUnit_Pixel,
 	GuiUnit_Aspect,
 } GuiUnit;
@@ -81,7 +82,7 @@ struct GuiParent {
 		Color color;
 	} background;
 
-	f32 vrange;
+	v2 vrange;
 
 	u32 state;
 };
@@ -132,6 +133,9 @@ void gui_set_background(GPUImage* image, v4 texcoord, Color color);
 
 f32 gui_parent_width(GuiUnit unit);
 f32 gui_parent_height(GuiUnit unit);
+
+u64 gui_parent_next_id(const char* name);
+v2 gui_parent_vertical_range(GuiParent* parent);
 
 // Widget utils
 
