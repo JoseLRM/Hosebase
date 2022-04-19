@@ -5,7 +5,7 @@
 SV_BEGIN_C_HEADER
 
 // TODO: Dynamic
-#define _GUI_PARENT_WIDGET_BUFFER_SIZE (1500 * 30)
+#define _GUI_PARENT_WIDGET_BUFFER_SIZE (1500 * 100)
 
 #define _GUI_LAYOUT_DATA_SIZE 500
 #define _GUI_LAYOUT_STACK_SIZE (500 * 30)
@@ -57,7 +57,9 @@ typedef struct GuiParent GuiParent;
 
 struct GuiParent {
 	u64 id;
+	u64 flags;
 	v4 bounds;
+	u32 depth;
 
 	v4 widget_bounds;
 	u8 widget_buffer[_GUI_PARENT_WIDGET_BUFFER_SIZE];
@@ -126,16 +128,27 @@ b8 gui_has_focus();
 
 // Parents
 
-void gui_parent_begin(const char* name, const char* layout);
+#define GuiParentFlag_Popup SV_BIT(0)
+
+void gui_parent_begin(const char* layout, u64 flags, u64 id);
 void gui_parent_end();
 
+b8 gui_parent_is_open(GuiParent* parent);
+void gui_parent_open(GuiParent* parent, b8 open);
+
+void gui_parent_bounds_set(v4 bounds);
+
 void gui_set_background(GPUImage* image, v4 texcoord, Color color);
+
+void gui_parent_add_depth(u32 depth);
 
 f32 gui_parent_width(GuiUnit unit);
 f32 gui_parent_height(GuiUnit unit);
 
-u64 gui_parent_next_id(const char* name);
+u64 gui_parent_next_id(u64 id);
 v2 gui_parent_vertical_range(GuiParent* parent);
+
+GuiParent* gui_parent_in_mouse();
 
 // Widget utils
 
@@ -158,6 +171,9 @@ v2 gui_resolution();
 v2 gui_pixel_size();
 v2 gui_mouse_position();
 
+b8 gui_input_used();
+void gui_use_input();
+
 f32 gui_aspect();
 
 b8 gui_scrolling();
@@ -173,6 +189,7 @@ b8 gui_bounds_inside(v4 bounds);
 b8 gui_bounds_inside_bounds(v4 child, v4 parent);
 
 GuiWidget* gui_find_widget(u32 type, u64 id, GuiParent* parent);
+GuiWidget* gui_last_widget();
 GuiParent* gui_find_parent(u64 parent_id);
 GuiParent* gui_current_parent();
 

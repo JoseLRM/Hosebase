@@ -9,6 +9,8 @@ typedef enum
 	GuiHeader_BeginParent,
 	GuiHeader_EndParent,
 	GuiHeader_SetBackground,
+	GuiHeader_SetParentBounds,
+	GuiHeader_AddDepth,
 	GuiHeader_LayoutPush,
 	GuiHeader_LayoutSet,
 	GuiHeader_LayoutPop,
@@ -41,15 +43,16 @@ typedef struct
 typedef struct
 {
 	u64 id;
-	char name[NAME_SIZE];
 
 	f32 voffset;
 	f32 voffset_target;
+
+	b8 closed;
+	b8 popup_entered;
 } GuiParentState;
 
 typedef struct
 {
-
 	Buffer buffer;
 
 	GuiParent parents[PARENTS_MAX];
@@ -64,6 +67,12 @@ typedef struct
 
 	DynamicArray(u64) id_stack;
 	u64 current_id;
+
+	struct
+	{
+		u32 type;
+		u64 id;
+	} last_widget;
 
 	GuiFocus focus;
 
@@ -91,6 +100,8 @@ typedef struct
 	u32 parent_state_count;
 	u32 parent_state_capacity;
 
+	b8 input_used;
+
 } GUI;
 
 static GUI *gui;
@@ -105,18 +116,18 @@ GuiParentState *gui_parent_state_get(u32 index)
 	return gui->parent_states + index;
 }
 
-u32 gui_parent_state_find(const char *name, u64 id, b8 create)
+u32 gui_parent_state_find(u64 id, b8 create, u8 *created)
 {
-	u32 len = string_size(name);
+	if (created != NULL)
+		*created = FALSE;
 
-	if (id == 0 || len == 0)
+	if (id == 0 || !(id & SV_BIT(0)))
 		return u32_max;
 
 	u32 index = u32_max;
 
 	foreach (i, gui->parent_state_count)
 	{
-
 		if (gui->parent_states[i].id == id)
 		{
 			index = i;
@@ -126,14 +137,14 @@ u32 gui_parent_state_find(const char *name, u64 id, b8 create)
 
 	if (create && index == u32_max)
 	{
-
 		array_prepare(&gui->parent_states, &gui->parent_state_count, &gui->parent_state_capacity, gui->parent_state_capacity + 50, 1, sizeof(GuiParentState));
 
 		index = gui->parent_state_count++;
 		GuiParentState *state = gui->parent_states + index;
 
 		state->id = id;
-		string_copy(state->name, name, NAME_SIZE);
+		if (created != NULL)
+			*created = TRUE;
 	}
 
 	return index;
@@ -361,22 +372,73 @@ static void adjust_widget_bounds(GuiParent *parent)
 	}
 }
 
+static b8 parent_less_than(const GuiParent **p0, const GuiParent **p1)
+{
+	return (*p0)->depth > (*p1)->depth;
+}
+
+static void sort_parents(GuiParent *parent)
+{
+	array_sort(parent->childs, parent->child_count, sizeof(GuiParent *), parent_less_than);
+
+	foreach (i, parent->child_count)
+	{
+		sort_parents(parent->childs[i]);
+	}
+}
+
 static void update_parent(GuiParent *parent)
 {
-	u8 *it = parent->widget_buffer;
+	GuiParentState *state = NULL;
 
-	u32 focus_widget_type = gui->focus.type;
-	u64 focus_widget_id = gui->focus.id;
-
-	foreach (i, parent->widget_count)
+	if (parent->state != u32_max)
 	{
+		state = gui_parent_state_get(parent->state);
+		if (state != NULL && state->closed)
+			return;
+	}
 
-		GuiWidget *widget = (GuiWidget *)it;
+	b8 is_popup = parent->flags & GuiParentFlag_Popup;
 
-		if (widget->type != focus_widget_type || widget->id != focus_widget_id)
-			gui_widget_update(parent, widget, FALSE);
+	if (is_popup && state != NULL)
+	{
+		b8 inside = gui_mouse_in_bounds(parent->bounds);
 
-		it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+		if (state->popup_entered)
+		{
+			if (!inside)
+			{
+				state->closed = TRUE;
+				return;
+			}
+		}
+		else
+		{
+			state->popup_entered = inside;
+		}
+	}
+
+	foreach (i, parent->child_count)
+	{
+		GuiParent *p = parent->childs[i];
+		update_parent(p);
+	}
+
+	{
+		u8 *it = parent->widget_buffer;
+
+		u32 focus_widget_type = gui->focus.type;
+		u64 focus_widget_id = gui->focus.id;
+
+		foreach (i, parent->widget_count)
+		{
+			GuiWidget *widget = (GuiWidget *)it;
+
+			if (widget->type != focus_widget_type || widget->id != focus_widget_id)
+				gui_widget_update(parent, widget, FALSE);
+
+			it += sizeof(GuiWidget) + gui_widget_size(widget->type);
+		}
 	}
 }
 
@@ -385,21 +447,22 @@ static void draw_parent(GuiParent *parent)
 	if (!gui_bounds_inside_bounds(parent->bounds, (parent->parent != NULL) ? parent->parent->bounds : (v4){0.5f, 0.5f, 1.f, 1.f}))
 		return;
 
+	if (parent->state != u32_max)
+	{
+		GuiParentState *state = gui_parent_state_get(parent->state);
+		if (state != NULL)
+		{
+			if (state->closed)
+				return;
+		}
+	}
+
 	v4 b = parent->widget_bounds;
 	imrend_push_scissor(b.x, b.y, b.z, b.w, TRUE, gui->cmd);
 
 	// Background
 	{
 		gui_draw_sprite(b, parent->background.color, parent->background.image, parent->background.texcoord);
-	}
-
-	// Draw childs
-	foreach (i, parent->child_count)
-	{
-
-		GuiParent *child = parent->childs[i];
-
-		draw_parent(child);
 	}
 
 	// Draw widgets
@@ -418,6 +481,14 @@ static void draw_parent(GuiParent *parent)
 
 			it += sizeof(GuiWidget) + gui_widget_size(widget->type);
 		}
+	}
+
+	// Draw childs
+	for (i32 i = (i32)parent->child_count - 1; i >= 0; --i)
+	{
+		GuiParent *child = parent->childs[i];
+
+		draw_parent(child);
 	}
 
 	imrend_pop_scissor(gui->cmd);
@@ -461,6 +532,9 @@ u64 gui_write_widget(u32 type, u64 flags, u64 id)
 	gui_write(type);
 	gui_write(flags);
 	gui_write(id);
+
+	gui->last_widget.type = type;
+	gui->last_widget.id = id;
 
 	return id;
 }
@@ -562,6 +636,10 @@ void gui_begin(const char *layout, Font *default_font)
 	buffer_reset(&gui->buffer);
 	array_reset(&gui->id_stack);
 	gui->current_id = 69;
+	gui->input_used = FALSE;
+
+	gui->last_widget.type = 0;
+	gui->last_widget.id = 0;
 
 	v2_u32 size = window_size();
 
@@ -600,8 +678,9 @@ void gui_end()
 		gui->root.widget_buffer_size = 0;
 		gui->root.widget_count = 0;
 		gui->root.bounds = v4_set(0.5f, 0.5f, 1.f, 1.f);
+		gui->root.depth = 1;
 		gui->root.widget_bounds = gui->root.bounds;
-		gui->root.state = gui_parent_state_find("root", 0x39485763293ULL, TRUE);
+		gui->root.state = gui_parent_state_find(0x39485763293ULL, TRUE, NULL);
 		gui->root.child_count = 0;
 		gui->root.parent = NULL;
 		gui_initialize_layout(&gui->root);
@@ -674,18 +753,49 @@ void gui_end()
 				GuiParent *current = gui_current_parent();
 
 				GuiParent *parent = allocate_parent();
+				parent->depth = current->depth + 1000;
+
 				gui_parent_add_child(current, parent);
 
-				const char *name;
-
-				gui_read_text(it, name);
+				gui_read(it, parent->flags);
 				gui_read(it, parent->id);
 				gui_read(it, parent->layout.type);
-				parent->bounds = gui_compute_bounds(current);
 
-				parent->state = gui_parent_state_find(name, parent->id, TRUE);
+				b8 ignore_layout = FALSE;
 
-				if (current)
+				// Initialize state
+				GuiParentState *state = NULL;
+				{
+					b8 state_created;
+					parent->state = gui_parent_state_find(parent->id, TRUE, &state_created);
+
+					if (parent->state != u32_max)
+					{
+						state = gui_parent_state_get(parent->state);
+
+						if (parent->flags & GuiParentFlag_Popup)
+						{
+							if (state_created)
+							{
+								state->closed = TRUE;
+							}
+
+							parent->depth += 1000000;
+							ignore_layout = TRUE;
+						}
+					}
+				}
+
+				if (ignore_layout)
+				{
+					parent->bounds = v4_zero();
+				}
+				else
+				{
+					parent->bounds = gui_compute_bounds(current);
+				}
+
+				if (current != NULL)
 				{
 					v4 pb = parent->bounds;
 					v4 b = current->bounds;
@@ -724,11 +834,38 @@ void gui_end()
 				gui_read(it, color);
 
 				GuiParent *parent = gui_current_parent();
-				if (parent)
+				if (parent != NULL)
 				{
 					parent->background.image = image;
 					parent->background.texcoord = texcoord;
 					parent->background.color = color;
+				}
+			}
+			break;
+
+			case GuiHeader_SetParentBounds:
+			{
+				v4 bounds;
+				gui_read(it, bounds);
+
+				GuiParent *parent = gui_current_parent();
+				if (parent != NULL)
+				{
+					parent->bounds = bounds;
+					parent->widget_bounds = bounds;
+				}
+			}
+			break;
+
+			case GuiHeader_AddDepth:
+			{
+				u32 depth;
+				gui_read(it, depth);
+
+				GuiParent *parent = gui_current_parent();
+				if (parent != NULL)
+				{
+					parent->depth += depth;
 				}
 			}
 			break;
@@ -914,6 +1051,11 @@ void gui_end()
 		}
 	}
 
+	// Sort parents
+	{
+		sort_parents(&gui->root);
+	}
+
 	// Compute parent in mouse
 	{
 		GuiParent *p = &gui->root;
@@ -928,7 +1070,7 @@ void gui_end()
 
 				GuiParent *c = p->childs[i];
 
-				if (c->state != u32_max && gui_mouse_in_bounds(c->widget_bounds))
+				if (gui_mouse_in_bounds(c->widget_bounds))
 				{
 					p = c;
 					keep = TRUE;
@@ -947,7 +1089,6 @@ void gui_end()
 	{
 		foreach (i, gui->parent_count)
 		{
-
 			GuiParent *parent = gui->parents + i;
 
 			adjust_widget_bounds(parent);
@@ -978,16 +1119,7 @@ void gui_end()
 	}
 
 	// Update widget
-	{
-		foreach (i, gui->parent_count)
-		{
-
-			GuiParent *parent = gui->parents + i;
-			update_parent(parent);
-		}
-
-		update_parent(&gui->root);
-	}
+	update_parent(&gui->root);
 }
 
 void gui_draw(GPUImage *image, CommandList cmd)
@@ -1036,15 +1168,14 @@ void gui_pop_id(u32 count)
 	}
 }
 
-void gui_parent_begin(const char *name, const char *layout)
+void gui_parent_begin(const char *layout, u64 flags, u64 id)
 {
-	name = string_validate(name);
-
 	GuiHeader header = GuiHeader_BeginParent;
 	gui_write(header);
 
-	gui_write_text(name);
-	u64 id = gui_parent_next_id(name);
+	id = gui_parent_next_id(id);
+
+	gui_write(flags);
 	gui_write(id);
 
 	u32 layout_index = gui_find_layout_index(layout);
@@ -1084,17 +1215,32 @@ f32 gui_parent_height(GuiUnit unit)
 	return gui_recompute_dimension((GuiDimension){v, unit}, TRUE);
 }
 
-u64 gui_parent_next_id(const char* name)
+u64 gui_parent_next_id(u64 id)
 {
-	return hash_combine(0x83487ULL ^ hash_string(string_validate(name)), gui->current_id);
+	b8 has_state = id != 0;
+
+	if (id == 0)
+		id = 0x2195643245ULL;
+
+	id = hash_combine(0x83487ULL ^ id, gui->current_id) | SV_BIT(0);
+
+	if (!has_state)
+		id &= ~SV_BIT(0);
+
+	return id;
 }
 
-v2 gui_parent_vertical_range(GuiParent* parent)
+v2 gui_parent_vertical_range(GuiParent *parent)
 {
 	if (parent == NULL)
 		return v2_zero();
-	
+
 	return parent->vrange;
+}
+
+GuiParent *gui_parent_in_mouse()
+{
+	return gui->parent_in_mouse;
 }
 
 void gui_parent_end()
@@ -1106,6 +1252,50 @@ void gui_parent_end()
 	gui_pop_id(1);
 }
 
+b8 gui_parent_is_open(GuiParent *parent)
+{
+	if (parent == NULL)
+		return FALSE;
+
+	if (parent->state == u32_max)
+		return FALSE;
+
+	GuiParentState *state = gui_parent_state_get(parent->state);
+
+	if (state == NULL)
+		return FALSE;
+
+	return !state->closed;
+}
+
+void gui_parent_open(GuiParent *parent, b8 open)
+{
+	if (parent == NULL)
+		return;
+
+	if (parent->state == u32_max)
+		return;
+
+	GuiParentState *state = gui_parent_state_get(parent->state);
+
+	if (state == NULL)
+		return;
+
+	state->closed = !open;
+
+	if (parent->flags & GuiParentFlag_Popup)
+	{
+		state->popup_entered = FALSE;
+	}
+}
+
+void gui_parent_bounds_set(v4 bounds)
+{
+	GuiHeader header = GuiHeader_SetParentBounds;
+	gui_write(header);
+	gui_write(bounds);
+}
+
 void gui_set_background(GPUImage *image, v4 texcoord, Color color)
 {
 	GuiHeader header = GuiHeader_SetBackground;
@@ -1113,6 +1303,13 @@ void gui_set_background(GPUImage *image, v4 texcoord, Color color)
 	gui_write(image);
 	gui_write(texcoord);
 	gui_write(color);
+}
+
+void gui_parent_add_depth(u32 depth)
+{
+	GuiHeader header = GuiHeader_AddDepth;
+	gui_write(header);
+	gui_write(depth);
 }
 
 ////////////////////////////// REGISTERS ///////////////////////////////
@@ -1163,6 +1360,16 @@ v2 gui_pixel_size()
 v2 gui_mouse_position()
 {
 	return gui->mouse_position;
+}
+
+b8 gui_input_used()
+{
+	return gui->input_used;
+}
+
+void gui_use_input()
+{
+	gui->input_used = TRUE;
 }
 
 f32 gui_aspect()
@@ -1272,6 +1479,11 @@ GuiWidget *gui_find_widget(u32 type, u64 id, GuiParent *parent)
 	}
 
 	return NULL;
+}
+
+GuiWidget *gui_last_widget()
+{
+	return gui_find_widget(gui->last_widget.type, gui->last_widget.id, gui_current_parent());
 }
 
 GuiParent *gui_find_parent(u64 parent_id)
