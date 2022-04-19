@@ -44,6 +44,147 @@ inline b8 array_prepare(void** data, u32* count, u32* capacity, u32 new_capacity
 	return FALSE;
 }
 
+typedef struct
+{
+	u64 hash;
+	void *next;
+} HashTableEntry;
+
+inline void* hashtable_get(u64 hash, void *_data, u32 stride, u32 table_size, b8 create, b8 *out_created)
+{
+	assert(sizeof(HashTableEntry) <= stride);
+
+	if (hash == 0)
+	{
+		if (out_created != NULL)
+			*out_created = FALSE;
+		return NULL;
+	}
+
+	u8 *data = (u8 *)_data;
+	u32 index = hash % table_size;
+
+	HashTableEntry *parent = NULL;
+	HashTableEntry *entry = (HashTableEntry *)(data + (index * stride) + stride - sizeof(HashTableEntry));
+
+	while (entry->hash != 0 && entry->hash != hash)
+	{
+		parent = entry;
+		entry = (HashTableEntry*)parent->next;
+
+		if (parent->next == NULL)
+			break;
+		
+		entry = (HashTableEntry*)((u8*)entry + stride - sizeof(HashTableEntry));
+	}
+
+	b8 created = FALSE;
+
+	if (entry != NULL && entry->hash == hash)
+	{
+		created = FALSE;
+	}
+	else if (create)
+	{
+		created = TRUE;
+
+		if (entry == NULL)
+		{
+			parent->next = memory_allocate(stride);
+			entry = (HashTableEntry*)parent->next;
+			entry = (HashTableEntry*)((u8*)entry + stride - sizeof(HashTableEntry));
+		}
+		
+		entry->hash = hash;
+		entry->next = NULL;
+	}
+
+	if (out_created != NULL)
+		*out_created = created;
+
+	return (entry == NULL) ? NULL : ((u8 *)entry + sizeof(HashTableEntry) - stride);
+}
+
+static void _hashtable_free_entry(u8* entry_data, u32 stride)
+{
+	HashTableEntry *entry = (HashTableEntry *)(entry_data + stride - sizeof(HashTableEntry));
+
+	if (entry->next != NULL)
+	{
+		_hashtable_free_entry((u8*)entry->next, stride);
+	}
+
+	memory_free(entry->next);
+}
+
+inline void hashtable_free(void *_data, u32 stride, u32 table_size)
+{
+	assert(sizeof(HashTableEntry) <= stride);
+
+	u8 *data = (u8 *)_data;
+
+	foreach(i, table_size)
+	{
+		HashTableEntry *entry = (HashTableEntry *)(data + (i * stride) + stride - sizeof(HashTableEntry));
+		
+		if (entry->next != NULL)
+		{
+			_hashtable_free_entry((u8*)entry->next, stride);
+		}
+	}
+}
+
+typedef struct {
+	HashTableEntry* entry;
+	HashTableEntry* parent;
+	HashTableEntry* end;
+	void* value;
+} HashTableIterator;
+
+inline b8 hashtable_iterator_next(HashTableIterator* it, void* data, u32 stride, u32 table_size)
+{
+	if (it->entry == NULL) {
+
+		it->entry = (HashTableEntry*)((u8*)data + stride - sizeof(HashTableEntry));
+		it->value = ((u8*)it->entry + sizeof(HashTableEntry) - stride);
+		it->parent = it->entry;
+		it->end = (HashTableEntry*)((u8*)data + (table_size * stride) + stride - sizeof(HashTableEntry));
+
+		if (it->entry->hash != 0)
+			return TRUE;
+	}
+
+	while (1) 
+	{
+		while (it->entry->next != NULL) 
+		{
+			it->entry = (HashTableEntry*)(((u8*)it->entry->next) + stride - sizeof(HashTableEntry));
+
+			if (it->entry->hash != 0) {
+				it->value = ((u8*)it->entry + sizeof(HashTableEntry) - stride);
+				return TRUE;
+			}
+		}
+
+		it->parent = (HashTableEntry*)((u8*)it->parent + stride);
+		it->entry = it->parent;
+
+		if (it->entry >= it->end)
+		{
+			it->value = NULL;
+			return FALSE;
+		}
+
+		if (it->entry->hash != 0) {
+			it->value = ((u8*)it->entry + sizeof(HashTableEntry) - stride);
+			return TRUE;
+		}
+	}
+
+	it->value = NULL;
+	return FALSE;
+}
+
 typedef b8(*LessThanFn)(const void*, const void*);
 
 struct _SortData {
