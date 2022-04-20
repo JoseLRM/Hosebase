@@ -387,6 +387,26 @@ static void sort_parents(GuiParent *parent)
 	}
 }
 
+static GuiParent *find_parent_in_mouse(GuiParent *parent)
+{
+	GuiParent* in_mouse = parent;
+
+	foreach (i, parent->child_count)
+	{
+		GuiParent *child = parent->childs[i];
+
+		if (gui_mouse_in_bounds(child->widget_bounds))
+		{
+			GuiParent* child_in_mouse = find_parent_in_mouse(child);
+			
+			if (child_in_mouse->depth > in_mouse->depth)
+				in_mouse = child_in_mouse;
+		}
+	}
+
+	return in_mouse;
+}
+
 static void update_parent(GuiParent *parent)
 {
 	GuiParentState *state = NULL;
@@ -1058,31 +1078,7 @@ void gui_end()
 
 	// Compute parent in mouse
 	{
-		GuiParent *p = &gui->root;
-
-		while (1)
-		{
-
-			b8 keep = FALSE;
-
-			foreach (i, p->child_count)
-			{
-
-				GuiParent *c = p->childs[i];
-
-				if (gui_mouse_in_bounds(c->widget_bounds))
-				{
-					p = c;
-					keep = TRUE;
-					break;
-				}
-			}
-
-			if (!keep)
-				break;
-		}
-
-		gui->parent_in_mouse = p;
+		gui->parent_in_mouse = find_parent_in_mouse(&gui->root);
 	}
 
 	// Adjust widget bounds
