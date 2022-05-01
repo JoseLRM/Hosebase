@@ -1705,7 +1705,7 @@ inline const char* dae_read_f32(const char* it, f32* value, b8* res)
 		++it;
 		i32 v;
 
-		const char* delimiters = " >";
+		const char* delimiters = " ><";
 
 		b8 r;
 		it = line_read_i32(it, &v, delimiters, string_size(delimiters), &r);
@@ -3270,7 +3270,6 @@ static b8 model_load_dae(ModelInfo* model_info, const char* filepath, char* it, 
 						{
 							v2 uv = dae->texcoords[index->texcoord];
 							uv.y = 1.f - uv.y;
-							uv.x = 1.f - uv.x;
 							mesh->texcoords[index->index] = uv;
 						}
 					}

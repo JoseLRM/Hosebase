@@ -523,6 +523,57 @@ inline void string_from_u32(char* dst, u32 value)
 	dst[end + 1] = '\0';
 }
 
+inline void string_from_f32(char* dst, f32 value, u32 decimals)
+{
+	i32 decimal_mult = 0;
+
+	if (decimals > 0)
+	{
+		u32 d = decimals;
+
+		decimal_mult = 10;
+		d--;
+
+		while (d--)
+		{
+			decimal_mult *= 10;
+		}
+	}
+
+	b8 minus = value < 0.f;
+	value = SV_ABS(value);
+
+	i32 integer = (i32)value;
+	i32 decimal = (value - (f32)integer) * (f32)decimal_mult;
+
+	if (minus)
+	{
+		string_copy(dst, "-", 50);
+	}
+	else
+	{
+		string_copy(dst, "", 50);
+	}
+
+	char integer_string[20];
+	string_from_u32(integer_string, integer);
+
+	string_append(dst, integer_string, 50);
+
+	string_append(dst, ".", 50);
+
+	string_from_u32(integer_string, decimal);
+
+	u32 decimal_size = string_size(integer_string);
+	while (decimal_size < decimal)
+	{
+		string_append(integer_string, "0", 20);
+		decimal_size++;
+	}
+
+	string_append(dst, integer_string, 50);
+}
+
 inline void string_from_u64(char* dst, u64 value)
 {
 	u32 digits = 0u;

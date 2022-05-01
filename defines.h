@@ -69,10 +69,12 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 #define foreach(_it, _end) for (u32 _it = 0u; _it < (u32)(_end); ++_it)
 #define SV_MIN(a, b) ((a < b) ? a : b)
 #define SV_MAX(a, b) ((a > b) ? a : b)
+#define SV_ABS(x) (((x) < 0.f) ? (-(x)) : (x))
 #define SV_CLAMP(a, min, max) (SV_MAX(SV_MIN(a, max), min))
 #define SV_POW2(x) ((x) * (x))
 #define SV_POW3(x) ((x) * (x) * (x))
 #define SV_STRING(x) #x
+#define SV_FUNCTION_NAME() __FUNCTION__
 #define SV_ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 #define SV_CHECK(x) if (!(x)) return FALSE
 #define SV_ZERO(x) memory_zero(&(x), sizeof(x))
