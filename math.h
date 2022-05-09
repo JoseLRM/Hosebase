@@ -420,7 +420,7 @@ inline v3 v3_cross(v3 v0, v3 v1)
 inline v3 v3_reflection(v3 v, v3 normal)
 {
 	f32 s  = v3_dot(v, normal) * 2.f;
-	return v3_mul_scalar(v3_sub(normal, v), s);
+	return v3_sub(v, v3_mul_scalar(normal, s));
 }
 
 inline b8 v2_i32_equals(v2_i32 v0, v2_i32 v1)
@@ -1205,8 +1205,14 @@ inline b8 ray_intersect_aabb(Ray ray, const v3 min, const v3 max, f32* dist)
 
 	if (tzmax < tmax)
 		tmax = tzmax;
-
-	*dist = tmin;
+	
+	if (tmin < 0.f && tmax < 0.f)
+		return FALSE;
+	
+	if (tmin < 0.f)
+		*dist = tmax;
+	else
+		*dist = tmin;
 
 	return TRUE;
 }
@@ -1372,6 +1378,45 @@ inline Color color_orange()      { return color_rgb(255u, 69u, 0u); }
 inline Color color_black()       { return color_rgb(0u, 0u, 0u); }
 inline Color color_gray(u8 i)    { return color_rgb(i, i, i); }
 inline Color color_white()       { return color_rgb(255u, 255u, 255u); }
+
+// 16 bit floating point
+
+// From https://stackoverflow.com/a/60047308
+
+inline u32 _as_uint(const f32 x) {
+    return *(u32*)&x;
+}
+
+inline f32 math_f16_to_f32(const f16 x) { // IEEE-754 16-bit floating-point format (without infinity): 1-5-10, exp-15, +-131008.0, +-6.1035156E-5, +-5.9604645E-8, 3.311 digits
+    const u32 e = (x&0x7C00)>>10; // exponent
+    const u32 m = (x&0x03FF)<<13; // mantissa
+    const u32 v = _as_uint((f32)m)>>23; // evil log2 bit hack to count leading zeros in denormalized format
+	const u32 res = (x&0x8000)<<16 | (e!=0)*((e+112)<<23|m) | ((e==0)&(m!=0))*((v-37)<<23|((m<<(150-v))&0x007FE000)); // sign : normalized : denormalized
+    return *(f32*)&res;
+}
+inline f16 math_f32_to_f16(const f32 x) { // IEEE-754 16-bit floating-point format (without infinity): 1-5-10, exp-15, +-131008.0, +-6.1035156E-5, +-5.9604645E-8, 3.311 digits
+    const u32 b = _as_uint(x)+0x00001000; // round-to-nearest-even: add last bit after truncated mantissa
+    const u32 e = (b&0x7F800000)>>23; // exponent
+    const u32 m = b&0x007FFFFF; // mantissa; in line below: 0x007FF000 = 0x00800000-0x00001000 = decimal indicator flag - initial rounding
+    return (b&0x80000000)>>16 | (e>112)*((((e-112)<<10)&0x7C00)|m>>13) | ((e<113)&(e>101))*((((0x007FF000+m)>>(125-e))+1)>>1) | (e>143)*0x7FFF; // sign : normalized : denormalized : saturate
+}
+
+inline v3_f16 math_v3_to_v3_f16(v3 v)
+{
+	v3_f16 r;
+	r.x = math_f32_to_f16(v.x);
+	r.y = math_f32_to_f16(v.y);
+	r.z = math_f32_to_f16(v.z);
+	return r;
+}
+
+inline v2_f16 math_v2_to_v2_f16(v2 v)
+{
+	v2_f16 r;
+	r.x = math_f32_to_f16(v.x);
+	r.y = math_f32_to_f16(v.y);
+	return r;
+}
 
 // Random
 

@@ -1,201 +1,99 @@
 #include "Hosebase/event_system.h"
 
-#define EVENT_TABLE_SIZE 5000
-#define EVENT_REGISTER_MAX 50
-
-typedef struct EventType EventType;
+#define EVENT_TABLE_SIZE 1000
 
 typedef struct {
 	EventFn fn;
+	u64 handle;
 } EventRegister;
 
-struct EventType {
-
-	EventRegister registers[EVENT_REGISTER_MAX];
+typedef struct {
+	char name[NAME_SIZE];
+	EventRegister registers[400];
 	u32 register_count;
-
-	// Used in hash table
-	u64 hash; // or id
-	EventType* next;
-};
+	HashTableEntry entry;
+} EventType;
 
 typedef struct {
 
-	EventType type_table[EVENT_TABLE_SIZE];
+	EventType event_table[EVENT_TABLE_SIZE];
 
-} EventSystemData;
+} EventSystem;
 
-static EventSystemData* event;
+static EventSystem* event_system;
 
-b8 _event_initialize()
+static EventType* _event_type_get(u64 hash, b8 create, b8* created)
 {
-	event = memory_allocate(sizeof(EventSystemData));
-
-	return TRUE;
+	return hashtable_get(hash, event_system->event_table, sizeof(EventType), EVENT_TABLE_SIZE, create, created);
 }
 
-void free_entry(EventType* type)
+u64 event_compute_handle(const char* system_name, u64 handle)
 {
-	if (type->next) {
-		free_entry(type->next);
-		memory_free(type->next);
-	}
-}
-
-void _event_close()
-{
-	if (event) {
-
-		foreach(i, EVENT_TABLE_SIZE) {
-
-			EventType* type = event->type_table + i;
-			free_entry(type);
-		}
-
-		memory_free(event);
-	}
-}
-
-inline b8 find_in_table(u64 hash, EventType** _type, EventType** _parent, b8 create)
-{
-	u32 index = hash % EVENT_TABLE_SIZE;
-
-	EventType* type = event->type_table + index;
-	EventType* parent = NULL;
-
-	while (type->hash != hash) {
-
-		parent = type;
-		type = type->next;
-		if (type == NULL) {
-
-			if (create) {
-				type = memory_allocate(sizeof(EventType));
-				parent->next = type;
-
-				type->hash = hash;
-			}
-			else break;
-		}
-	}
-
-	if (type == NULL) return FALSE;
-	else {
-
-		*_type = type;
-		*_parent = parent;
-	}
-
-	return TRUE;
-}
-
-inline void erase_entry(EventType* type, EventType* parent)
-{
-	parent->next = type->next;
-
-	if (parent == NULL) {
-		memory_zero(type, sizeof(EventType));
-	}
-	else {
-		memory_free(type);
-	}
+	return hash_combine(handle, hash_string(string_validate(system_name)));
 }
 
 b8 event_register(u64 handle, const char* name, EventFn fn)
 {
-	EventType* type;
-	EventType* parent;
+	if (handle == 0)
+		handle = 0x29898665345ULL;
+	
+	EventRegister reg;
+	reg.fn = fn;
+	reg.handle = handle;
+	
+	u64 hash = hash_string(name);
 
-	u64 hash = hash_combine(handle, hash_string(name));
-	find_in_table(hash, &type, &parent, TRUE);
+	EventType* type = _event_type_get(hash, TRUE, NULL);
 
-	if (type->register_count >= EVENT_REGISTER_MAX) {
-
-		SV_LOG_ERROR("Can't register more than %u events\n", EVENT_REGISTER_MAX);
-		return FALSE;
+	if (type->register_count >= SV_ARRAY_SIZE(type->registers))
+	{
+		// TODO: Use auxiliar dynamic buffer
+		assert_title(FALSE, "Event register overflow!!");
 	}
-	else {
-
-		b8 found = FALSE;
-
-		foreach(i, type->register_count) {
-
-			if (type->registers[i].fn == fn) {
-				found = TRUE;
-				break;
-			}
-		}
-
-		if (found)
-			return FALSE;
-
-		EventRegister reg;
-		reg.fn = fn;
-
+	else
+	{
 		type->registers[type->register_count++] = reg;
-		return TRUE;
-	}
-}
-
-b8 event_unregister(u64 handle, const char* name, EventFn fn)
-{
-	EventType* type;
-	EventType* parent;
-
-	u64 hash = hash_combine(handle, hash_string(name));
-	if (!find_in_table(hash, &type, &parent, FALSE))
-		return FALSE;
-
-	b8 found = FALSE;
-
-	foreach(i, type->register_count) {
-
-		if (type->registers[i].fn == fn) {
-
-			--type->register_count;
-			for (u32 j = i; j < type->register_count; ++j) {
-
-				type->registers[j + 0] = type->registers[j + 1];
-			}
-
-			found = TRUE;
-			break;
-		}
 	}
 
-	if (type->register_count == 0) {
-
-		erase_entry(type, parent);
-	}
-
-	return found;
-}
-
-b8 event_unregister_all(u64 handle, const char* name)
-{
-	EventType* type;
-	EventType* parent;
-
-	u64 hash = hash_combine(handle, hash_string(name));
-	if (!find_in_table(hash, &type, &parent, FALSE))
-		return FALSE;
-
-	erase_entry(type, parent);
 	return TRUE;
+}
+
+void event_unregister_handle(u64 handle)
+{
+	// TODO: 
 }
 
 void event_dispatch(u64 handle, const char* name, void* data)
 {
-	EventType* type;
-	EventType* parent;
+	u64 hash = hash_string(name);
+	EventType* type = _event_type_get(hash, FALSE, NULL);
 
-	u64 hash = hash_combine(handle, hash_string(name));
-	if (!find_in_table(hash, &type, &parent, FALSE))
-		return;
+	if (type != NULL)
+	{
+		foreach(i, type->register_count)
+		{
+			EventRegister* reg = type->registers + i;
+			
+			if (handle == 0 || reg->handle == handle)
+			{
+				reg->fn(data);
+			}
+		}
+	}
+}
 
-	foreach(i, type->register_count) {
+b8 _event_initialize()
+{
+	event_system = memory_allocate(sizeof(EventSystem));
+	return TRUE;
+}
 
-		EventRegister reg = type->registers[i];
-		reg.fn(data);
+void _event_close()
+{
+	if (event_system != NULL)
+	{
+		hashtable_free(event_system->event_table, sizeof(EventType), EVENT_TABLE_SIZE);
+
+		memory_free(event_system);
 	}
 }

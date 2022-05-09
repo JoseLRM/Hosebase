@@ -1,4 +1,5 @@
 #include "Hosebase/input.h"
+#include "Hosebase/os.h"
 
 #define INPUT_TEXT_SIZE 20
 
@@ -10,8 +11,8 @@ typedef struct {
 	InputState mouse_buttons[MouseButton_MaxEnum];
 
 	char text[INPUT_TEXT_SIZE];
-	// TODO: static buffer
-	DynamicArray(TextCommand) text_commands;
+	TextCommand text_commands[INPUT_TEXT_SIZE];
+	u32 text_command_count;
 
 	v2	mouse_position;
 	v2	mouse_last_position;
@@ -75,29 +76,25 @@ const char* input_text()
 
 u32 input_text_command_count()
 {
-	return input->text_commands.size;
+	return input->text_command_count;
 }
 
 TextCommand input_text_command(u32 index)
 {
-	return *(TextCommand*)array_get(&input->text_commands, index);
+	if (index >= input->text_command_count)
+		return TextCommand_Null;
+	return input->text_commands[index];
 }
 
 b8 _input_initialize()
 {
 	input = memory_allocate(sizeof(InputData));
-
-	input->text_commands = array_init(TextCommand, 1.1f);
-
 	return TRUE;
 }
 
 void _input_close()
 {
-	if (input) {
-
-		array_close(&input->text_commands);
-		
+	if (input) {		
 		memory_free(input);
 	}
 }
@@ -116,6 +113,9 @@ void _input_update()
 		}
 		else if (*state == InputState_Hold) {
 			input->any = TRUE;
+
+			if (!key_async(i))
+				*state = InputState_Released;
 		}
 		else if (*state == InputState_Released) {
 			*state = InputState_None;
@@ -139,6 +139,9 @@ void _input_update()
 		}
 		else if (*state == InputState_Hold) {
 			input->any = TRUE;
+
+			if (!mouse_button_async(i))
+				*state = InputState_Released;
 		}
 		else if (*state == InputState_Released) {
 			*state = InputState_None;
@@ -154,7 +157,7 @@ void _input_update()
 
 	input->mouse_last_position = input->mouse_position;
 	input->text[0] = '\0';
-	array_reset(&input->text_commands);
+	input->text_command_count;
 	input->mouse_wheel = 0.f;
 }
 
@@ -194,7 +197,13 @@ void _input_mouse_button_set_released(MouseButton mouse_button)
 
 void _input_text_command_add(TextCommand text_command)
 {
-	array_push(&input->text_commands, text_command);
+	if (input->text_command_count >= SV_ARRAY_SIZE(input->text_commands))
+	{
+		assert_title(FALSE, "Input text command buffer overflow");
+		return;
+	}
+	
+	input->text_commands[input->text_command_count++] = text_command;
 	input->any = TRUE;
 }
 

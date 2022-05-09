@@ -20,6 +20,7 @@ typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
 
+typedef u16     f16;
 typedef float	f32;
 typedef double	f64;
 
@@ -284,6 +285,19 @@ typedef struct {
 
 	union {
 		struct {
+			f16 x;
+			f16 y;
+			f16 z;
+		};
+		f16 v[3];
+	};
+
+} v3_f16;
+
+typedef struct {
+
+	union {
+		struct {
 			i16 x;
 			i16 y;
 			i16 z;
@@ -305,6 +319,18 @@ typedef struct {
 	};
 
 } v2_u16;
+
+typedef struct {
+
+	union {
+		struct {
+			f16 x;
+			f16 y;
+		};
+		f16 v[2];
+	};
+
+} v2_f16;
 
 typedef struct {
 

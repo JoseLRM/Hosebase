@@ -105,7 +105,7 @@ typedef struct {
 	
 	// Pipeline settings
 	b8 transparent;
-	RasterizerCullMode culling;
+	CullMode culling;
 
 	// Values
 	

@@ -4,9 +4,11 @@ SV_BEGIN_C_HEADER
 
 typedef void(*EventFn)(void* data);
 
+u64 event_compute_handle(const char* system_name, u64 handle);
+
 b8 event_register(u64 handle, const char* name, EventFn fn);
-b8 event_unregister(u64 handle, const char* name, EventFn fn);
-b8 event_unregister_all(u64 handle, const char* name);
+
+void event_unregister_handle(u64 handle);
 
 void event_dispatch(u64 handle, const char* name, void* data);
 

@@ -245,20 +245,13 @@ namespace sv {
 		VkRenderPassBeginInfo			beginInfo;
 		Mutex					mutex;
     };
-    // InputLayoutState
-    struct InputLayoutState_vk : public InputLayoutState {
-		u64 hash;
-    };
+    
     // BlendState
     struct BlendState_vk : public BlendState {
 		u64 hash;
     };
     // DepthStencilState
     struct DepthStencilState_vk : public DepthStencilState {
-		u64 hash;
-    };
-    // RasterizerState
-    struct RasterizerState_vk : public RasterizerState {
 		u64 hash;
     };
 
@@ -382,10 +375,8 @@ namespace sv {
     bool graphics_vulkan_sampler_create(Sampler_vk& sampler, const SamplerDesc& desc);
     bool graphics_vulkan_shader_create(Shader_vk& shader, const ShaderDesc& desc);
     bool graphics_vulkan_renderpass_create(RenderPass_vk& renderPass, const RenderPassDesc& desc);
-    bool graphics_vulkan_inputlayoutstate_create(InputLayoutState_vk& inputLayoutState, const InputLayoutStateDesc& desc);
     bool graphics_vulkan_blendstate_create(BlendState_vk& blendState, const BlendStateDesc& desc);
     bool graphics_vulkan_depthstencilstate_create(DepthStencilState_vk& depthStencilState, const DepthStencilStateDesc& desc);
-    bool graphics_vulkan_rasterizerstate_create(RasterizerState_vk& rasterizerState, const RasterizerStateDesc& desc);
     bool graphics_vulkan_swapchain_create();
 
     bool graphics_vulkan_buffer_destroy(Buffer_vk& buffer);

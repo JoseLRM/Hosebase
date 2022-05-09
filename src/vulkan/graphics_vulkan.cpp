@@ -358,10 +358,8 @@ void graphics_vulkan_device_prepare(GraphicsDevice* device_)
 	device.sampler_allocator			 = instance_allocator_init(sizeof(sv::Sampler_vk), 200u);
 	device.shader_allocator			     = instance_allocator_init(sizeof(sv::Shader_vk), 200u);
 	device.render_pass_allocator		 = instance_allocator_init(sizeof(sv::RenderPass_vk), 200u);
-	device.input_layout_state_allocator	 = instance_allocator_init(sizeof(sv::InputLayoutState_vk), 200u);
 	device.blend_state_allocator		 = instance_allocator_init(sizeof(sv::BlendState_vk), 200u);
 	device.depth_stencil_state_allocator = instance_allocator_init(sizeof(sv::DepthStencilState_vk), 200u);
-	device.rasterizer_state_allocator	 = instance_allocator_init(sizeof(sv::RasterizerState_vk), 200u);
 		
 	device.api = GraphicsAPI_Vulkan;
 }
@@ -842,13 +840,6 @@ namespace sv {
 		}
 		break;
 
-		case GraphicsPrimitiveType_InputLayoutState:
-		{
-			InputLayoutState_vk* ils = new(ptr) InputLayoutState_vk();
-			return graphics_vulkan_inputlayoutstate_create(*ils, *reinterpret_cast<const InputLayoutStateDesc*>(desc));
-		}
-		break;
-
 		case GraphicsPrimitiveType_BlendState:
 		{
 			BlendState_vk* bs = new(ptr) BlendState_vk();
@@ -860,13 +851,6 @@ namespace sv {
 		{
 			DepthStencilState_vk* dss = new(ptr) DepthStencilState_vk();
 			return graphics_vulkan_depthstencilstate_create(*dss, *reinterpret_cast<const DepthStencilStateDesc*>(desc));
-		}
-		break;
-
-		case GraphicsPrimitiveType_RasterizerState:
-		{
-			RasterizerState_vk* rs = new(ptr) RasterizerState_vk();
-			return graphics_vulkan_rasterizerstate_create(*rs, *reinterpret_cast<const RasterizerStateDesc*>(desc));
 		}
 		break;
 
@@ -924,14 +908,6 @@ namespace sv {
 			break;
 		}
 
-		case GraphicsPrimitiveType_InputLayoutState:
-		{
-			InputLayoutState_vk& inputLayoutState = *reinterpret_cast<InputLayoutState_vk*>(primitive);
-			inputLayoutState.~InputLayoutState_vk();
-			result = true;
-			break;
-		}
-
 		case GraphicsPrimitiveType_BlendState:
 		{
 			BlendState_vk& blendState = *reinterpret_cast<BlendState_vk*>(primitive);
@@ -944,14 +920,6 @@ namespace sv {
 		{
 			DepthStencilState_vk& depthStencilState = *reinterpret_cast<DepthStencilState_vk*>(primitive);
 			depthStencilState.~DepthStencilState_vk();
-			result = true;
-			break;
-		}
-
-		case GraphicsPrimitiveType_RasterizerState:
-		{
-			RasterizerState_vk& rasterizerState = *reinterpret_cast<RasterizerState_vk*>(primitive);
-			rasterizerState.~RasterizerState_vk();
 			result = true;
 			break;
 		}
@@ -1838,7 +1806,6 @@ namespace sv {
 			VulkanPipeline& pipeline = *pipelinePtr;
 
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_vulkan_pipeline_get(pipeline, state, pipelineHash));
-
 		}
 
 		// Bind Viewports
@@ -3169,12 +3136,6 @@ namespace sv {
 		return true;
     }
 
-    bool graphics_vulkan_inputlayoutstate_create(InputLayoutState_vk& inputLayoutState, const InputLayoutStateDesc& desc)
-    {
-		inputLayoutState.hash = graphics_compute_hash_inputlayoutstate(&desc);
-		return true;
-    }
-
     bool graphics_vulkan_blendstate_create(BlendState_vk& blendState, const BlendStateDesc& desc)
     {
 		blendState.hash = graphics_compute_hash_blendstate(&desc);
@@ -3184,12 +3145,6 @@ namespace sv {
     bool graphics_vulkan_depthstencilstate_create(DepthStencilState_vk& depthStencilState, const DepthStencilStateDesc& desc)
     {
 		depthStencilState.hash = graphics_compute_hash_depthstencilstate(&desc);
-		return true;
-    }
-
-    bool graphics_vulkan_rasterizerstate_create(RasterizerState_vk& rasterizerState, const RasterizerStateDesc& desc)
-    {
-		rasterizerState.hash = graphics_compute_hash_rasterizerstate(&desc);
 		return true;
     }
 

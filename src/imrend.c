@@ -624,8 +624,8 @@ void imrend_flush(CommandList cmd)
 				graphics_resource_bind(ResourceType_ConstantBuffer, state->gfx.cbuffer_primitive, 0u, ShaderType_Vertex, cmd);
 
 				graphics_blendstate_bind(gfx->bs_transparent, cmd);
-				graphics_inputlayoutstate_unbind(cmd);
-				graphics_rasterizerstate_unbind(cmd);
+				graphics_inputlayout_reset(0, cmd);
+				graphics_rasterizer_set(FALSE, CullMode_None, TRUE, cmd);
 
 				graphics_resource_bind(ResourceType_Sampler, gfx->sampler_def_nearest, 0u, ShaderType_Pixel, cmd);
 		    

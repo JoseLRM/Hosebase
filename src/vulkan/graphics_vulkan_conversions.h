@@ -27,6 +27,17 @@ namespace sv {
 		case Format_R32G32B32_SINT:
 			return VK_FORMAT_R32G32B32_SINT;
 
+		case Format_R16G16B16_FLOAT:
+			return VK_FORMAT_R16G16B16_SFLOAT;
+		case Format_R16G16B16_UNORM:
+			return VK_FORMAT_R16G16B16_UNORM;
+		case Format_R16G16B16_UINT:
+			return VK_FORMAT_R16G16B16_UINT;
+		case Format_R16G16B16_SNORM:
+			return VK_FORMAT_R16G16B16_SNORM;
+		case Format_R16G16B16_SINT:
+			return VK_FORMAT_R16G16B16_SINT;
+
 		case Format_R16G16B16A16_FLOAT:
 			return VK_FORMAT_R16G16B16A16_SFLOAT;
 
@@ -204,6 +215,21 @@ namespace sv {
 		case VK_FORMAT_R32G32B32_SINT:
 			return Format_R32G32B32_SINT;
 
+		case VK_FORMAT_R16G16B16_SFLOAT:
+			return Format_R16G16B16_FLOAT;
+
+		case VK_FORMAT_R16G16B16_UNORM:
+			return Format_R16G16B16_UNORM;
+
+		case VK_FORMAT_R16G16B16_UINT:
+			return Format_R16G16B16_UINT;
+
+		case VK_FORMAT_R16G16B16_SNORM:
+			return Format_R16G16B16_SNORM;
+
+		case VK_FORMAT_R16G16B16_SINT:
+			return Format_R16G16B16_SINT;
+
 		case VK_FORMAT_R16G16B16A16_SFLOAT:
 			return Format_R16G16B16A16_FLOAT;
 
@@ -375,17 +401,17 @@ namespace sv {
 			return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		}
     }
-    constexpr VkCullModeFlags graphics_vulkan_parse_cullmode(RasterizerCullMode mode)
+    constexpr VkCullModeFlags graphics_vulkan_parse_cullmode(CullMode mode)
     {
 		switch (mode)
 		{
-		case RasterizerCullMode_None:
+		case CullMode_None:
 			return VK_CULL_MODE_NONE;
-		case RasterizerCullMode_Front:
+		case CullMode_Front:
 			return VK_CULL_MODE_FRONT_BIT;
-		case RasterizerCullMode_Back:
+		case CullMode_Back:
 			return VK_CULL_MODE_BACK_BIT;
-		case RasterizerCullMode_FrontAndBack:
+		case CullMode_FrontAndBack:
 			return VK_CULL_MODE_FRONT_AND_BACK;
 		default:
 			return VK_CULL_MODE_BACK_BIT;

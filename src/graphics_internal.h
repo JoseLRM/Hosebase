@@ -45,11 +45,6 @@ struct RenderPass {
 	RenderPassInfo info;
 };
 
-struct InputLayoutState {
-	GraphicsPrimitive primitive;
-	InputLayoutStateInfo info;
-};
-
 struct BlendState {
 	GraphicsPrimitive primitive;
 	BlendStateInfo info;
@@ -58,11 +53,6 @@ struct BlendState {
 struct DepthStencilState {
 	GraphicsPrimitive primitive;
 	DepthStencilStateInfo info;
-};
-
-struct RasterizerState {
-	GraphicsPrimitive primitive;
-	RasterizerStateInfo info;
 };
 
 // Pipeline state
@@ -130,10 +120,33 @@ typedef struct {
 	Shader*				    pixel_shader;
 	Shader*				    geometry_shader;
 	
-	InputLayoutState*		input_layout_state;
 	BlendState*			    blend_state;
 	DepthStencilState*		depth_stencil_state;
-	RasterizerState*		rasterizer_state;
+
+	struct {
+		struct {
+			u32 stride;
+			b8 instanced;
+
+			struct {
+				char name[NAME_SIZE];
+				u32 index;
+				u32 offset;
+				Format format;
+			} elements[GraphicsLimit_InputElement];
+
+			u32 element_count;
+
+		} slots[GraphicsLimit_InputSlot];
+
+		u32 slot_count;
+	} input_layout;
+
+	struct {
+		b8		wireframe;
+		CullMode cull_mode;
+		b8       clockwise;
+	} rasterizer;
 	
 	Viewport				viewports[GraphicsLimit_Viewport];
 	u32						viewport_count;
@@ -266,17 +279,11 @@ typedef struct {
 	InstanceAllocator render_pass_allocator;
 	Mutex             render_pass_mutex;
 
-	InstanceAllocator input_layout_state_allocator;
-	Mutex             input_layout_state_mutex;
-
 	InstanceAllocator blend_state_allocator;
 	Mutex             blend_state_mutex;
 
 	InstanceAllocator depth_stencil_state_allocator;
 	Mutex             depth_stencil_state_mutex;
-
-	InstanceAllocator rasterizer_state_allocator;
-	Mutex             rasterizer_state_mutex;
 
 	GraphicsAPI api;
 

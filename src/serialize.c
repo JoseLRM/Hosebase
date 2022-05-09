@@ -597,57 +597,57 @@ inline void read_mtl(const char* filepath, ModelInfo* model_info)
 
 							case 0: // Color on and Ambient off
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_Back;
+								mat->culling = CullMode_Back;
 								break;
 				    
 							case 1: // Color on and Ambient on
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_Back;
+								mat->culling = CullMode_Back;
 								break;
 				    
 							case 2: // Highlight on
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_Back;
+								mat->culling = CullMode_Back;
 								break;
 				    
 							case 3: // Reflection on and Ray trace on
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_Back;
+								mat->culling = CullMode_Back;
 								break;
 				    
 							case 4: // Transparency: Glass on. Reflection: Ray trace on
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_None;
+								mat->culling = CullMode_None;
 								break;
 				    
 							case 5:	// Reflection: Fresnel on and Ray trace on
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_Back;
+								mat->culling = CullMode_Back;
 								break;
 				    
 							case 6: // Transparency: Refraction on. Reflection: Fresnel off and Ray trace on
 								mat->transparent = TRUE;
-								mat->culling = RasterizerCullMode_None;
+								mat->culling = CullMode_None;
 								break;
 				    
 							case 7: // Transparency: Refraction on. Reflection: Fresnel on and Ray trace on
 								mat->transparent = TRUE;
-								mat->culling = RasterizerCullMode_None;
+								mat->culling = CullMode_None;
 								break;
 				    
 							case 8: // Reflection on and Ray trace off
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_Back;
+								mat->culling = CullMode_Back;
 								break;
 				    
 							case 9:	// Transparency: Glass on. Reflection: Ray trace off
 								mat->transparent = TRUE;
-								mat->culling = RasterizerCullMode_None;
+								mat->culling = CullMode_None;
 								break;
 				    
 							case 10:// Casts shadows onto invisible surfaces
 								mat->transparent = FALSE;
-								mat->culling = RasterizerCullMode_Back;
+								mat->culling = CullMode_Back;
 								break;
 				    
 							}

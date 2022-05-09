@@ -2,6 +2,7 @@
 
 #include "Hosebase/allocators.h"
 #include "Hosebase/math.h"
+#include "Hosebase/input.h"
 
 SV_BEGIN_C_HEADER
 
@@ -82,6 +83,11 @@ inline b8 date_less_than(Date d0, Date d1)
 f64  timer_now();
 u64  timer_seed();
 Date timer_date();
+
+// Input async
+
+b8 key_async(Key key);
+b8 mouse_button_async(MouseButton button);
 
 // Window
 

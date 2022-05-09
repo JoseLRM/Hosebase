@@ -67,7 +67,9 @@ inline void* hashtable_get(u64 hash, void *_data, u32 stride, u32 table_size, b8
 	HashTableEntry *parent = NULL;
 	HashTableEntry *entry = (HashTableEntry *)(data + (index * stride) + stride - sizeof(HashTableEntry));
 
-	while (entry->hash != 0 && entry->hash != hash)
+	b8 first_entry_empty = entry->hash == 0;
+
+	while ((entry->hash != 0 || entry->next != NULL) && entry->hash != hash)
 	{
 		parent = entry;
 		entry = (HashTableEntry*)parent->next;
@@ -86,6 +88,11 @@ inline void* hashtable_get(u64 hash, void *_data, u32 stride, u32 table_size, b8
 	}
 	else if (create)
 	{
+		if (first_entry_empty)
+		{
+			entry = (HashTableEntry *)(data + (index * stride) + stride - sizeof(HashTableEntry));
+		}
+
 		created = TRUE;
 
 		if (entry == NULL)
@@ -96,13 +103,55 @@ inline void* hashtable_get(u64 hash, void *_data, u32 stride, u32 table_size, b8
 		}
 		
 		entry->hash = hash;
-		entry->next = NULL;
 	}
 
 	if (out_created != NULL)
 		*out_created = created;
 
-	return (entry == NULL) ? NULL : ((u8 *)entry + sizeof(HashTableEntry) - stride);
+	return (entry == NULL || entry->hash == 0) ? NULL : ((u8 *)entry + sizeof(HashTableEntry) - stride);
+}
+
+inline b8 hashtable_erase(u64 hash, void *_data, u32 stride, u32 table_size)
+{
+	assert(sizeof(HashTableEntry) <= stride);
+
+	if (hash == 0)
+	{
+		return FALSE;
+	}
+
+	u8 *data = (u8 *)_data;
+	u32 index = hash % table_size;
+
+	HashTableEntry *parent = NULL;
+	HashTableEntry *entry = (HashTableEntry *)(data + (index * stride) + stride - sizeof(HashTableEntry));
+
+	while ((entry->hash != 0 || entry->next != NULL) && entry->hash != hash)
+	{
+		parent = entry;
+		entry = (HashTableEntry*)parent->next;
+
+		if (parent->next == NULL)
+			return FALSE;
+		
+		entry = (HashTableEntry*)((u8*)entry + stride - sizeof(HashTableEntry));
+	}
+
+	void* entry_data = (u8*)entry + sizeof(HashTableEntry) - stride;
+
+	if (parent == NULL)
+	{
+		void* next = entry->next;
+		memory_zero(entry_data, stride);
+		entry->next = next;
+	}
+	else
+	{
+		parent->next = entry->next;
+		memory_free(entry_data);
+	}
+
+	return TRUE;
 }
 
 static void _hashtable_free_entry(u8* entry_data, u32 stride)
@@ -565,7 +614,7 @@ inline void string_from_f32(char* dst, f32 value, u32 decimals)
 	string_from_u32(integer_string, decimal);
 
 	u32 decimal_size = string_size(integer_string);
-	while (decimal_size < decimal)
+	while (decimal_size < decimals)
 	{
 		string_append(integer_string, "0", 20);
 		decimal_size++;

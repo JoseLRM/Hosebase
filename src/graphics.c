@@ -8,20 +8,20 @@
 
 typedef struct
 {
-
 	PipelineState pipeline_state;
 	GraphicsDevice device;
 
 	GraphicsState def_graphics_state;
 	ComputeState def_compute_state;
 
-	InputLayoutState *def_input_layout_state;
 	BlendState *def_blend_state;
 	DepthStencilState *def_depth_stencil_state;
-	RasterizerState *def_rasterizer_state;
 
 	DynamicArray(GraphicsPrimitive *) primitives_to_destroy;
 	Mutex primitives_to_destroy_mutex;
+
+	GPUBuffer *immediate_cbuffers_graphics_pipeline[GraphicsLimit_CommandList][ShaderType_GraphicsCount];
+	GPUBuffer *immediate_cbuffers_compute_pipeline[GraphicsLimit_CommandList];
 
 } GraphicsData;
 
@@ -136,22 +136,14 @@ b8 _graphics_initialize(const GraphicsInitializeDesc *desc)
 	gfx->device.sampler_mutex = mutex_create();
 	gfx->device.shader_mutex = mutex_create();
 	gfx->device.render_pass_mutex = mutex_create();
-	gfx->device.input_layout_state_mutex = mutex_create();
 	gfx->device.depth_stencil_state_mutex = mutex_create();
 	gfx->device.blend_state_mutex = mutex_create();
-	gfx->device.rasterizer_state_mutex = mutex_create();
 
 	gfx->primitives_to_destroy_mutex = mutex_create();
 
 	gfx->primitives_to_destroy = array_init(GraphicsPrimitive *, 2.f);
 
 	// Create default states
-	{
-		InputLayoutStateDesc desc;
-		desc.slot_count = 0u;
-		desc.element_count = 0u;
-		SV_CHECK(graphics_inputlayoutstate_create(&gfx->def_input_layout_state, &desc));
-	}
 	{
 		BlendAttachmentDesc att;
 		att.blend_enabled = FALSE;
@@ -180,20 +172,16 @@ b8 _graphics_initialize(const GraphicsInitializeDesc *desc)
 		desc.write_mask = 0xFF;
 		SV_CHECK(graphics_depthstencilstate_create(&gfx->def_depth_stencil_state, &desc));
 	}
-	{
-		RasterizerStateDesc desc;
-		desc.wireframe = FALSE;
-		desc.cull_mode = RasterizerCullMode_None;
-		desc.clockwise = TRUE;
-		SV_CHECK(graphics_rasterizerstate_create(&gfx->def_rasterizer_state, &desc));
-	}
 
 	// Graphic State
 	memory_zero(&gfx->def_graphics_state, sizeof(GraphicsState));
-	gfx->def_graphics_state.input_layout_state = gfx->def_input_layout_state;
 	gfx->def_graphics_state.blend_state = gfx->def_blend_state;
 	gfx->def_graphics_state.depth_stencil_state = gfx->def_depth_stencil_state;
-	gfx->def_graphics_state.rasterizer_state = gfx->def_rasterizer_state;
+
+	gfx->def_graphics_state.rasterizer.clockwise = TRUE;
+	gfx->def_graphics_state.rasterizer.cull_mode = CullMode_Back;
+	gfx->def_graphics_state.rasterizer.wireframe = FALSE;
+
 	for (u32 i = 0; i < GraphicsLimit_Viewport; ++i)
 	{
 		gfx->def_graphics_state.viewports[i] = (Viewport){
@@ -300,7 +288,16 @@ void _graphics_close()
 	graphics_destroy(gfx->def_blend_state);
 	graphics_destroy(gfx->def_depth_stencil_state);
 	// graphics_destroy(gfx->def_input_layout_state);
-	graphics_destroy(gfx->def_rasterizer_state);
+
+	foreach (i, GraphicsLimit_CommandList)
+	{
+		foreach (j, ShaderType_GraphicsCount)
+		{
+			graphics_destroy(gfx->immediate_cbuffers_graphics_pipeline[i][j]);
+		}
+
+		graphics_destroy(gfx->immediate_cbuffers_compute_pipeline[i]);
+	}
 
 	destroy_primitives();
 
@@ -309,10 +306,8 @@ void _graphics_close()
 	mutex_lock(gfx->device.sampler_mutex);
 	mutex_lock(gfx->device.shader_mutex);
 	mutex_lock(gfx->device.render_pass_mutex);
-	mutex_lock(gfx->device.input_layout_state_mutex);
 	mutex_lock(gfx->device.blend_state_mutex);
 	mutex_lock(gfx->device.depth_stencil_state_mutex);
-	mutex_lock(gfx->device.rasterizer_state_mutex);
 
 	u32 count;
 
@@ -371,17 +366,6 @@ void _graphics_close()
 		}
 	}
 
-	count = instance_allocator_size(&gfx->device.input_layout_state_allocator);
-	if (count)
-	{
-		SV_LOG_WARNING("There are %u unfreed input layout states\n", count);
-
-		foreach_instance(it, &gfx->device.input_layout_state_allocator)
-		{
-			destroy_unused_primitive((GraphicsPrimitive *)it.ptr);
-		}
-	}
-
 	count = instance_allocator_size(&gfx->device.blend_state_allocator);
 	if (count)
 	{
@@ -404,35 +388,20 @@ void _graphics_close()
 		}
 	}
 
-	count = instance_allocator_size(&gfx->device.rasterizer_state_allocator);
-	if (count)
-	{
-		SV_LOG_WARNING("There are %u unfreed rasterizer states\n", count);
-
-		foreach_instance(it, &gfx->device.rasterizer_state_allocator)
-		{
-			destroy_unused_primitive((GraphicsPrimitive *)it.ptr);
-		}
-	}
-
 	instance_allocator_close(&gfx->device.buffer_allocator);
 	instance_allocator_close(&gfx->device.image_allocator);
 	instance_allocator_close(&gfx->device.sampler_allocator);
 	instance_allocator_close(&gfx->device.shader_allocator);
-	instance_allocator_close(&gfx->device.input_layout_state_allocator);
 	instance_allocator_close(&gfx->device.blend_state_allocator);
 	instance_allocator_close(&gfx->device.depth_stencil_state_allocator);
-	instance_allocator_close(&gfx->device.rasterizer_state_allocator);
 
 	mutex_unlock(gfx->device.buffer_mutex);
 	mutex_unlock(gfx->device.image_mutex);
 	mutex_unlock(gfx->device.sampler_mutex);
 	mutex_unlock(gfx->device.shader_mutex);
 	mutex_unlock(gfx->device.render_pass_mutex);
-	mutex_unlock(gfx->device.input_layout_state_mutex);
 	mutex_unlock(gfx->device.blend_state_mutex);
 	mutex_unlock(gfx->device.depth_stencil_state_mutex);
-	mutex_unlock(gfx->device.rasterizer_state_mutex);
 
 	gfx->device.close();
 
@@ -443,10 +412,8 @@ void _graphics_close()
 	mutex_destroy(gfx->device.sampler_mutex);
 	mutex_destroy(gfx->device.shader_mutex);
 	mutex_destroy(gfx->device.render_pass_mutex);
-	mutex_destroy(gfx->device.input_layout_state_mutex);
 	mutex_destroy(gfx->device.depth_stencil_state_mutex);
 	mutex_destroy(gfx->device.blend_state_mutex);
-	mutex_destroy(gfx->device.rasterizer_state_mutex);
 
 	mutex_destroy(gfx->primitives_to_destroy_mutex);
 
@@ -502,13 +469,6 @@ inline void destroy_graphics_primitive(GraphicsPrimitive *p)
 		mutex_unlock(gfx->device.render_pass_mutex);
 		break;
 	}
-	case GraphicsPrimitiveType_InputLayoutState:
-	{
-		mutex_lock(gfx->device.input_layout_state_mutex);
-		instance_allocator_destroy(&gfx->device.input_layout_state_allocator, p);
-		mutex_unlock(gfx->device.input_layout_state_mutex);
-		break;
-	}
 	case GraphicsPrimitiveType_BlendState:
 	{
 		mutex_lock(gfx->device.blend_state_mutex);
@@ -521,13 +481,6 @@ inline void destroy_graphics_primitive(GraphicsPrimitive *p)
 		mutex_lock(gfx->device.depth_stencil_state_mutex);
 		instance_allocator_destroy(&gfx->device.depth_stencil_state_allocator, p);
 		mutex_unlock(gfx->device.depth_stencil_state_mutex);
-		break;
-	}
-	case GraphicsPrimitiveType_RasterizerState:
-	{
-		mutex_lock(gfx->device.rasterizer_state_mutex);
-		instance_allocator_destroy(&gfx->device.rasterizer_state_allocator, p);
-		mutex_unlock(gfx->device.rasterizer_state_mutex);
 		break;
 	}
 	}
@@ -599,35 +552,6 @@ GraphicsDevice *graphics_device_get()
 
 /////////////////////////////////////// HASH FUNCTIONS ///////////////////////////////////////
 
-u64 graphics_compute_hash_inputlayoutstate(const InputLayoutStateDesc *desc)
-{
-	if (desc == NULL)
-		return 0u;
-
-	u64 hash = 0u;
-	hash = hash_combine(hash, desc->slot_count);
-
-	for (u32 i = 0; i < desc->slot_count; ++i)
-	{
-		const InputSlotDesc *slot = desc->slots + i;
-		hash = hash_combine(hash, slot->slot);
-		hash = hash_combine(hash, slot->stride);
-		hash = hash_combine(hash, (u64)(slot->instanced));
-	}
-
-	hash = hash_combine(hash, desc->element_count);
-
-	for (u32 i = 0; i < desc->element_count; ++i)
-	{
-		const InputElementDesc *element = desc->elements + i;
-		hash = hash_combine(hash, (u64)(element->format));
-		hash = hash_combine(hash, element->input_slot);
-		hash = hash_combine(hash, element->offset);
-		hash = hash_combine(hash, hash_string(element->name));
-	}
-
-	return hash;
-}
 u64 graphics_compute_hash_blendstate(const BlendStateDesc *desc)
 {
 	if (desc == NULL)
@@ -652,18 +576,6 @@ u64 graphics_compute_hash_blendstate(const BlendStateDesc *desc)
 		hash = hash_combine(hash, att->src_alpha_blend_factor);
 		hash = hash_combine(hash, att->src_color_blend_factor);
 	}
-
-	return hash;
-}
-u64 graphics_compute_hash_rasterizerstate(const RasterizerStateDesc *desc)
-{
-	if (desc == NULL)
-		return 0u;
-
-	u64 hash = 0u;
-	hash = hash_combine(hash, desc->clockwise ? 1u : 0u);
-	hash = hash_combine(hash, desc->cull_mode);
-	hash = hash_combine(hash, desc->wireframe ? 1u : 0u);
 
 	return hash;
 }
@@ -720,6 +632,13 @@ u32 graphics_format_size(Format format)
 	case Format_R32G32_UINT:
 	case Format_R32G32_SINT:
 		return 8u;
+
+	case Format_R16G16B16_FLOAT:
+	case Format_R16G16B16_UNORM:
+	case Format_R16G16B16_UINT:
+	case Format_R16G16B16_SNORM:
+	case Format_R16G16B16_SINT:
+		return 6;
 
 	case Format_R8G8B8A8_UNORM:
 	case Format_R8G8B8A8_SRGB:
@@ -932,41 +851,6 @@ b8 graphics_renderpass_create(RenderPass **renderPass, const RenderPassDesc *des
 	return TRUE;
 }
 
-b8 graphics_inputlayoutstate_create(InputLayoutState **inputLayoutState, const InputLayoutStateDesc *desc)
-{
-#if SV_GFX
-#endif
-
-	// Allocate memory
-	{
-		mutex_lock(gfx->device.input_layout_state_mutex);
-		*inputLayoutState = (InputLayoutState *)instance_allocator_create(&gfx->device.input_layout_state_allocator);
-		mutex_unlock(gfx->device.input_layout_state_mutex);
-	}
-
-	// Create API primitive
-	// TODO: Handle error
-	gfx->device.create(GraphicsPrimitiveType_InputLayoutState, desc, (GraphicsPrimitive *)*inputLayoutState);
-
-	// Set parameters
-	InputLayoutState *p = *inputLayoutState;
-	p->primitive.type = GraphicsPrimitiveType_InputLayoutState;
-
-	p->info.slot_count = desc->slot_count;
-	p->info.element_count = desc->element_count;
-
-	foreach (i, desc->slot_count)
-	{
-		p->info.slots[i] = desc->slots[i];
-	}
-	foreach (i, desc->element_count)
-	{
-		p->info.elements[i] = desc->elements[i];
-	}
-
-	return TRUE;
-}
-
 b8 graphics_blendstate_create(BlendState **blendState, const BlendStateDesc *desc)
 {
 #if SV_GFX
@@ -1018,29 +902,6 @@ b8 graphics_depthstencilstate_create(DepthStencilState **depthStencilState, cons
 	DepthStencilState *p = *depthStencilState;
 	p->primitive.type = GraphicsPrimitiveType_DepthStencilState;
 	memory_copy(&p->info, desc, sizeof(DepthStencilStateInfo));
-
-	return TRUE;
-}
-
-b8 graphics_rasterizerstate_create(RasterizerState **rasterizerState, const RasterizerStateDesc *desc)
-{
-#if SV_GFX
-#endif
-
-	// Allocate memory
-	{
-		mutex_lock(gfx->device.rasterizer_state_mutex);
-		*rasterizerState = (RasterizerState *)instance_allocator_create(&gfx->device.rasterizer_state_allocator);
-		mutex_unlock(gfx->device.rasterizer_state_mutex);
-	}
-
-	// Create API primitive
-	gfx->device.create(GraphicsPrimitiveType_RasterizerState, desc, (GraphicsPrimitive *)*rasterizerState);
-
-	// Set parameters
-	RasterizerState *p = *rasterizerState;
-	p->primitive.type = GraphicsPrimitiveType_RasterizerState;
-	memory_copy(&p->info, desc, sizeof(RasterizerStateInfo));
 
 	return TRUE;
 }
@@ -1199,6 +1060,69 @@ void graphics_index_buffer_unbind(CommandList cmd)
 
 	state->index_buffer = NULL;
 	state->flags |= GraphicsPipelineState_IndexBuffer;
+}
+
+void graphics_constant_buffer_bind(void *data, u32 size, u32 slot, ShaderType shader_type, CommandList cmd)
+{
+	if (data == NULL || size == 0)
+		return;
+
+	GPUBuffer *buffer;
+
+	// Get buffer
+	{
+		if (shader_type == ShaderType_Compute)
+		{
+			buffer = gfx->immediate_cbuffers_compute_pipeline[cmd];
+		}
+		else
+		{
+			buffer = gfx->immediate_cbuffers_graphics_pipeline[cmd][shader_type];
+		}
+	}
+
+	if (buffer == NULL || graphics_buffer_info(buffer)->size < size)
+	{
+		graphics_destroy(buffer);
+		buffer = NULL;
+
+		GPUBufferDesc desc;
+		SV_ZERO(desc);
+		desc.buffer_type = GPUBufferType_Constant;
+		desc.cpu_access = CPUAccess_Write;
+		desc.data = data;
+		desc.size = size;
+		desc.usage = ResourceUsage_Dynamic;
+
+		b8 res = graphics_buffer_create(&buffer, &desc);
+
+		if (!res)
+		{
+			buffer = NULL;
+			SV_LOG_ERROR("Can't create dynamic buffer\n");
+		}
+	}
+	else
+	{
+		graphics_buffer_update(buffer, GPUBufferState_Constant, data, size, 0, cmd);
+	}
+
+	if (buffer != NULL)
+	{
+		graphics_resource_bind(ResourceType_ConstantBuffer, buffer, slot, shader_type, cmd);
+	}
+
+	// Set buffer
+	{
+		if (shader_type == ShaderType_Compute)
+		{
+			gfx->immediate_cbuffers_compute_pipeline[cmd] = buffer;
+		}
+		else
+		{
+			gfx->immediate_cbuffers_graphics_pipeline[cmd][shader_type] = buffer;
+		}
+	}
 }
 
 /////////////////////////// SHADER RESOURCES ////////////////
@@ -1492,21 +1416,6 @@ void graphics_resource_bind(ResourceType type, void *primitive, u32 slot, Shader
 
 ////////////////////////////////////////////// STATE //////////////////////////////////////////////////
 
-void graphics_state_unbind(CommandList cmd)
-{
-	if (gfx->pipeline_state.graphics[cmd].render_pass)
-		graphics_renderpass_end(cmd);
-
-	graphics_shader_unbind_commandlist(cmd);
-	graphics_inputlayoutstate_unbind(cmd);
-	graphics_blendstate_unbind(cmd);
-	graphics_depthstencilstate_unbind(cmd);
-	graphics_rasterizerstate_unbind(cmd);
-
-	graphics_stencil_reference_set(0u, cmd);
-	graphics_line_width_set(1.f, cmd);
-}
-
 void graphics_shader_bind(Shader *shader, CommandList cmd)
 {
 	if (shader->info.shader_type == ShaderType_Compute)
@@ -1550,13 +1459,6 @@ void graphics_shader_bind_asset(Asset asset, CommandList cmd)
 		graphics_shader_bind(shader, cmd);
 }
 
-void graphics_inputlayoutstate_bind(InputLayoutState *input_layout_state, CommandList cmd)
-{
-	GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
-	state->input_layout_state = input_layout_state;
-	state->flags |= GraphicsPipelineState_InputLayoutState;
-}
-
 void graphics_blendstate_bind(BlendState *blend_state, CommandList cmd)
 {
 	GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
@@ -1571,10 +1473,83 @@ void graphics_depthstencilstate_bind(DepthStencilState *depth_stencil_state, Com
 	state->flags |= GraphicsPipelineState_DepthStencilState;
 }
 
-void graphics_rasterizerstate_bind(RasterizerState *rasterizer_state, CommandList cmd)
+void graphics_inputlayout_reset(u32 slots, CommandList cmd)
 {
 	GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
-	state->rasterizer_state = rasterizer_state;
+
+	if (slots > GraphicsLimit_InputSlot)
+	{
+		SV_LOG_ERROR("The slot limit is '%u'\n", GraphicsLimit_InputSlot);
+		slots = GraphicsLimit_InputSlot;
+	}
+
+	foreach(i, slots)
+	{
+		SV_ZERO(state->input_layout.slots[i]);
+	}
+	state->input_layout.slot_count = slots;
+	
+	state->flags |= GraphicsPipelineState_InputLayoutState;
+}
+
+void graphics_inputlayout_set_slot(u32 slot, u32 stride, b8 instanced, CommandList cmd)
+{
+	GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
+
+	if (slot >= state->input_layout.slot_count)
+	{
+		SV_LOG_ERROR("The slot '%u' exceedes the slot count '%u'\n", slot, state->input_layout.slot_count);
+		return;
+	}
+
+	state->input_layout.slots[slot].stride = stride;
+	state->input_layout.slots[slot].instanced = instanced;
+	state->input_layout.slots[slot].element_count = 0;
+}
+
+void graphics_inputlayout_add_element(u32 slot, const char* name, Format format, u32 index, CommandList cmd)
+{
+	GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
+
+	if (slot >= state->input_layout.slot_count)
+	{
+		SV_LOG_ERROR("The slot '%u' exceedes the slot count '%u'\n", slot, state->input_layout.slot_count);
+		return;
+	}
+
+	if (state->input_layout.slots[slot].element_count >= GraphicsLimit_InputElement)
+	{
+		SV_LOG_ERROR("The input element count in slot exceeds the limit '%u'\n", slot, GraphicsLimit_InputElement);
+		return;
+	}
+
+	u32 element = state->input_layout.slots[slot].element_count++;
+
+	u32 offset = 0;
+
+	if (element != 0)
+	{
+		u32 e = element - 1;
+		offset = state->input_layout.slots[slot].elements[e].offset;
+		offset += graphics_format_size(state->input_layout.slots[slot].elements[e].format);
+	}
+
+	string_copy(state->input_layout.slots[slot].elements[element].name, name, NAME_SIZE);
+	state->input_layout.slots[slot].elements[element].index = index;
+	state->input_layout.slots[slot].elements[element].offset = offset;
+	state->input_layout.slots[slot].elements[element].format = format;
+}
+
+void graphics_rasterizer_set(b8 wireframe, CullMode cull_mode, b8 clockwise, CommandList cmd)
+{
+	GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
+
+	if (state->rasterizer.wireframe == wireframe && state->rasterizer.cull_mode == cull_mode && state->rasterizer.clockwise == clockwise)
+		return;
+
+	state->rasterizer.wireframe = wireframe;
+	state->rasterizer.cull_mode = cull_mode;
+	state->rasterizer.clockwise = clockwise;
 	state->flags |= GraphicsPipelineState_RasterizerState;
 }
 
@@ -1624,11 +1599,6 @@ void graphics_shader_unbind_commandlist(CommandList cmd)
 	state->flags |= GraphicsPipelineState_Shader;
 }
 
-void graphics_inputlayoutstate_unbind(CommandList cmd)
-{
-	graphics_inputlayoutstate_bind(gfx->def_input_layout_state, cmd);
-}
-
 void graphics_blendstate_unbind(CommandList cmd)
 {
 	graphics_blendstate_bind(gfx->def_blend_state, cmd);
@@ -1637,11 +1607,6 @@ void graphics_blendstate_unbind(CommandList cmd)
 void graphics_depthstencilstate_unbind(CommandList cmd)
 {
 	graphics_depthstencilstate_bind(gfx->def_depth_stencil_state, cmd);
-}
-
-void graphics_rasterizerstate_unbind(CommandList cmd)
-{
-	graphics_rasterizerstate_bind(gfx->def_rasterizer_state, cmd);
 }
 
 void graphics_viewport_set_array(const Viewport *viewports, u32 count, CommandList cmd)
@@ -1726,19 +1691,9 @@ const SamplerInfo *graphics_sampler_info(const Sampler *sampler)
 	return &sampler->info;
 }
 
-const InputLayoutStateInfo *graphics_inputlayoutstate_info(const InputLayoutState *ils)
-{
-	return &ils->info;
-}
-
 const BlendStateInfo *graphics_blendstate_info(const BlendState *bs)
 {
 	return &bs->info;
-}
-
-const RasterizerStateInfo *graphics_rasterizerstate_info(const RasterizerState *rs)
-{
-	return &rs->info;
 }
 
 const DepthStencilStateInfo *graphics_depthstencilstate_info(const DepthStencilState *dss)

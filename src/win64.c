@@ -121,7 +121,6 @@ inline Key wparam_to_key(WPARAM wParam)
 
 	if (wParam >= 'A' && wParam <= 'Z')
 	{
-
 		key = (Key)((u32)Key_A + (u32)wParam - 'A');
 	}
 	else if (wParam >= '0' && wParam <= '9')
@@ -131,7 +130,6 @@ inline Key wparam_to_key(WPARAM wParam)
 	}
 	else if (wParam >= VK_F1 && wParam <= VK_F24)
 	{
-
 		key = (Key)((u32)Key_F1 + (u32)wParam - VK_F1);
 	}
 	else
@@ -215,6 +213,123 @@ inline Key wparam_to_key(WPARAM wParam)
 	}
 
 	return key;
+}
+
+inline i32 key_to_winkey(Key key)
+{
+	i32 res;
+
+	if (key >= Key_A && key <= Key_Z)
+	{
+		res = 'A' + (key - Key_A);
+	}
+	else if (key >= Key_Num0 && key <= Key_Num9)
+	{
+		res = '0' + (key - Key_Num0);
+	}
+	else if (key >= Key_F1 && key <= Key_F24)
+	{
+		res = VK_F1 + (key - Key_F1);
+	}
+	else
+	{
+		switch (key)
+		{
+
+		case Key_Insert:
+			res = VK_INSERT;
+			break;
+
+		case Key_Space:
+			res = VK_SPACE;
+			break;
+
+		case Key_Shift:
+			res = VK_SHIFT;
+			break;
+
+		case Key_Control:
+			res = VK_CONTROL;
+			break;
+
+		case Key_Escape:
+			res = VK_ESCAPE;
+			break;
+
+		case Key_Left:
+			res = VK_LEFT;
+			break;
+
+		case Key_Right:
+			res = VK_RIGHT;
+			break;
+
+		case Key_Up:
+			res = VK_UP;
+			break;
+
+		case Key_Down:
+			res = VK_DOWN;
+			break;
+
+		case Key_Enter:
+			res = 13;
+			break;
+
+		case Key_Delete:
+			res = 8;
+			break;
+
+		case Key_Supr:
+			res = 46;
+			break;
+
+		case Key_Tab:
+			res = VK_TAB;
+			break;
+
+		case Key_Capital:
+			res = VK_CAPITAL;
+			break;
+
+		case Key_Alt:
+			res = VK_MENU;
+			break;
+
+		case Key_Begin:
+			res = 36;
+			break;
+
+		case Key_End:
+			res = 35;
+			break;
+
+		default:
+			// TODO SV_LOG_WARNING("Unknown keycode: %u", (u32)wParam);
+			res = 0;
+			break;
+		}
+	}
+
+	return res;
+}
+
+inline i32 mouse_button_to_winkey(MouseButton button)
+{
+	switch (button)
+	{
+	case MouseButton_Center:
+		return VK_MBUTTON;
+
+	case MouseButton_Left:
+		return VK_LBUTTON;
+
+	case MouseButton_Right:
+		return VK_RBUTTON;
+
+	default:
+		return 0;
+	}
 }
 
 inline v2_u32 get_window_size()
@@ -894,7 +1009,7 @@ b8 file_dialog(char *buff, u32 filterCount, const char **filters, const char *fi
 	char abs_filter[5000] = "";
 
 	{
-		char* it = abs_filter;
+		char *it = abs_filter;
 
 		for (u32 i = 0; i < filterCount; ++i)
 		{
@@ -1185,6 +1300,37 @@ Date timer_date()
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	return systemtime_to_date(time);
+}
+
+b8 key_async(Key key)
+{
+	i32 k = key_to_winkey(key);
+
+	if (k == 0)
+		return FALSE;
+
+	SHORT res = GetAsyncKeyState(k);
+	return (res & 0x8000) != 0;
+}
+
+b8 mouse_button_async(MouseButton button)
+{
+	i32 k = mouse_button_to_winkey(button);
+
+	if (k == 0)
+		return FALSE;
+	
+	if (GetSystemMetrics(SM_SWAPBUTTON))
+	{
+		if (k == VK_LBUTTON)
+			k = VK_RBUTTON;
+
+		if (k == VK_RBUTTON)
+			k = VK_LBUTTON;
+	}
+
+	SHORT res = GetAsyncKeyState(k);
+	return (res & 0x8000) != 0;
 }
 
 b8 file_date(const char *filepath_, Date *create, Date *last_write, Date *last_access)

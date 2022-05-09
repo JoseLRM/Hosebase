@@ -15,10 +15,8 @@ typedef struct GPUImage GPUImage;
 typedef struct Sampler Sampler;
 typedef struct RenderPass RenderPass;
 typedef struct Shader Shader;
-typedef struct InputLayoutState InputLayoutState;
 typedef struct BlendState BlendState;
 typedef struct DepthStencilState DepthStencilState;
-typedef struct RasterizerState RasterizerState;
 
 // Enums
 
@@ -50,10 +48,8 @@ typedef enum {
 	GraphicsPrimitiveType_Buffer,
 	GraphicsPrimitiveType_Shader,
 	GraphicsPrimitiveType_RenderPass,
-	GraphicsPrimitiveType_InputLayoutState,
 	GraphicsPrimitiveType_BlendState,
 	GraphicsPrimitiveType_DepthStencilState,
-	GraphicsPrimitiveType_RasterizerState,
 } GraphicsPrimitiveType;
 
 typedef enum {
@@ -132,6 +128,11 @@ typedef enum {
 	Format_R16G16B16A16_UINT,
 	Format_R16G16B16A16_SNORM,
 	Format_R16G16B16A16_SINT,
+	Format_R16G16B16_FLOAT,
+	Format_R16G16B16_UNORM,
+	Format_R16G16B16_UINT,
+	Format_R16G16B16_SNORM,
+	Format_R16G16B16_SINT,
 	Format_R32G32_FLOAT,
 	Format_R32G32_UINT,
 	Format_R32G32_SINT,
@@ -193,11 +194,11 @@ typedef enum {
 } IndexType;
 	
 typedef enum {
-	RasterizerCullMode_None,
-	RasterizerCullMode_Front,
-	RasterizerCullMode_Back,
-	RasterizerCullMode_FrontAndBack,
-} RasterizerCullMode;
+	CullMode_None,
+	CullMode_Front,
+	CullMode_Back,
+	CullMode_FrontAndBack,
+} CullMode;
 
 typedef enum {
 	AttachmentOperation_DontCare,
@@ -442,34 +443,6 @@ typedef struct {
 } RenderPassInfo;
 
 typedef struct {
-	const char* name;
-	u32			index;
-	u32			input_slot;
-	u32			offset;
-	Format		format;
-} InputElementDesc;
-
-typedef struct {
-	u32	slot;
-	u32	stride;
-	b8  instanced;
-} InputSlotDesc;
-
-typedef struct {
-	InputSlotDesc*		slots;
-	u32					slot_count;
-	InputElementDesc*	elements;
-	u32					element_count;
-} InputLayoutStateDesc;
-
-typedef struct {
-	InputSlotDesc    slots[GraphicsLimit_InputSlot];
-	u32              slot_count;
-	InputElementDesc elements[GraphicsLimit_InputElement];
-	u32              element_count;
-} InputLayoutStateInfo;
-
-typedef struct {
 	b8				    blend_enabled;
 	BlendFactor			src_color_blend_factor;
 	BlendFactor			dst_color_blend_factor;
@@ -491,14 +464,6 @@ typedef struct {
 	u32                 attachment_count;
 	v4			        blend_constants;
 } BlendStateInfo;
-
-typedef struct {
-	b8		           wireframe;
-	RasterizerCullMode cull_mode;
-	b8                 clockwise;
-} RasterizerStateDesc;
-
-typedef RasterizerStateDesc RasterizerStateInfo;
 
 typedef struct {
 	StencilOperation fail_op;
@@ -542,9 +507,7 @@ void graphics_present_image(GPUImage* image, GPUImageLayout layout);
 
 // Hash functions
 
-u64 graphics_compute_hash_inputlayoutstate(const InputLayoutStateDesc* desc);
 u64 graphics_compute_hash_blendstate(const BlendStateDesc* desc);
-u64 graphics_compute_hash_rasterizerstate(const RasterizerStateDesc* desc);
 u64 graphics_compute_hash_depthstencilstate(const DepthStencilStateDesc* desc);
 
 // Primitives
@@ -554,10 +517,8 @@ b8 graphics_shader_create(Shader** shader, const ShaderDesc* desc);
 b8 graphics_image_create(GPUImage** image, const GPUImageDesc* desc);
 b8 graphics_sampler_create(Sampler** sampler, const SamplerDesc* desc);
 b8 graphics_renderpass_create(RenderPass** render_pass, const RenderPassDesc* desc);
-b8 graphics_inputlayoutstate_create(InputLayoutState** input_layout_state, const InputLayoutStateDesc* desc);
 b8 graphics_blendstate_create(BlendState** blend_state, const BlendStateDesc* desc);
 b8 graphics_depthstencilstate_create(DepthStencilState** depth_stencil_state, const DepthStencilStateDesc* desc);
-b8 graphics_rasterizerstate_create(RasterizerState** rasterizer_state, const RasterizerStateDesc* desc);
 
 void graphics_destroy(void* primitive);
 	
@@ -584,6 +545,8 @@ void graphics_vertex_buffer_unbind_commandlist(CommandList cmd);
 void graphics_index_buffer_bind(GPUBuffer* buffer, u32 offset, CommandList cmd);
 void graphics_index_buffer_unbind(CommandList cmd);
 
+void graphics_constant_buffer_bind(void* data, u32 size, u32 slot, ShaderType shader_type, CommandList cmd);
+
 // Shader Resources
 
 typedef enum {
@@ -597,21 +560,26 @@ void graphics_resource_bind(ResourceType type, void* primitive, u32 slot, Shader
 
 // State functions
 
-void graphics_state_unbind(CommandList cmd);
-
 void graphics_shader_bind(Shader* shader, CommandList cmd);
 void graphics_shader_bind_asset(Asset asset, CommandList cmd);
-void graphics_inputlayoutstate_bind(InputLayoutState* inputLayoutState, CommandList cmd);
 void graphics_blendstate_bind(BlendState* blendState, CommandList cmd);
 void graphics_depthstencilstate_bind(DepthStencilState* depthStencilState, CommandList cmd);
-void graphics_rasterizerstate_bind(RasterizerState* rasterizerState, CommandList cmd);
+
+// Input layout
+
+void graphics_inputlayout_reset(u32 slots, CommandList cmd);
+
+void graphics_inputlayout_set_slot(u32 slot, u32 stride, b8 instanced, CommandList cmd);
+void graphics_inputlayout_add_element(u32 slot, const char* name, Format format, u32 index, CommandList cmd);
+
+// Rasterizer
+
+void graphics_rasterizer_set(b8 wireframe, CullMode cull_mode, b8 clockwise, CommandList cmd);
 
 void graphics_shader_unbind(ShaderType shaderType, CommandList cmd);
 void graphics_shader_unbind_commandlist(CommandList cmd);
-void graphics_inputlayoutstate_unbind(CommandList cmd);
 void graphics_blendstate_unbind(CommandList cmd);
 void graphics_depthstencilstate_unbind(CommandList cmd);
-void graphics_rasterizerstate_unbind(CommandList cmd);
 
 void graphics_topology_set(GraphicsTopology topology, CommandList cmd);
 void graphics_stencil_reference_set(u32 ref, CommandList cmd);
@@ -641,9 +609,7 @@ const GPUImageInfo*		     graphics_image_info(const GPUImage* image);
 const ShaderInfo*		     graphics_shader_info(const Shader* shader);
 const RenderPassInfo*	     graphics_renderpass_info(const RenderPass* renderpass);
 const SamplerInfo*		     graphics_sampler_info(const Sampler* sampler);
-const InputLayoutStateInfo*	 graphics_inputlayoutstate_info(const InputLayoutState* ils);
 const BlendStateInfo*	     graphics_blendstate_info(const BlendState* blendstate);
-const RasterizerStateInfo*	 graphics_rasterizerstate_info(const RasterizerState* rasterizer);
 const DepthStencilStateInfo* graphics_depthstencilstate_info(const DepthStencilState* dss);
 
 // Resource getters
