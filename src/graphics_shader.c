@@ -61,7 +61,7 @@ static b8 dxc_call(const ShaderCompileDesc* desc, const ShaderPreprocessorData* 
 	{
 	case GraphicsAPI_Vulkan:
 	{
-		append_bat(bat, &offset, "-spirv ");
+		append_bat(bat, &offset, "-DENABLE_SPIRV_CODEGEN=ON -spirv ");
 
 		char shift_str[20];
 

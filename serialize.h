@@ -145,6 +145,7 @@ typedef struct {
 } ModelInfo;
 
 b8 import_model(ModelInfo* model_info, const char* filepath);
+b8 import_model2(ModelInfo* model_info, const char* filepath);
 void free_model_info(ModelInfo* model_info);
 
 // Serializer

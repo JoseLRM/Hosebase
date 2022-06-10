@@ -157,7 +157,7 @@ void _input_update()
 
 	input->mouse_last_position = input->mouse_position;
 	input->text[0] = '\0';
-	input->text_command_count;
+	input->text_command_count = 0;
 	input->mouse_wheel = 0.f;
 }
 

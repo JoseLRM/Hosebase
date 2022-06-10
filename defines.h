@@ -74,6 +74,7 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 #define SV_CLAMP(a, min, max) (SV_MAX(SV_MIN(a, max), min))
 #define SV_POW2(x) ((x) * (x))
 #define SV_POW3(x) ((x) * (x) * (x))
+#define SV_SQRT_2 (1.414213562f)
 #define SV_STRING(x) #x
 #define SV_FUNCTION_NAME() __FUNCTION__
 #define SV_ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
@@ -81,6 +82,7 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 #define SV_ZERO(x) memory_zero(&(x), sizeof(x))
 #define SV_BUFFER_WRITE(it, src) do { memory_copy((it), &(src), sizeof(src)); it += sizeof(src); } while(0)
 #define SV_BUFFER_READ(it, dst) do { memory_copy(&(dst), (it), sizeof(dst)); it += sizeof(dst); } while(0)
+#define SV_DEREF(n, def) (((n) == NULL) ? (def) : (*(n)))
 
 #ifdef __cplusplus
 
@@ -293,6 +295,20 @@ typedef struct {
 	};
 
 } v3_f16;
+
+typedef struct {
+
+	union {
+		struct {
+			f16 x;
+			f16 y;
+			f16 z;
+			f16 w;
+		};
+		f16 v[4];
+	};
+
+} v4_f16;
 
 typedef struct {
 

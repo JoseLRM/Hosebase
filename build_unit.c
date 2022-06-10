@@ -9,6 +9,7 @@
 
 #include "src/memory_manager.c"
 #include "src/serialize.c"
+#include "src/model_loader.c"
 #include "src/input.c"
 #include "src/event_system.c"
 #include "src/asset_system.c"

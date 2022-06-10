@@ -43,6 +43,8 @@ void audio_source_continue(u64 id);
 void audio_source_pause(u64 id);
 void audio_source_kill(u64 id);
 
+b8 audio_source_is_playing(u64 id);
+
 // Synchronization calls. Remember that if the sound is locked too much time will produce some artefacts
 void audio_source_lock();
 void audio_source_unlock();

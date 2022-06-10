@@ -40,9 +40,14 @@ inline f32 math_cos(f32 n)
 	return cosf(n);
 }
 
-inline f32 math_atan2(float a, float b)
+inline f32 math_atan2(f32 a, f32 b)
 {
 	return atan2f(a, b);
+}
+
+inline f32 math_asin(f32 n)
+{
+	return asinf(n);
 }
 
 inline f64 math_sqrt_f64(f64 n)
@@ -171,6 +176,11 @@ inline v2 v2_zero()
 	return v;
 }
 
+inline b8 v2_is_zero(v2 v)
+{
+	return (fabs(v.x) <= 0.000001f) && (fabs(v.y) <= 0.000001f);
+}
+
 inline v2 v2_add(v2 a, v2 b)
 {
 	v2 res;
@@ -240,6 +250,11 @@ inline f32 v2_length(v2 v)
 	return math_sqrt(v.x * v.x + v.y * v.y);
 }
 
+inline v2 v2_inverse(v2 v)
+{
+	return v2_set(-v.x, -v.y);
+}
+
 inline v2 v2_normalize(v2 v)
 {
 	f32 mag = v2_length(v);
@@ -293,12 +308,29 @@ inline v2 v2_reflection(v2 v, v2 normal)
 	return res;
 }
 
+inline v2 v2_direction(f32 angle)
+{
+	v2 dir;
+	dir.x = math_cos(angle);
+	dir.y = math_sin(angle);
+	return dir;
+}
+
 inline v3 v3_set(f32 x, f32 y, f32 z)
 {
 	v3 v;
 	v.x = x;
 	v.y = y;
 	v.z = z;
+	return v;
+}
+
+inline v3 v3_one()
+{
+	v3 v;
+	v.x = 1.f;
+	v.y = 1.f;
+	v.z = 1.f;
 	return v;
 }
 
@@ -421,6 +453,17 @@ inline v3 v3_reflection(v3 v, v3 normal)
 {
 	f32 s  = v3_dot(v, normal) * 2.f;
 	return v3_sub(v, v3_mul_scalar(normal, s));
+}
+
+inline v3 v3_direction(f32 pitch, f32 yaw)
+{
+	v3 dir;
+	dir.x = math_sin(yaw) * math_cos(pitch);
+	dir.z = math_cos(yaw) * math_cos(pitch);
+	dir.y = -math_sin(pitch);
+
+	dir = v3_normalize(dir);
+	return dir;
 }
 
 inline b8 v2_i32_equals(v2_i32 v0, v2_i32 v1)
@@ -1330,6 +1373,26 @@ inline Color color_rgb_f32(f32 r, f32 g, f32 b)
 	return color_rgb((u8)(r * 255.f), (u8)(g * 255.f), (u8)(b * 255.f));
 }
 
+inline Color color_rgb_hexa(u32 rgb)
+{
+	Color c;
+	c.a = 0xFF;
+	c.b = (rgb >> 0) & 0xFF;
+	c.g = (rgb >> 8) & 0xFF;
+	c.r = (rgb >> 16) & 0xFF;
+	return c;
+}
+
+inline Color color_rgba_hexa(u32 rgb)
+{
+	Color c;
+	c.a = (rgb >> 0) & 0xFF;
+	c.b = (rgb >> 8) & 0xFF;
+	c.g = (rgb >> 16) & 0xFF;
+	c.r = (rgb >> 24) & 0xFF;
+	return c;
+}
+
 inline b8 color_equals(Color c0, Color c1)
 {
 	return c0.r == c1.r &&
@@ -1348,6 +1411,11 @@ inline v4 color_to_v4(Color c)
 {
 	f32 mult = (1.f / 255.f);
 	return v4_set((f32)c.r * mult, (f32)c.g * mult, (f32)c.b * mult, (f32)c.a * mult);
+}
+
+inline u32 color_to_u32(Color c)
+{
+	return ((u32)c.r << 0) | ((u32)c.g << 8) | ((u32)c.b << 16) | ((u32)c.a << 24);
 }
 
 inline Color color_blend(Color c0, Color c1)
@@ -1401,6 +1469,14 @@ inline f16 math_f32_to_f16(const f32 x) { // IEEE-754 16-bit floating-point form
     return (b&0x80000000)>>16 | (e>112)*((((e-112)<<10)&0x7C00)|m>>13) | ((e<113)&(e>101))*((((0x007FF000+m)>>(125-e))+1)>>1) | (e>143)*0x7FFF; // sign : normalized : denormalized : saturate
 }
 
+inline v2_f16 math_v2_to_v2_f16(v2 v)
+{
+	v2_f16 r;
+	r.x = math_f32_to_f16(v.x);
+	r.y = math_f32_to_f16(v.y);
+	return r;
+}
+
 inline v3_f16 math_v3_to_v3_f16(v3 v)
 {
 	v3_f16 r;
@@ -1410,12 +1486,75 @@ inline v3_f16 math_v3_to_v3_f16(v3 v)
 	return r;
 }
 
-inline v2_f16 math_v2_to_v2_f16(v2 v)
+inline v4_f16 math_v4_to_v4_f16(v4 v)
 {
-	v2_f16 r;
+	v4_f16 r;
 	r.x = math_f32_to_f16(v.x);
 	r.y = math_f32_to_f16(v.y);
+	r.z = math_f32_to_f16(v.z);
+	r.w = math_f32_to_f16(v.w);
 	return r;
+}
+
+// Hash functions
+
+inline u64 hash_combine(u64 hash, u64 value)
+{
+	value *= 942341895;
+	value >>= 8;
+	value *= 858432321;
+	value >>= 8;
+	value *= 239823573;
+		
+	hash ^= value + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+	return hash;
+}
+
+inline u64 hash_memory(u64 hash, const u8* data, u32 size)
+{
+	const u8* it = data;
+	const u8* end = data + size;
+
+	while (it != end) {
+
+		u64 value = 0u;
+
+		u32 count = SV_MIN(it + 4, end) - it;
+
+		foreach(i, count) {
+			
+			u8 byte = it[i];
+
+			value |= byte << (i * 8);
+		}
+
+		it += count;
+
+		hash = hash_combine(hash, value);
+	}
+
+	return hash;
+}
+
+inline u64 hash_string(const char* str)
+{
+	u32 size = (u32)string_size(str);
+	return hash_memory(0, (const u8*)str, size);
+}
+
+inline u64 hash_v2_i32(v2_i32 v)
+{
+	u64 hash = hash_combine(0x6549FC0aA52D85ULL, v.x);
+	hash = hash_combine(hash, v.y);
+	return hash;
+}
+
+inline u64 hash_v3_i32(v3_i32 v)
+{
+	u64 hash = hash_combine(0x6589FC06A52D85ULL, v.x);
+	hash = hash_combine(hash, v.y);
+	hash = hash_combine(hash, v.z);
+	return hash;
 }
 
 // Random
@@ -1525,159 +1664,132 @@ inline f32 math_ridged_noise(f32 n, f32 e)
 	return n;
 }
 
-/*
-    // Matrix
+inline u64 math_voronoi_noise(u64 seed, f32 x, f32 y, f32 size, f32 offset, f32 noisy, f32 transition_distance, v2* center_, f32* transition_)
+{
+    u64 noise = 0ULL;
+    f32 min_distance = 999999.f;
 
-	inline XMMATRIX mat_view_from_quaternion(v3_f32 position, v4_f32 quaternion)
+	v2 pos = v2_set(x / size, y / size);
+	
+	f32 nx = 0.f;
+	f32 ny = 0.f;
+
+	if (noisy > 0.0001f)
 	{
-		XMMATRIX m = XMMatrixRotationQuaternion(vec4_to_dx(quaternion)) * XMMatrixTranslation(position.x, position.y, position.z);
-		
-		m = XMMatrixInverse(NULL, m);
-		return m;
+		f32 f = 0.8f;
+    	f32 f0 = 10.f;
+    	f32 m0 = 0.02f;
+
+		nx = math_perlin_noise2D(seed + 0x8344u, pos.x * f, pos.y * f) + math_perlin_noise2D(seed + 0x8344u, pos.x * f0, pos.y * f0) * m0;
+		nx *= noisy;
+		ny = math_perlin_noise2D(seed + 0x3945u, pos.x * f, pos.y * f) + math_perlin_noise2D(seed + 0x3945u, pos.x * f0, pos.y * f0) * m0;
+		ny *= noisy;
+
+		pos.x += nx;
+		pos.y += ny;
 	}
+    
+    i32 px = (i32)pos.x;
+    if (x < 0.f)
+        px--;
+    int py = (i32)pos.y;
+    if (y < 0.f)
+        py--;
+    
+    assert(offset <= 1.0001f);
+       
+    i32 space = (offset > 0.35f) ? 2 : 1;
 
-	inline XMMATRIX mat_view_from_direction(v3_f32 position, v3_f32 direction, v3_f32 up)
-	{
-		v3_f32 cam_right = vec3_normalize(vec3_cross(direction, up));
-		v3_f32 cam_up = vec3_cross(cam_right, direction);
+	v2 center;
+    
+    for (i32 y0 = py - space; y0 <= py + space; ++y0)
+    {
+        for (i32 x0 = px - space; x0 <= px + space; ++x0)
+        {
+			v2_i32 v;
+			v.x = x0;
+			v.y = y0;
+            u64 seed0 = hash_v2_i32(v);
+        
+            v2 p;
+            p.x = math_random_f32(seed0 + 0x33836ULL) * 2.f - 1.f;
+            p.y = math_random_f32(seed0 + 0x26727ULL) * 2.f - 1.f;
+            
+            p.x = (f32)x0 + p.x * offset;
+            p.y = (f32)y0 + p.y * offset;
 
-		XMFLOAT4X4 mat;
-		mat(1, 1) = cam_right.x;
-		mat(2, 1) = cam_right.y;
-		mat(3, 1) = cam_right.z;
-		mat(4, 1) = 0.f;
-		mat(1, 2) = cam_up.x;
-		mat(2, 2) = cam_up.y;
-		mat(3, 2) = cam_up.z;
-		mat(4, 2) = 0.f;
-		mat(1, 3) = -direction.x;
-		mat(2, 3) = -direction.y;
-		mat(3, 3) = -direction.z;
-		mat(4, 3) = 0.f;
-		mat(1, 4) = position.x;
-		mat(2, 4) = position.y;
-		mat(3, 4) = position.z;
-		mat(4, 4) = 1.f;
+			if (y0 % 2 == 0)
+                p.x += 0.5f;
+               
+            if (x0 % 2 == 0)
+                p.y += 0.5f;
+        
+            f32 dist = v2_distance(p, pos);
+        
+            if (dist < min_distance)
+            {
+                min_distance = dist;
+                noise = seed0;
+                center = p;
+            }
+        }
+    }
+    
+    // Transition
+	if (transition_ != NULL)
+    {
+		transition_distance /= size;
+        f32 transition = 0.f;
+        
+        for (i32 y0 = py - space; y0 <= py + space; ++y0)
+        {
+            for (i32 x0 = px - space; x0 <= px + space; ++x0)
+            {
+				v2_i32 v;
+				v.x = x0;
+				v.y = y0;
+                u64 seed0 = hash_v2_i32(v);
+                
+                if (seed0 == noise)
+                    continue;
+        
+                v2 p;
+            	p.x = math_random_f32(seed0 + 0x33836ULL) * 2.f - 1.f;
+            	p.y = math_random_f32(seed0 + 0x26727ULL) * 2.f - 1.f;
+            
+            	p.x = (f32)x0 + p.x * offset;
+            	p.y = (f32)y0 + p.y * offset;
 
-		// TODO: position
-
-		return XMMatrixInverse(NULL, XMMatrixTranspose(XMLoadFloat4x4(&mat)));
-	}
-
-	// Quaternion
-
-	// TODO: WTF is going on
-	inline v3_f32 quaternion_to_euler_angles(v4_f32 quat)
-	{
-		v3_f32 euler;
-
-		// roll (x-axis rotation)
-
-		XMFLOAT4 q;
-		q.x = quat.x;
-		q.y = quat.y;
-		q.z = quat.z;
-		q.w = quat.w;
-		float sinr_cosp = 2.f * (q.w * q.x + q.y * q.z);
-		float cosr_cosp = 1.f - 2.f * (q.x * q.x + q.y * q.y);
-		euler.x = atan2f(sinr_cosp, cosr_cosp);
-
-		// pitch (y-axis rotation)
-		float sinp = 2.f * (q.w * q.y - q.z * q.x);
-		if (abs(sinp) >= 1.f)
-			euler.y = copysignf(PI / 2.f, sinp); // use 90 degrees if out of range
-		else
-			euler.y = asinf(sinp);
-
-		// yaw (z-axis rotation)
-		float siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-		float cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-		euler.z = atan2f(siny_cosp, cosy_cosp);
-
-		if (euler.x < 0.f) {
-			euler.x = 2.f * PI + euler.x;
-		}
-		if (euler.y < 0.f) {
-			euler.y = 2.f * PI + euler.y;
-		}
-		if (euler.z < 0.f) {
-			euler.z = 2.f * PI + euler.z;
-		}
-
-		return euler;
+				if (y0 % 2 == 0)
+                	p.x += 0.5f;
+               
+            	if (x0 % 2 == 0)
+                	p.y += 0.5f;
+                
+                v2 c = v2_mul_scalar(v2_sub(p, center), 0.5f);
+                v2 d = v2_normalize(v2_perpendicular(c));
+                c = v2_add(c, center);
+                
+                v2 projection = v2_add(c, v2_mul_scalar(d, v2_dot(d, v2_sub(pos, c))));
+        
+                f32 dist = v2_distance(projection, pos);
+                
+                dist = 1.f - SV_MIN((dist) / transition_distance, 1.f);
+                
+                dist = math_pow(dist, 2.f);
+                transition += dist;
+            }
+        }
+        
+        *transition_ = SV_MIN(SV_MAX(1.f - math_sqrt(transition), 0.f), 1.f);
     }
 
-	// TODO: WTF is going on 2
-	inline v4_f32 quaternion_from_euler_angles(v3_f32 euler)
+	if (center_ != NULL)
 	{
-		float cy = cosf(euler.z * 0.5f);
-		float sy = sinf(euler.z * 0.5f);
-		float cp = cosf(euler.y * 0.5f);
-		float sp = sinf(euler.y * 0.5f);
-		float cr = cosf(euler.x * 0.5f);
-		float sr = sinf(euler.x * 0.5f);
-
-		v4_f32 q;
-		q.w = cr * cp * cy + sr * sp * sy;
-		q.x = sr * cp * cy - cr * sp * sy;
-		q.y = cr * sp * cy + sr * cp * sy;
-		q.z = cr * cp * sy - sr * sp * cy;
-
-		return q;
+		center.x = (center.x - nx) * size;
+		center.y = (center.y - ny) * size;
+		*center_ = center;
 	}
-
-    // Intersection
-
-    struct Ray {
-		v3_f32 origin;
-		v3_f32 direction;
-    };
-	
-   
-*/
-
-// Hash functions
-
-inline u64 hash_combine(u64 hash, u64 value)
-{
-	value *= 942341895;
-	value >>= 8;
-	value *= 858432321;
-	value >>= 8;
-	value *= 239823573;
-		
-	hash ^= value + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-	return hash;
-}
-
-inline u64 hash_memory(u64 hash, const u8* data, u32 size)
-{
-	const u8* it = data;
-	const u8* end = data + size;
-
-	while (it != end) {
-
-		u64 value = 0u;
-
-		u32 count = SV_MIN(it + 4, end) - it;
-
-		foreach(i, count) {
-			
-			u8 byte = it[i];
-
-			value |= byte << (i * 8);
-		}
-
-		it += count;
-
-		hash = hash_combine(hash, value);
-	}
-
-	return hash;
-}
-
-inline u64 hash_string(const char* str)
-{
-	u32 size = (u32)string_size(str);
-	return hash_memory(0, (const u8*)str, size);
+    
+    return noise;
 }

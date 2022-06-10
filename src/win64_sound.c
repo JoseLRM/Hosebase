@@ -546,6 +546,17 @@ void audio_source_kill(u64 id)
 	free_audio_source(id);
 }
 
+b8 audio_source_is_playing(u64 id)
+{
+	u64 hash = id;
+	AudioSource* src = get_audio_source(hash, 0);
+
+	if (src == NULL)
+		return FALSE;
+	
+	return src->audio_asset != 0 && !(src->flags & AudioSourceFlag_Stopped);
+}
+
 void audio_source_play(u64 id, Asset audio_asset, const AudioProperties* source_props, const AudioProperties* audio_props)
 {
 	u64 hash = id;

@@ -9,6 +9,14 @@
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Comdlg32.lib")
 
+#define WRITE_BARRIER \
+	_WriteBarrier();  \
+	_mm_sfence()
+#define READ_BARRIER _ReadBarrier()
+#define GENERAL_BARRIER \
+	WRITE_BARRIER;      \
+	READ_BARRIER
+
 #include "time.h"
 
 #include "Hosebase/os.h"
@@ -65,7 +73,7 @@ typedef struct
 
 	LARGE_INTEGER clock_frequency;
 	LARGE_INTEGER begin_time;
-	f64 last_time;
+	volatile f64 last_time;
 	f64 add_time;
 
 	HINSTANCE hinstance;
@@ -1271,7 +1279,7 @@ f64 timer_now()
 
 	if (time < 0.0)
 	{
-
+		WRITE_BARRIER;
 		platform->add_time = platform->last_time;
 		QueryPerformanceCounter(&platform->begin_time);
 		return timer_now();
@@ -1279,6 +1287,7 @@ f64 timer_now()
 
 	time += platform->add_time;
 
+	WRITE_BARRIER;
 	platform->last_time = time;
 	return time;
 }
@@ -1292,7 +1301,7 @@ u64 timer_seed()
 	elapsed.QuadPart *= 1000000000;
 	elapsed.QuadPart /= platform->clock_frequency.QuadPart;
 
-	return elapsed.QuadPart;
+	return hash_combine(elapsed.QuadPart * 0x92847ULL + 0x82744ULL, 0x7677634345ULL);
 }
 
 Date timer_date()
@@ -1682,14 +1691,6 @@ void thread_configure(Thread thread, const char *name, u64 affinity_mask, Thread
 
 	configure_thread((HANDLE)thread, name, affinity_mask, win_priority);
 }
-
-#define WRITE_BARRIER \
-	_WriteBarrier();  \
-	_mm_sfence()
-#define READ_BARRIER _ReadBarrier()
-#define GENERAL_BARRIER \
-	WRITE_BARRIER;      \
-	READ_BARRIER
 
 static DWORD WINAPI task_thread(void *arg);
 
