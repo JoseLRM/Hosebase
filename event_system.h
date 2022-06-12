@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Hosebase/os.h"
+
 SV_BEGIN_C_HEADER
 
 typedef void(*EventFn)(void* data);
