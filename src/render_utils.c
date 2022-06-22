@@ -1,4 +1,5 @@
 #include "Hosebase/render_utils.h"
+#include "Hosebase/os.h"
 
 #if SV_GRAPHICS
 

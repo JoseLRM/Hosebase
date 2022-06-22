@@ -12,6 +12,7 @@
 #include "Hosebase/profiler.h"
 #include "Hosebase/render_utils.h"
 #include "Hosebase/imgui.h"
+#include "Hosebase/profiler.h"
 
 typedef struct {
 	OSInitializeDesc os;

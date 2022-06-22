@@ -2,6 +2,7 @@
 
 #include "Hosebase/graphics.h"
 #include "Hosebase/math.h"
+#include "Hosebase/font.h"
 
 SV_BEGIN_C_HEADER
 

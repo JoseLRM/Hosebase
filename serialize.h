@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Hosebase/graphics.h"
+#include "Hosebase/os.h"
 
 SV_BEGIN_C_HEADER
 
@@ -73,30 +74,35 @@ typedef struct {
 typedef struct {
 	char name[NAME_SIZE];
 	// TODO: Remove unnecesary matrices
-	m4 local_matrix;
+	struct {
+		v3 position;
+		v4 rotation;
+		v3 scale;
+	} local;
 	m4 inverse_bind_matrix;
 	u8 child_count;
+	u32 parent_index;
 } JointInfo;
 
 typedef struct {
 	v3 position;
 	v4 rotation;
-	u32 joint;
-} JointPoseInfo;
-
-typedef struct {
-	f32 time_stamp;
-	JointPoseInfo* poses;
-	u32 pose_count;
+	v3 scale;
+	f32 time;
 } KeyFrameInfo;
 
 typedef struct {
-	u8* _pose_memory;
-	u32 pose_memory_size;
+	KeyFrameInfo* keyframes;
+	u32 keyframe_count;
+} JointAnimationInfo;
+
+typedef struct {
+	KeyFrameInfo* _keyframe_memory;
+	u32 total_keyframe_count;
+	f32 total_time;
 
 	char name[NAME_SIZE];
-	KeyFrameInfo keyframes[MODEL_INFO_MAX_KEYFRAMES];
-	u32 keyframe_count;
+	JointAnimationInfo joint_animations[MODEL_INFO_MAX_JOINTS];
 } AnimationInfo;
 
 typedef struct {
@@ -139,13 +145,10 @@ typedef struct {
 
 	JointInfo joints[MODEL_INFO_MAX_JOINTS];
 	u32 joint_count;
-
-	JointInfo* hierarchy[MODEL_INFO_MAX_JOINTS];
-	u32 hierarchy_count;
+	
 } ModelInfo;
 
 b8 import_model(ModelInfo* model_info, const char* filepath);
-b8 import_model2(ModelInfo* model_info, const char* filepath);
 void free_model_info(ModelInfo* model_info);
 
 // Serializer

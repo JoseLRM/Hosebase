@@ -1,6 +1,7 @@
-#include "text_processing.h"
+#include "Hosebase/text_processing.h"
 
 #include "Hosebase/memory_manager.h"
+#include "Hosebase/input.h"
 
 v2 text_pos(const void* text, u32 cursor, Font* font, f32 font_size)
 {

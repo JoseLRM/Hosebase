@@ -1,5 +1,7 @@
 #include "Hosebase/profiler.h"
 
+#include "Hosebase/os.h"
+
 #if SV_SLOW
 
 typedef struct {

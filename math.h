@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Hosebase/defines.h"
+#include "Hosebase/memory_manager.h"
 
 #include <math.h>
 
@@ -308,6 +308,11 @@ inline v2 v2_reflection(v2 v, v2 normal)
 	return res;
 }
 
+inline v2 v2_swap(v2 v)
+{
+	return v2_set(v.y, v.x);
+}
+
 inline v2 v2_direction(f32 angle)
 {
 	v2 dir;
@@ -341,6 +346,11 @@ inline v3 v3_zero()
 	v.y = 0.f;
 	v.z = 0.f;
 	return v;
+}
+
+inline b8 v3_equals(v3 v0, v3 v1)
+{
+	return fabs(v0.x - v1.x) <= 0.00001f && fabs(v0.y - v1.y) <= 0.00001f && fabs(v0.z - v1.z) <= 0.00001f;
 }
 
 inline v3 v3_add(v3 a, v3 b)
@@ -494,6 +504,11 @@ inline v4 v4_zero()
 	v.z = 0.f;
 	v.w = 0.f;
 	return v;
+}
+
+inline b8 v4_equals(v4 v0, v4 v1)
+{
+	return fabs(v0.x - v1.x) <= 0.00001f && fabs(v0.y - v1.y) <= 0.00001f && fabs(v0.z - v1.z) <= 0.00001f && fabs(v0.w - v1.w) <= 0.00001f;
 }
 
 inline v4 v4_add(v4 a, v4 b)
@@ -1104,7 +1119,44 @@ inline v4 m4_decompose_rotation(m4 matrix)
 	return q;
 }
 
+inline v3 m4_decompose_scale(m4 m)
+{
+	v3 vx = v3_set(m.v[0][0], m.v[0][1], m.v[0][2]);
+	v3 vy = v3_set(m.v[1][0], m.v[1][1], m.v[1][2]);
+	v3 vz = v3_set(m.v[2][0], m.v[2][1], m.v[2][2]);
+
+	return v3_set(v3_length(vx), v3_length(vy), v3_length(vz));
+}
+
 // Quaternion
+
+inline v4 quaternion_identity()
+{
+	return v4_set(0.f, 0.f, 0.f, 1.f);
+}
+
+inline v4 quaternion_inverse(v4 v)
+{
+	v4 r;
+	f32 ls = v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w;
+    f32 m = 1.0f / ls;
+ 
+    r.x = -v.x * m;
+    r.y = -v.y * m;
+    r.z = -v.z * m;
+    r.w = v.w * m;
+	return r;
+}
+
+inline v4 quaternion_mul(v4 v0, v4 v1)
+{
+	v4 v;
+    v.x =  v0.x * v1.w + v0.y * v1.z - v0.z * v1.y + v0.w * v1.x;
+    v.y = -v0.x * v1.z + v0.y * v1.w + v0.z * v1.x + v0.w * v1.y;
+    v.z =  v0.x * v1.y - v0.y * v1.x + v0.z * v1.w + v0.w * v1.z;
+    v.w = -v0.x * v1.x - v0.y * v1.y - v0.z * v1.z + v0.w * v1.w;
+	return v;
+}
 
 // This code is stolen from ThinMatrix skeletal animation tutorial.
 // I don't know wtf is going on here, but I should

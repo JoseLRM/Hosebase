@@ -1,3 +1,7 @@
+#if SV_PLATFORM_WINDOWS
+
+#include "Hosebase/os.h"
+
 #define NOMINMAX
 #include "windows.h"
 #include "Shlobj.h"
@@ -1964,3 +1968,5 @@ void *library_address(Library library, const char *name)
 {
 	return GetProcAddress((HINSTANCE)library, name);
 }
+
+#endif

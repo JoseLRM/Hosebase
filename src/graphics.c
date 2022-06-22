@@ -2,8 +2,9 @@
 
 #if SV_GRAPHICS
 
-#include "graphics_internal.h"
+#include "Hosebase/asset_system.h"
 
+#include "graphics_internal.h"
 #include "vulkan/graphics_vulkan.h"
 
 typedef struct

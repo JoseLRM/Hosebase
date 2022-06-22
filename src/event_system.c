@@ -1,5 +1,7 @@
 #include "Hosebase/event_system.h"
 
+#include "Hosebase/memory_manager.h"
+
 #define EVENT_TABLE_SIZE 1000
 
 typedef struct {

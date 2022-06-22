@@ -1,4 +1,7 @@
+#if SV_PLATFORM_WINDOWS
+
 #include "Hosebase/sound.h"
+#include "Hosebase/os.h"
 
 #include "windows.h"
 #include "DSound.h"
@@ -1028,3 +1031,4 @@ void _sound_close()
 		memory_free(sound);
 	}
 }
+#endif

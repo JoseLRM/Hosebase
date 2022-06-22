@@ -6,6 +6,8 @@ SV_BEGIN_C_HEADER
 
 #if SV_SLOW
 
+#include "Hosebase/memory_manager.h"
+
 struct _ProfilerChrono {
 	f64 begin;
 	f64 end;

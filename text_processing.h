@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Hosebase/graphics.h"
+#include "Hosebase/font.h"
+#include "Hosebase/math.h"
+#include "Hosebase/os.h"
 
 // --- TEXT BUFFER FORMAT ---
 // - char size (1 for now)

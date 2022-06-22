@@ -1,4 +1,5 @@
-#include "asset_system.h"
+#include "Hosebase/asset_system.h"
+#include "Hosebase/os.h"
 
 #define EXTENSION_MAX 10
 #define ASSET_TYPE_MAX 20

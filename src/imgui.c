@@ -1,4 +1,7 @@
 #include "Hosebase/imgui.h"
+#include "Hosebase/input.h"
+#include "Hosebase/os.h"
+#include "Hosebase/render_utils.h"
 
 // TODO
 #define PARENTS_MAX 1000

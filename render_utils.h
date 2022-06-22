@@ -1,6 +1,6 @@
 #pragma once
 
-#include "hosebase/defines.h"
+#include "hosebase/math.h"
 
 SV_BEGIN_C_HEADER
 

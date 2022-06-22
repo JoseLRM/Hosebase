@@ -2,6 +2,7 @@
 
 #if SV_GRAPHICS
 
+#include "Hosebase/serialize.h"
 #include "graphics_internal.h"
 
 b8 graphics_shader_initialize()
