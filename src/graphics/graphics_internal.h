@@ -3,11 +3,9 @@
 #if SV_GRAPHICS
 
 #include "Hosebase/graphics.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SV_BEGIN_C_HEADER
 
 // Primitives internal
 
@@ -289,18 +287,11 @@ typedef struct {
 
 } GraphicsDevice;
 
-void graphics_swapchain_resize();
-
 GraphicsDevice*	graphics_device_get();
 PipelineState*	graphics_state_get();
 
-// Shader utils
+void _graphics_swapchain_rotation_set(SwapchainRotation rotation);
 
-b8 graphics_shader_initialize();
-b8 graphics_shader_close();
-
-#ifdef __cplusplus
-}
-#endif
+SV_END_C_HEADER
 
 #endif

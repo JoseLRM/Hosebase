@@ -1,73 +1,8 @@
 #include "Hosebase/render_utils.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
+#include "Hosebase/asset_system.h"
 
 #if SV_GRAPHICS
-
-static const char *TEXT_VERTEX_SHADER = SV_STRING(
-#include "core.hlsl"\n
-
-	SV_CONSTANT_BUFFER(buffer, b0) {
-		\n
-			matrix tm;
-	}; \n
-
-#shader vertex\n
-
-	struct Input {
-		\n
-			float2 position : Position;
-		\n
-			float2 texcoord : Texcoord;
-		\n
-			float4 color : Color;
-		\n
-	}; \n
-
-	struct Output {
-		\n
-			float2 texcoord : FragTexcoord;
-		\n
-			float4 color : FragColor;
-		\n
-			float4 position : SV_Position;
-		\n
-	}; \n
-
-		Output main(Input input)\n {
-			\n
-				Output output;
-			output.position = mul(float4(input.position, 0.f, 1.f), tm);
-			output.color = input.color;
-			output.texcoord = input.texcoord;
-			return output;
-		}\n
-
-);
-
-static const char *TEXT_PIXEL_SHADER = SV_STRING(
-#include "core.hlsl"\n
-
-#shader pixel\n
-
-	struct Input {
-		\n
-			float2 texcoord : FragTexcoord;
-		\n
-			float4 color : FragColor;
-		\n
-	}; \n
-
-		SV_TEXTURE(tex, t0); \n
-			SV_SAMPLER(sam, s0); \n
-
-				float4 main(Input input)
-	: SV_Target0\n { \n
-	float4 color;
-	f32 char_color = tex.Sample(sam, input.texcoord).r;
-	color = char_color * input.color;
-	if (color.a < 0.05f) discard;
-	color = input.color;
-	return color; }\n);
 
 #define TEXT_BATCH_SIZE 1000
 
@@ -81,7 +16,7 @@ typedef struct
 	Color color;
 } TextVertex;
 
-inline void text_vertex_layout_bind(CommandList cmd)
+SV_INLINE void text_vertex_layout_bind(CommandList cmd)
 {
 	graphics_inputlayout_reset(1, cmd);
 	graphics_inputlayout_set_slot(0, sizeof(TextVertex), FALSE, cmd);
@@ -99,8 +34,8 @@ typedef struct
 	GPUBuffer *vbuffer_text;
 	GPUBuffer *cbuffer_text;
 	GPUBuffer *ibuffer_text;
-	Shader *vs_text;
-	Shader *ps_text;
+	Asset vs_text;
+	Asset ps_text;
 	Sampler *sampler_text;
 	BlendState *bs_text;
 
@@ -119,8 +54,8 @@ b8 render_utils_initialize()
 {
 	render = memory_allocate(sizeof(RenderUtilsData));
 
-	SV_CHECK(compile_shader(&render->vs_text, TEXT_VERTEX_SHADER));
-	SV_CHECK(compile_shader(&render->ps_text, TEXT_PIXEL_SHADER));
+	render->vs_text = asset_load_from_file("base_shaders/text_vs.hlsl", AssetPriority_KeepItLoading);
+	render->ps_text = asset_load_from_file("base_shaders/text_ps.hlsl", AssetPriority_KeepItLoading);
 
 	{
 		GPUBufferDesc desc;
@@ -241,25 +176,25 @@ void render_utils_close()
 {
 	if (render)
 	{
-
 		imrend_close();
 
 		graphics_destroy(render->render_pass_text);
 		graphics_destroy(render->vbuffer_text);
 		graphics_destroy(render->cbuffer_text);
 		graphics_destroy(render->ibuffer_text);
-		graphics_destroy(render->vs_text);
-		graphics_destroy(render->ps_text);
 		graphics_destroy(render->sampler_text);
 		graphics_destroy(render->bs_text);
 
 		graphics_destroy(render->white_image);
 
+		asset_unload(&render->vs_text);
+		asset_unload(&render->ps_text);
+
 		memory_free(render);
 	}
 }
 
-inline void draw_text_batch(GPUImage *image, TextAlignment alignment, f32 font_size, u32 batch_count, u64 flags, CommandList cmd)
+SV_INLINE void draw_text_batch(GPUImage *image, TextAlignment alignment, f32 font_size, u32 batch_count, u64 flags, CommandList cmd)
 {
 	if (batch_count < 4)
 		return;
@@ -487,8 +422,8 @@ void draw_text(const DrawTextDesc *desc, CommandList cmd)
 		graphics_resource_bind(ResourceType_ShaderResource, font->image, 0u, ShaderType_Pixel, cmd);
 		graphics_resource_bind(ResourceType_Sampler, render->sampler_text, 0u, ShaderType_Pixel, cmd);
 
-		graphics_shader_bind(render->vs_text, cmd);
-		graphics_shader_bind(render->ps_text, cmd);
+		graphics_shader_bind_asset(render->vs_text, cmd);
+		graphics_shader_bind_asset(render->ps_text, cmd);
 	}
 
 	Color format_color = desc->text_default_color;
@@ -737,11 +672,11 @@ GPUImage *get_white_image()
 	return render->white_image;
 }
 
-GPUImage *load_skybox_image(const char *filepath)
+GPUImage *load_skybox_image(FilepathType type, const char *filepath)
 {
 	Color *data;
 	u32 w, h;
-	if (load_image(filepath, (void **)&data, &w, &h) == FALSE)
+	if (load_image(type, filepath, (void **)&data, &w, &h) == FALSE)
 		return NULL;
 
 	u32 image_width = w / 4u;

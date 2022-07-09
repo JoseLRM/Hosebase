@@ -1,7 +1,7 @@
 #if SV_PLATFORM_WINDOWS
 
 #include "Hosebase/sound.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 #include "windows.h"
 #include "DSound.h"
@@ -182,7 +182,7 @@ b8 audio_load(Audio* audio, const char* filepath)
 
 	b8 res = TRUE;
 
-	if (file_read_binary(filepath, &data, &size)) {
+	if (file_read_binary(FilepathType_Asset, filepath, &data, &size)) {
 
 		deserializer_begin_buffer(&s, data, size);
 
@@ -877,7 +877,7 @@ static i32 thread_main(void* _data)
 	return 0;
 }
 
-b8 _sound_initialize(u32 samples_per_second)
+b8 sound_initialize(u32 samples_per_second)
 {
 	sound = memory_allocate(sizeof(SoundSystemData));
 
@@ -1015,7 +1015,7 @@ b8 _sound_initialize(u32 samples_per_second)
 	return TRUE;
 }
 
-void _sound_close()
+void sound_close()
 {
 	if (sound) {
 		// TODO

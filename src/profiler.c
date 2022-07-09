@@ -1,6 +1,6 @@
 #include "Hosebase/profiler.h"
 
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 #if SV_SLOW
 

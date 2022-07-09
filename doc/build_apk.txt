@@ -1,0 +1,10 @@
+- Open "Android Studio"
+- File -> New -> Import Samples
+- Select: Ndk -> Native Activity
+- Name it "AndroidProject", inside of the root folder
+- Run it for test
+- Remove "src/main/cpp" folder
+- Go to "app/build.gradle"
+- Remove "cmake" block and put "ndkBuild { path 'Android.mk' }"
+- Create "assets" folder inside of "main" folder (must be created as a special folder)
+- Run "build" command to generate Android.mk and Application.mk

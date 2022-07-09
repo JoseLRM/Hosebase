@@ -1,6 +1,11 @@
 #pragma once
 
-#include "Hosebase/os.h"
+#include "Hosebase/defines.h"
+
+SV_BEGIN_C_HEADER
+
+#include "Hosebase/platform.h"
+#include "Hosebase/memory_manager.h"
 #include "Hosebase/sound.h"
 #include "Hosebase/graphics.h"
 #include "Hosebase/input.h"
@@ -14,8 +19,12 @@
 #include "Hosebase/imgui.h"
 #include "Hosebase/profiler.h"
 
+b8 initialize();
+void update();
+void close();
+
 typedef struct {
-	OSInitializeDesc os;
+	PlatformInitializeDesc os;
 
 #if SV_GRAPHICS
 	GraphicsInitializeDesc graphics;
@@ -27,7 +36,7 @@ typedef struct {
 
 } HosebaseInitializeDesc;
 
-inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
+SV_INLINE b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 {
 	core.frame_count = 0u;
 	core.delta_time = 0.f;
@@ -41,7 +50,7 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 		SV_LOG_ERROR("Can't initialize asset system\n");
 	}
 	
-	if (!_os_initialize(&desc->os)) {
+	if (!platform_initialize(&desc->os)) {
 		SV_LOG_ERROR("Can't initialize os layer\n");
 		return FALSE;
 	}
@@ -50,7 +59,7 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 	_profiler_initialize();
 #endif
 
-	if (!_sound_initialize(44800)) {
+	if (!sound_initialize(44800)) {
 		SV_LOG_ERROR("Can't initialize audio system");
 	}
 
@@ -90,7 +99,7 @@ inline b8 hosebase_initialize(const HosebaseInitializeDesc* desc)
 	return TRUE;
 }
 
-inline void hosebase_close()
+SV_INLINE void hosebase_close()
 {
 #if SV_GRAPHICS
 	gui_close();
@@ -107,7 +116,7 @@ inline void hosebase_close()
 	_net_close();
 #endif
 
-	_sound_close();
+	sound_close();
 	
 	_input_close();
 
@@ -115,13 +124,14 @@ inline void hosebase_close()
 	_profiler_close();
 #endif
 
-	_os_close();
+	platform_close();
 	
 	_asset_close();
 	_event_close();
 }
 
-inline b8 hosebase_frame_begin()
+
+SV_INLINE b8 hosebase_frame_begin()
 {
 	profiler_function_begin();
 
@@ -142,7 +152,7 @@ inline b8 hosebase_frame_begin()
 #endif
 	
 	_input_update();
-	if (!_os_recive_input()) return FALSE; // Close request
+	if (!platform_recive_input()) return FALSE; // Close request
 
 	_asset_update();
 
@@ -151,7 +161,9 @@ inline b8 hosebase_frame_begin()
 	return TRUE;
 }
 
-inline void hosebase_frame_end()
+SV_INLINE void hosebase_frame_end()
 {
 	++core.frame_count;
 }
+
+SV_END_C_HEADER

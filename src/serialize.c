@@ -2,7 +2,7 @@
 
 #include "Hosebase/memory_manager.h"
 #include "Hosebase/math.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 #define STBI_ASSERT(x) assert(x)
 #define STBI_MALLOC(size) memory_allocate(size)
@@ -12,19 +12,22 @@
 
 #include "Hosebase/external/stbi_lib.h"
 
-b8 load_image(const char* filepath_, void** pdata, u32* width, u32* height)
+b8 load_image(FilepathType type, const char* filepath, void** pdata, u32* width, u32* height)
 {
-	char filepath[FILE_PATH_SIZE];
-	filepath_resolve(filepath, filepath_);
+	u8* bin;
+	u32 bin_size;
+	if (!file_read_binary(type, filepath, &bin, &bin_size))
+		return FALSE;
 	
 	int w = 0, h = 0, bits = 0;
-	void* data = stbi_load(filepath, &w, &h, &bits, 4);
+	void* data = stbi_load_from_memory(bin, bin_size, &w, &h, &bits, 4);
+	memory_free(bin);
 
 	* pdata = NULL;
 	*width = w;
 	*height = h;
 
-	if (!data) return FALSE;
+	if (data == NULL) return FALSE;
 	*pdata = data;
 	return TRUE;
 }
@@ -41,7 +44,7 @@ b8 bin_read(u64 hash, u8** data, u32* size)
 	char filepath[BIN_PATH_SIZE];
 	bin_filepath(filepath, hash);
 
-	return file_read_binary(filepath, data, size);
+	return file_read_binary(FilepathType_File, filepath, data, size);
 }
     
 /*b8 bin_read(u64 hash, Deserializer& deserializer, b8 system)
@@ -55,7 +58,7 @@ b8 bin_write(u64 hash, const void* data, u32 size)
 {
 	char filepath[BIN_PATH_SIZE];
 	bin_filepath(filepath, hash);
-	return file_write_binary(filepath, (u8*)data, size, FALSE, TRUE);
+	return file_write_binary(FilepathType_File, filepath, (u8*)data, size, FALSE, TRUE);
 }
     
 /*b8 bin_write(u64 hash, Serializer& serializer, b8 system)
@@ -486,23 +489,4 @@ b8 xml_get_attribute_u32(XMLElement* e, u32* n, const char* att_name)
 		return string_to_u32(n, str);
 	}
 	return FALSE;
-}
-
-void free_model_info(ModelInfo* model_info)
-{
-	foreach(i, model_info->mesh_count) {
-		MeshInfo* mesh = model_info->meshes + i;
-
-		if (mesh->_memory)
-			memory_free(mesh->_memory);
-	}
-
-	foreach(i, model_info->animation_count) {
-		AnimationInfo* anim = model_info->animations + i;
-
-		if (anim->_keyframe_memory != NULL)
-			memory_free(anim->_keyframe_memory);
-	}
-
-	memory_zero(model_info, sizeof(ModelInfo));
 }

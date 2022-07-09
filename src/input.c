@@ -1,5 +1,5 @@
 #include "Hosebase/input.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 #define INPUT_TEXT_SIZE 20
 
@@ -23,6 +23,15 @@ typedef struct {
 	u32 release_key_count;
 	Key release_mouse_buttons[MouseButton_MaxEnum];
 	u32 release_mouse_button_count;
+
+	InputState gamepad_button_state[GamepadButton_MaxEnum];
+	v2 joystick_left;
+	v2 joystick_right;
+
+	InputState touch_state;
+	v2 touch_position;
+
+	ControllerType last_controller_used;
 
 } InputData;
 
@@ -54,6 +63,22 @@ b8 input_mouse_button(MouseButton mouse_button, InputState input_state)
 	return validate_input_state(actual, input_state);
 }
 
+b8 input_gamepad_button(GamepadButton gamepad_button, InputState input_state)
+{
+	InputState actual = input->gamepad_button_state[gamepad_button];
+	return validate_input_state(actual, input_state);
+}
+
+v2 input_gamepad_joystick_left()
+{
+	return input->joystick_left;
+}
+
+v2 input_gamepad_joystick_right()
+{
+	return input->joystick_right;
+}
+
 f32 input_mouse_wheel()
 {
 	return input->mouse_wheel;
@@ -67,6 +92,16 @@ v2 input_mouse_position()
 v2 input_mouse_dragging()
 {
 	return input->mouse_dragging;
+}
+
+v2 input_touch_position()
+{
+	return input->touch_position;
+}
+
+b8 input_touch_button(InputState input_state)
+{
+	return validate_input_state(input->touch_state, input_state);
 }
 
 const char* input_text()
@@ -86,9 +121,19 @@ TextCommand input_text_command(u32 index)
 	return input->text_commands[index];
 }
 
+ControllerType input_last_controller_used()
+{
+	return input->last_controller_used;
+}
+
 b8 _input_initialize()
 {
 	input = memory_allocate(sizeof(InputData));
+
+#if SV_PLATFORM_ANDROID
+	input->last_controller_used = ControllerType_TouchScreen;
+#endif
+
 	return TRUE;
 }
 
@@ -113,9 +158,6 @@ void _input_update()
 		}
 		else if (*state == InputState_Hold) {
 			input->any = TRUE;
-
-			if (!key_async(i))
-				*state = InputState_Released;
 		}
 		else if (*state == InputState_Released) {
 			*state = InputState_None;
@@ -139,9 +181,6 @@ void _input_update()
 		}
 		else if (*state == InputState_Hold) {
 			input->any = TRUE;
-
-			if (!mouse_button_async(i))
-				*state = InputState_Released;
 		}
 		else if (*state == InputState_Released) {
 			*state = InputState_None;
@@ -159,12 +198,50 @@ void _input_update()
 	input->text[0] = '\0';
 	input->text_command_count = 0;
 	input->mouse_wheel = 0.f;
+
+	// Gamepad
+	{
+		foreach(i, GamepadButton_MaxEnum)
+		{
+			InputState* state = input->gamepad_button_state + i;
+
+			if (*state == InputState_Released)
+			{
+				*state = InputState_None;
+			}
+			else if (*state == InputState_Pressed || *state == InputState_Hold)
+			{
+				*state = InputState_Released;
+			}
+		}
+
+		input->joystick_left = v2_zero();
+		input->joystick_right = v2_zero();
+	}
+
+	// Touch screen
+	{
+		if (input->touch_state == InputState_Released)
+		{
+			input->touch_state = InputState_None;
+		}
+		else if (input->touch_state == InputState_Pressed)
+		{
+			input->any = TRUE;
+			input->touch_state = InputState_Hold;
+		}
+		else if (input->touch_state == InputState_Hold)
+		{
+			input->any = TRUE;
+		}
+	}
 }
 
 void _input_key_set_pressed(Key key)
 {
 	input->keys[key] = InputState_Pressed;
 	input->any = TRUE;
+	input->last_controller_used = ControllerType_KeyboardAndMouse;
 }
 
 void _input_key_set_released(Key key)
@@ -176,12 +253,14 @@ void _input_key_set_released(Key key)
 	else input->keys[key] = InputState_Released;
 
 	input->any = TRUE;
+	input->last_controller_used = ControllerType_KeyboardAndMouse;
 }
 
 void _input_mouse_button_set_pressed(MouseButton mouse_button)
 {
 	input->mouse_buttons[mouse_button] = InputState_Pressed;
 	input->any = TRUE;
+	input->last_controller_used = ControllerType_KeyboardAndMouse;
 }
 
 void _input_mouse_button_set_released(MouseButton mouse_button)
@@ -193,6 +272,7 @@ void _input_mouse_button_set_released(MouseButton mouse_button)
 	else input->mouse_buttons[mouse_button] = InputState_Released;
 
 	input->any = TRUE;
+	input->last_controller_used = ControllerType_KeyboardAndMouse;
 }
 
 void _input_text_command_add(TextCommand text_command)
@@ -220,6 +300,11 @@ void _input_mouse_wheel_set(f32 value)
 {
 	input->mouse_wheel = value;
 	input->any = TRUE;
+
+	if (fabs(value) > 0.00001f)
+	{
+		input->last_controller_used = ControllerType_KeyboardAndMouse;
+	}
 }
 
 void _input_mouse_position_set(v2 value)
@@ -233,4 +318,41 @@ void _input_mouse_dragging_set(v2 value)
 
 	if (fabs(value.x) > 0.0001f || fabs(value.y) > 0.0001f)
 	input->any = TRUE;
+}
+
+void _input_gamepad_press(GamepadButton button)
+{
+	InputState state = input->gamepad_button_state[button];
+
+	if (state == InputState_None)
+	{
+		input->gamepad_button_state[button] = InputState_Pressed;
+	}
+	else if (state == InputState_Released)
+	{
+		input->gamepad_button_state[button] = InputState_Hold;
+	}
+
+	input->last_controller_used = ControllerType_Gamepad;
+}
+
+void _input_gamepad_set_joystick(b8 left, v2 value)
+{
+	if (fabs(value.x) < 0.0001f)
+		value.x = 0.f;
+	
+	if (fabs(value.y) < 0.0001f)
+		value.y = 0.f;
+
+	if (left)
+		input->joystick_left = value;
+	else
+		input->joystick_right = value;
+}
+
+void _input_touch_set(InputState state, v2 position)
+{
+	input->touch_state = state;
+	input->touch_position = position;
+	input->last_controller_used = ControllerType_TouchScreen;
 }

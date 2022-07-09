@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 SV_BEGIN_C_HEADER
 

@@ -3,71 +3,7 @@
 #if SV_GRAPHICS
 
 #include "Hosebase/render_utils.h"
-
-static const char* PRIMITIVE_VERTEX_SHADER = SV_STRING(
-	\n#include "core.hlsl"\n
-
-	\n#shader vertex\n
-
-	struct Output {
-	float2 texcoord : FragTexcoord;
-	float4 color : FragColor;
-	float4 position : SV_Position;
-};
-
-struct Vertex {
-	float4 position;
-	float2 texcoord;
-	u32 color;
-	u32 padding;
-};
-
-SV_CONSTANT_BUFFER(immediate_buffer, b0)
-{
-	Vertex vertices[4];
-};
-
-Output main(u32 vertex_id : SV_VertexID)
-{
-	Output output;
-
-	Vertex v = vertices[vertex_id];
-
-	output.texcoord = v.texcoord;
-	output.position = v.position;
-
-	const f32 mult = 1.f / 255.f;
-	output.color.a = f32(v.color >> 24) * mult;
-	output.color.b = f32((v.color >> 16) & 0xFF) * mult;
-	output.color.g = f32((v.color >> 8) & 0xFF) * mult;
-	output.color.r = f32(v.color & 0xFF) * mult;
-
-	return output;
-}
-
-);
-
-static const char* PRIMITIVE_PIXEL_SHADER = SV_STRING(
-	\n#include "core.hlsl"\n
-
-	\n#shader pixel\n
-
-	struct Input {
-	float2 texcoord : FragTexcoord;
-	float4 color : FragColor;
-};
-
-SV_TEXTURE(tex, t0);
-SV_SAMPLER(sam, s0);
-
-float4 main(Input input) : SV_Target0
-{
-	float4 color = tex.Sample(sam, input.texcoord) * input.color;
-	if (color.a < 0.0001f)
-		discard;
-	return color;
-}
-);
+#include "Hosebase/asset_system.h"
 
 typedef struct {
 	v4 position;
@@ -110,9 +46,6 @@ typedef struct {
 
 typedef struct {
 
-	Shader* vs_primitive;
-	Shader* ps_primitive;
-
 	RenderPass* render_pass;
 	RenderPass* render_pass_depth;
 
@@ -131,6 +64,9 @@ typedef struct {
 typedef struct {
 	ImRendState state[GraphicsLimit_CommandList];
 	ImRendGfx gfx;
+
+	Asset vs_primitive;
+	Asset ps_primitive;
 } ImRendData;
 
 static ImRendData* imrend = NULL;
@@ -164,38 +100,12 @@ typedef enum {
 	ImRendDrawCall_TextArea,
 } ImRendDrawCall;
 
-inline b8 compile_shader(Shader** shader, const char* src)
-{
-	ShaderCompileDesc cdesc;
-	cdesc.api = graphics_api();
-	cdesc.major_version = 6;
-	cdesc.minor_version = 0;
-	cdesc.entry_point = "main";
-	cdesc.macros = NULL;
-	cdesc.macro_count = 0u;
-
-	ShaderPreprocessorData pp;
-
-	Buffer data = buffer_init(1.f);
-	SV_CHECK(graphics_shader_compile_string(&cdesc, src, string_size(src), &data, &pp));
-
-	ShaderDesc desc;
-	desc.bin_data = data.data;
-	desc.bin_data_size = data.size;
-	desc.shader_type = pp.shader_type;
-
-	SV_CHECK(graphics_shader_create(shader, &desc));
-
-	buffer_close(&data);
-	return TRUE;
-}
-
 b8 imrend_initialize()
 {
 	imrend = (ImRendData*)memory_allocate(sizeof(ImRendData));
 
-	SV_CHECK(compile_shader(&imrend->gfx.vs_primitive, PRIMITIVE_VERTEX_SHADER));
-	SV_CHECK(compile_shader(&imrend->gfx.ps_primitive, PRIMITIVE_PIXEL_SHADER));
+	imrend->vs_primitive = asset_load_from_file("base_shaders/primitive_vs.hlsl", AssetPriority_KeepItLoading);
+	imrend->ps_primitive = asset_load_from_file("base_shaders/primitive_ps.hlsl", AssetPriority_KeepItLoading);
 
 	{
 		AttachmentDesc att[3];
@@ -341,19 +251,22 @@ void imrend_close()
 			}
 		}
 
+		asset_unload(&imrend->vs_primitive);
+		asset_unload(&imrend->ps_primitive);
+
 		memory_free(imrend);
 	}
 }
 
 #define imrend_write(state, data) buffer_write_back(&(state)->buffer, &(data), sizeof(data))
 
-inline void imrend_write_buffer(ImRendState* state, const void* data, u32 size)
+SV_INLINE void imrend_write_buffer(ImRendState* state, const void* data, u32 size)
 {
 	imrend_write(state, size);
 	buffer_write_back(&state->buffer, data, size);
 }
 
-inline void imrend_write_text(ImRendState* state, const char* text)
+SV_INLINE void imrend_write_text(ImRendState* state, const char* text)
 {
 	buffer_write_back(&state->buffer, text, string_size(string_validate(text)) + 1u);
 }
@@ -368,14 +281,14 @@ void* _imrend_read(u8** it, u32 size)
 #define imrend_read(T, it) *(T*)_imrend_read(&it, sizeof(T))
 #define imrend_read_text(it) (const char*)it; it += (string_size((const char*)it) + 1)
 
-inline void imrend_read_buffer(u8** it, const void** ptr, u32* size)
+SV_INLINE void imrend_read_buffer(u8** it, const void** ptr, u32* size)
 {
 	*size = imrend_read(u32, *it);
 	*ptr = *it;
 	*it += *size;
 }
 
-inline void update_current_matrix(ImRendState* state)
+SV_INLINE void update_current_matrix(ImRendState* state)
 {
 	m4 matrix = m4_identity();
 
@@ -416,7 +329,7 @@ inline void update_current_matrix(ImRendState* state)
 	state->current_matrix = m4_mul(matrix, vpm);
 }
 
-inline void update_current_scissor(ImRendState* state, CommandList cmd)
+SV_INLINE void update_current_scissor(ImRendState* state, CommandList cmd)
 {
 	v4 s0 = (v4){ 0.5f, 0.5f, 1.f, 1.f };
 
@@ -629,8 +542,8 @@ void imrend_flush(CommandList cmd)
 
 				graphics_resource_bind(ResourceType_Sampler, gfx->sampler_def_nearest, 0u, ShaderType_Pixel, cmd);
 		    
-				graphics_shader_bind(gfx->vs_primitive, cmd);
-				graphics_shader_bind(gfx->ps_primitive, cmd);
+				graphics_shader_bind_asset(imrend->vs_primitive, cmd);
+				graphics_shader_bind_asset(imrend->ps_primitive, cmd);
 
 				if (draw_call == ImRendDrawCall_Quad || draw_call == ImRendDrawCall_Sprite) {
 

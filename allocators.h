@@ -18,7 +18,7 @@ typedef struct {
 
 } DynamicArray;
 
-inline DynamicArray __impl__array_init(u32 stride, f32 scale_factor)
+SV_INLINE DynamicArray __impl__array_init(u32 stride, f32 scale_factor)
 {
 	DynamicArray array;
 	array.data = NULL;
@@ -30,19 +30,19 @@ inline DynamicArray __impl__array_init(u32 stride, f32 scale_factor)
 	return array;
 }
 
-inline void array_close(DynamicArray* array)
+SV_INLINE void array_close(DynamicArray* array)
 {	
 	if (array->data) {
 		memory_free(array->data);
 	}
 }
 
-inline void array_reset(DynamicArray* array)
+SV_INLINE void array_reset(DynamicArray* array)
 {
 	array->size = 0u;
 }
 
-inline void __impl__array_resize(DynamicArray* array, u32 size, u32 line, const char* file)
+SV_INLINE void __impl__array_resize(DynamicArray* array, u32 size, u32 line, const char* file)
 {
 	if (size != array->capacity) {
 
@@ -60,7 +60,7 @@ inline void __impl__array_resize(DynamicArray* array, u32 size, u32 line, const 
 	array->size = size;
 }
 
-inline void* __impl__array_add(DynamicArray* array, u32 line, const char* file)
+SV_INLINE void* __impl__array_add(DynamicArray* array, u32 line, const char* file)
 {
 	if (array->size == array->capacity) {
 		
@@ -82,25 +82,25 @@ inline void* __impl__array_add(DynamicArray* array, u32 line, const char* file)
 	return res;
 }
 
-inline void __impl__array_push(DynamicArray* array, const void* data, u32 line, const char* file)
+SV_INLINE void __impl__array_push(DynamicArray* array, const void* data, u32 line, const char* file)
 {
 	void* obj = __impl__array_add(array, line, file);
 	memory_copy(obj, data, array->stride);
 }
 
-inline void array_pop(DynamicArray* array)
+SV_INLINE void array_pop(DynamicArray* array)
 {
 	assert(array->size != 0);
 	--array->size;
 }
 
-inline void array_pop_count(DynamicArray* array, u32 count)
+SV_INLINE void array_pop_count(DynamicArray* array, u32 count)
 {
 	assert(array->size >= count);
 	array->size -= count;
 }
 
-inline void array_erase(DynamicArray* array, u32 index)
+SV_INLINE void array_erase(DynamicArray* array, u32 index)
 {
 	assert(index < array->size);
 	--array->size;
@@ -111,7 +111,7 @@ inline void array_erase(DynamicArray* array, u32 index)
 	}
 }
 
-inline void array_erase_range(DynamicArray* array, u32 i0, u32 i1)
+SV_INLINE void array_erase_range(DynamicArray* array, u32 i0, u32 i1)
 {
 	assert(i0 <= i1);
 	assert(i0 <= array->size && i1 <= array->size);
@@ -131,13 +131,13 @@ inline void array_erase_range(DynamicArray* array, u32 i0, u32 i1)
 	array->size -= dist;
 }
 
-inline void* array_get(DynamicArray* array, u32 index)
+SV_INLINE void* array_get(DynamicArray* array, u32 index)
 {
 	assert(index < array->size);
 	return array->data + index * array->stride;
 }
 
-inline void* array_last(DynamicArray* array)
+SV_INLINE void* array_last(DynamicArray* array)
 {
 	assert(array->size);
 	return array->data + (array->size- 1) * array->stride;
@@ -157,7 +157,7 @@ typedef struct {
 	f32 scale_factor;
 } Buffer;
 
-inline Buffer buffer_init(f32 scale_factor)
+SV_INLINE Buffer buffer_init(f32 scale_factor)
 {
 	Buffer buffer;
 	buffer.data = NULL;
@@ -167,7 +167,7 @@ inline Buffer buffer_init(f32 scale_factor)
 	return buffer;
 }
 
-inline void __impl__buffer_resize(Buffer* buffer, u32 size, u32 line, const char* filepath)
+SV_INLINE void __impl__buffer_resize(Buffer* buffer, u32 size, u32 line, const char* filepath)
 {
 	if (buffer->size < size) {
 
@@ -191,7 +191,7 @@ inline void __impl__buffer_resize(Buffer* buffer, u32 size, u32 line, const char
 	buffer->size = size;
 }
 
-inline void __impl__buffer_prepare(Buffer* buffer, u32 capacity, u32 line, const char* filepath)
+SV_INLINE void __impl__buffer_prepare(Buffer* buffer, u32 capacity, u32 line, const char* filepath)
 {
 	if (buffer->capacity < capacity) {
 
@@ -207,7 +207,7 @@ inline void __impl__buffer_prepare(Buffer* buffer, u32 capacity, u32 line, const
 	}
 }
 
-inline void buffer_set(Buffer* buffer, u8* data, u32 size)
+SV_INLINE void buffer_set(Buffer* buffer, u8* data, u32 size)
 {
 	if (buffer->data) {
 		memory_free(buffer->data);
@@ -218,14 +218,14 @@ inline void buffer_set(Buffer* buffer, u8* data, u32 size)
 	buffer->capacity = size;
 }
 
-inline void buffer_close(Buffer* buffer)
+SV_INLINE void buffer_close(Buffer* buffer)
 {
 	if (buffer->data) {
 		memory_free(buffer->data);
 	}
 }
 
-inline void buffer_reset(Buffer* buffer)
+SV_INLINE void buffer_reset(Buffer* buffer)
 {
 	if (buffer->size) {
 		memory_zero(buffer->data, buffer->size);
@@ -234,7 +234,7 @@ inline void buffer_reset(Buffer* buffer)
 	buffer->size = 0u;
 }
 
-inline void __impl__buffer_write_back(Buffer* buffer, const void* data, u32 size, u32 line, const char* file)
+SV_INLINE void __impl__buffer_write_back(Buffer* buffer, const void* data, u32 size, u32 line, const char* file)
 {
 	u32 required = buffer->size + size;
 	
@@ -273,7 +273,7 @@ typedef struct {
 	u32 pool_size;
 } InstanceAllocator;
 
-inline InstanceAllocator instance_allocator_init(u32 instance_size, u32 pool_size)
+SV_INLINE InstanceAllocator instance_allocator_init(u32 instance_size, u32 pool_size)
 {
 	InstanceAllocator alloc;
 	alloc.pools = NULL;
@@ -283,7 +283,7 @@ inline InstanceAllocator instance_allocator_init(u32 instance_size, u32 pool_siz
 	return alloc;
 }
 
-inline void instance_allocator_close(InstanceAllocator* alloc)
+SV_INLINE void instance_allocator_close(InstanceAllocator* alloc)
 {
 	foreach(i, alloc->pool_count) {
 
@@ -300,7 +300,7 @@ inline void instance_allocator_close(InstanceAllocator* alloc)
 	alloc->pool_count = 0u;
 }
 
-inline void* __impl__instance_allocator_create(InstanceAllocator* alloc, u32 line, const char* file)
+SV_INLINE void* __impl__instance_allocator_create(InstanceAllocator* alloc, u32 line, const char* file)
 {
 	// Find pool
 	InstanceAllocatorPool* pool = NULL;
@@ -369,7 +369,7 @@ inline void* __impl__instance_allocator_create(InstanceAllocator* alloc, u32 lin
 	return ptr;
 }
 
-inline u32* _instance_allocator_find_last_count(InstanceAllocator* alloc, void* ptr, InstanceAllocatorPool* pool)
+SV_INLINE u32* _instance_allocator_find_last_count(InstanceAllocator* alloc, void* ptr, InstanceAllocatorPool* pool)
 {
 	u32* next_count;
 
@@ -398,7 +398,7 @@ inline u32* _instance_allocator_find_last_count(InstanceAllocator* alloc, void* 
 	return next_count;
 }
 
-inline void instance_allocator_destroy(InstanceAllocator* alloc, void* ptr_)
+SV_INLINE void instance_allocator_destroy(InstanceAllocator* alloc, void* ptr_)
 {
 	u8* ptr = (u8*)ptr_;
 
@@ -445,7 +445,7 @@ inline void instance_allocator_destroy(InstanceAllocator* alloc, void* ptr_)
 	}
 }
 
-inline u32 instance_allocator_size(InstanceAllocator* alloc)
+SV_INLINE u32 instance_allocator_size(InstanceAllocator* alloc)
 {
 	// TODO:
 	return 0;
@@ -461,7 +461,7 @@ typedef struct {
 	b8 has_next;
 } InstanceIterator;
 
-inline void instance_iterator_next(InstanceIterator* it)
+SV_INLINE void instance_iterator_next(InstanceIterator* it)
 {
 	InstanceAllocator* alloc = it->allocator;
 	u8* ptr = (u8*)it->ptr;
@@ -516,7 +516,7 @@ inline void instance_iterator_next(InstanceIterator* it)
 	else it->ptr = ptr;
 }
 
-inline InstanceIterator instance_iterator_begin(InstanceAllocator* allocator)
+SV_INLINE InstanceIterator instance_iterator_begin(InstanceAllocator* allocator)
 {
 	InstanceIterator it;
 	it.allocator = allocator;
@@ -538,7 +538,7 @@ typedef struct {
 	f32 scale_factor;
 } DynamicString;
 
-inline DynamicString __impl__dynamic_string_init(const char* init_string, f32 scale_factor, u32 line, const char* file)
+SV_INLINE DynamicString __impl__dynamic_string_init(const char* init_string, f32 scale_factor, u32 line, const char* file)
 {
 	DynamicString str;
 	str.scale_factor = SV_MIN(scale_factor, 1.f);
@@ -563,14 +563,14 @@ inline DynamicString __impl__dynamic_string_init(const char* init_string, f32 sc
 	return str;
 }
 
-inline void dynamic_string_close(DynamicString* str)
+SV_INLINE void dynamic_string_close(DynamicString* str)
 {
 	if (str->size) {
 		memory_free(str->data);
 	}
 }
 
-inline void __impl__dynamic_string_append(DynamicString* str, const char* src, u32 line, const char* file)
+SV_INLINE void __impl__dynamic_string_append(DynamicString* str, const char* src, u32 line, const char* file)
 {
 	u32 size = string_size(src);
 
@@ -592,7 +592,7 @@ inline void __impl__dynamic_string_append(DynamicString* str, const char* src, u
 	str->size += size;
 }
 
-inline void __impl__dynamic_string_resize(DynamicString* str, u32 size, u32 line, const char* file)
+SV_INLINE void __impl__dynamic_string_resize(DynamicString* str, u32 size, u32 line, const char* file)
 {
 	if (str->size < size) {
 

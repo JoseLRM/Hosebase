@@ -2,7 +2,7 @@
 
 #include "Hosebase/networking.h"
 #include "Hosebase/memory_manager.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 #if SV_NETWORKING
 

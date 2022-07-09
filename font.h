@@ -31,7 +31,7 @@ typedef struct {
 	f32 pixel_height;
 } Font;
 
-inline Glyph* font_get(Font* font, u32 index)
+SV_INLINE Glyph* font_get(Font* font, u32 index)
 {
 	if (index < FONT_CHAR_COUNT)
 		return font->glyphs + index;

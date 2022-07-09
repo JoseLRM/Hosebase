@@ -64,9 +64,13 @@ namespace sv {
 
 #if SV_PLATFORM_WINDOWS
 #define VK_USE_PLATFORM_WIN32_KHR
+#elif SV_PLATFORM_ANDROID
+#define VK_USE_PLATFORM_ANDROID_KHR
 #elif SV_PLATFORM_LINUX
 #define VK_USE_PLATFORM_XCB_KHR
 #endif
+
+#include "Hosebase/external/volk.h"
 
 #pragma warning(push, 0)
 #pragma warning(disable : 4701)
@@ -85,12 +89,13 @@ namespace sv {
 
 #undef CreateSemaphore
 
-#include "Hosebase/external/sprv/spirv_reflect.hpp"
-
 #include "graphics_vulkan_conversions.h"
 
 // TEMP TODO
 #include <map>
+#include <vector>
+#include <unordered_map>
+#include <string>
 
 namespace sv {
 
@@ -241,7 +246,7 @@ namespace sv {
     // RenderPass
     struct RenderPass_vk : public RenderPass {
 		VkRenderPass				renderPass;
-		std::vector<std::pair<size_t, VkFramebuffer>>	frameBuffers;
+		std::vector<std::pair<u64, VkFramebuffer>>	frameBuffers;
 		VkRenderPassBeginInfo			beginInfo;
 		Mutex					mutex;
     };

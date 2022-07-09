@@ -6,16 +6,13 @@
 
 SV_BEGIN_C_HEADER
 
-void filepath_resolve(char* dst, const char* src);
-void filepath_user(char* dst);
-
 typedef enum {
-	PrintStyle_Info,
-	PrintStyle_Warning,
-	PrintStyle_Error,
-} PrintStyle;
+	FilepathType_File,
+	FilepathType_Asset
+} FilepathType;
 
-void print(PrintStyle style, const char* str, ...);
+void filepath_resolve(char* dst, const char* src, FilepathType type);
+void filepath_user(char* dst);
 
 void show_message(const char* title, const char* content, b8 error);
 b8   show_dialog_yesno(const char* title, const char* content); // Returns true if yes
@@ -37,7 +34,7 @@ typedef struct {
 		
 } Date;
 
-inline Date date_set(u32 year, u32 month, u32 day, u32 hour, u32 minute, u32 second, u32 milliseconds)
+SV_INLINE Date date_set(u32 year, u32 month, u32 day, u32 hour, u32 minute, u32 second, u32 milliseconds)
 {
 	Date date;
 	date.year = year;
@@ -50,7 +47,7 @@ inline Date date_set(u32 year, u32 month, u32 day, u32 hour, u32 minute, u32 sec
 	return date;
 }
 
-inline b8 date_equals(Date d0, Date d1)
+SV_INLINE b8 date_equals(Date d0, Date d1)
 {
 	return d0.year == d1.year &&
 		d0.month == d1.month &&
@@ -61,7 +58,7 @@ inline b8 date_equals(Date d0, Date d1)
 		d0.millisecond == d1.millisecond;
 }
 
-inline b8 date_less_than(Date d0, Date d1)
+SV_INLINE b8 date_less_than(Date d0, Date d1)
 {
 	if (d0.year != d1.year)
 		return d0.year < d1.year;
@@ -83,11 +80,6 @@ inline b8 date_less_than(Date d0, Date d1)
 f64  timer_now();
 u64  timer_seed();
 Date timer_date();
-
-// Input async
-
-b8 key_async(Key key);
-b8 mouse_button_async(MouseButton button);
 
 // Window
 
@@ -116,19 +108,18 @@ void cursor_show();
 b8 path_is_absolute(const char* path);
 void path_clear(char* path);
 
+b8 file_read_binary(FilepathType type, const char* filepath, u8** data, u32* size);
+b8 file_read_text(FilepathType type, const char* filepath, u8** data, u32* size);
+b8 file_write_binary(FilepathType type, const char* filepath, const u8* data, size_t size, b8 append, b8 recursive);
+b8 file_write_text(FilepathType type, const char* filepath, const char* str, size_t size, b8 append, b8 recursive);
 
-b8 file_read_binary(const char* filepath, u8** data, u32* size);
-b8 file_read_text(const char* filepath, u8** data, u32* size);
-b8 file_write_binary(const char* filepath, const u8* data, size_t size, b8 append, b8 recursive);
-b8 file_write_text(const char* filepath, const char* str, size_t size, b8 append, b8 recursive);
+b8 file_remove(FilepathType type, const char* filepath);
+b8 file_copy(FilepathType type, const char* srcpath, const char* dstpath);
+b8 file_exists(FilepathType type, const char* filepath);
+b8 folder_create(FilepathType type, const char* filepath, b8 recursive);
+b8 folder_remove(FilepathType type, const char* filepath);
 
-b8 file_remove(const char* filepath);
-b8 file_copy(const char* srcpath, const char* dstpath);
-b8 file_exists(const char* filepath);
-b8 folder_create(const char* filepath, b8 recursive);
-b8 folder_remove(const char* filepath);
-
-b8 file_date(const char* filepath, Date* create, Date* last_write, Date* last_access);
+b8 file_date(FilepathType type, const char* filepath, Date* create, Date* last_write, Date* last_access);
 
 typedef struct {
 	Date        create_date;
@@ -145,7 +136,7 @@ typedef struct {
 	FolderElement element;
 } FolderIterator;
 
-FolderIterator folder_iterator_begin(const char* folderpath);
+FolderIterator folder_iterator_begin(FilepathType type, const char* folderpath);
 void folder_iterator_next(FolderIterator* iterator);
 void folder_iterator_close(FolderIterator* iterator);
 
@@ -251,7 +242,7 @@ u32 interlock_decrement_u32(volatile u32* n);
 
 typedef u64 Library;
 
-Library library_load(const char* filepath);
+Library library_load(FilepathType type, const char* filepath);
 void    library_free(Library library);
 void*   library_address(Library library, const char* name);
 
@@ -266,10 +257,10 @@ typedef struct {
 		const char* title;
 	} window;
 
-} OSInitializeDesc;
+} PlatformInitializeDesc;
 	
-b8   _os_initialize(const OSInitializeDesc* desc);
-void _os_close();
-b8 _os_recive_input();
+b8 platform_initialize(const PlatformInitializeDesc* desc);
+void platform_close();
+b8 platform_recive_input();
 
 SV_END_C_HEADER

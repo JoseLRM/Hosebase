@@ -6,6 +6,7 @@
 
 #include "Hosebase/external/stb_truetype.h"
 #include "Hosebase/font.h"
+#include "Hosebase/platform.h"
 
 typedef struct {
 	u8* bitmap;
@@ -23,7 +24,7 @@ typedef struct {
 	u32 height;
 } GlyphLine;
 
-inline void add_glyph(char c, stbtt_fontinfo* info, f32 heightScale, DynamicArray(TempGlyph)* glyphs)
+SV_INLINE void add_glyph(char c, stbtt_fontinfo* info, f32 heightScale, DynamicArray(TempGlyph)* glyphs)
 {
 	i32 index = stbtt_FindGlyphIndex(info, c);
 
@@ -37,7 +38,7 @@ inline void add_glyph(char c, stbtt_fontinfo* info, f32 heightScale, DynamicArra
 	array_push(glyphs, glyph);
 }
 
-static b8 glyph_less_than(const TempGlyph* g0, const TempGlyph* g1)
+SV_INLINE b8 glyph_less_than(const TempGlyph* g0, const TempGlyph* g1)
 {
 	return g0->h > g1->h;
 }
@@ -46,7 +47,7 @@ b8 font_create(Font* font, const char* filepath, f32 pixel_height, FontFlags fla
 {
 	u8* file_data;
 	u32 file_size;
-	SV_CHECK(file_read_binary(filepath, &file_data, &file_size));
+	SV_CHECK(file_read_binary(FilepathType_Asset, filepath, &file_data, &file_size));
 
 	stbtt_fontinfo info;
 	stbtt_InitFont(&info, file_data, 0);

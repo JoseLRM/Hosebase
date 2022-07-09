@@ -234,7 +234,7 @@ u32 text_jump_lines(const void* text, u32 lines)
 	if (lines != 0)
 		return u32_max;
 
-	return it - text;
+	return it - (const char*)text;
 }
 
 u32 text_move_right(void* buffer, u32 cursor)

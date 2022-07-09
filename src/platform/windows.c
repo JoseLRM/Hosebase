@@ -1,10 +1,11 @@
 #if SV_PLATFORM_WINDOWS
 
-#include "Hosebase/os.h"
+#include "Hosebase/hosebase.h"
 
 #define NOMINMAX
 #include "windows.h"
 #include "Shlobj.h"
+#include "xinput.h"
 
 #undef near
 #undef far
@@ -12,6 +13,7 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Comdlg32.lib")
+#pragma comment(lib, "Xinput.lib")
 
 #define WRITE_BARRIER \
 	_WriteBarrier();  \
@@ -23,10 +25,10 @@
 
 #include "time.h"
 
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 #include "Hosebase/input.h"
 
-#include "graphics_internal.h"
+#include "Hosebase/graphics.h"
 
 #define TASK_QUEUE_SIZE 6000
 #define TASK_THREAD_MAX 64
@@ -70,18 +72,16 @@ typedef struct
 
 } TaskSystemData;
 
+HANDLE console_handle;
+
 typedef struct
 {
-
-	char origin_path[FILE_PATH_SIZE];
-
 	LARGE_INTEGER clock_frequency;
 	LARGE_INTEGER begin_time;
 	volatile f64 last_time;
 	f64 add_time;
 
 	HINSTANCE hinstance;
-	HANDLE console;
 	HINSTANCE user_lib;
 	HWND handle;
 
@@ -101,17 +101,17 @@ typedef struct
 
 	TaskSystemData task_system;
 
-} PlatformData;
+} WindowsData;
 
-static PlatformData *platform = NULL;
+static WindowsData *windows = NULL;
 
-void filepath_resolve(char *dst, const char *src)
+void filepath_resolve(char *dst, const char *src, FilepathType type)
 {
 	if (path_is_absolute(src))
 		string_copy(dst, src, FILE_PATH_SIZE);
 	else
 	{
-		string_copy(dst, platform->origin_path, FILE_PATH_SIZE);
+		string_copy(dst, (type == FilepathType_Asset) ? "assets/" : "", FILE_PATH_SIZE);
 		string_append(dst, src, FILE_PATH_SIZE);
 	}
 }
@@ -347,7 +347,7 @@ inline i32 mouse_button_to_winkey(MouseButton button)
 inline v2_u32 get_window_size()
 {
 	RECT rect;
-	if (GetClientRect(platform->handle, &rect))
+	if (GetClientRect(windows->handle, &rect))
 	{
 
 		v2_u32 size;
@@ -379,20 +379,20 @@ LRESULT CALLBACK window_proc(
 
 	case WM_CLOSE:
 	{
-		platform->close_request = TRUE;
+		windows->close_request = TRUE;
 		return 0;
 	}
 	break;
 
 	case WM_SETFOCUS:
 	{
-		platform->has_focus = TRUE;
+		windows->has_focus = TRUE;
 	}
 	break;
 
 	case WM_KILLFOCUS:
 	{
-		platform->has_focus = FALSE;
+		windows->has_focus = FALSE;
 	}
 	break;
 
@@ -502,8 +502,8 @@ LRESULT CALLBACK window_proc(
 		f32 w = (f32)size.x;
 		f32 h = (f32)size.y;
 
-		platform->mouse_position.x = ((f32)_x / w) - 0.5f;
-		platform->mouse_position.y = -((f32)_y / h) + 0.5f;
+		windows->mouse_position.x = ((f32)_x / w) - 0.5f;
+		windows->mouse_position.y = -((f32)_y / h) + 0.5f;
 
 		break;
 	}
@@ -583,8 +583,8 @@ LRESULT CALLBACK window_proc(
 		const RAWINPUT *input = (const RAWINPUT *)buffer;
 		if (input->header.dwType == RIM_TYPEMOUSE && (input->data.mouse.lLastX != 0 || input->data.mouse.lLastY != 0))
 		{
-			platform->raw_mouse_dragging.x += input->data.mouse.lLastX;
-			platform->raw_mouse_dragging.y -= input->data.mouse.lLastY;
+			windows->raw_mouse_dragging.x += input->data.mouse.lLastX;
+			windows->raw_mouse_dragging.y -= input->data.mouse.lLastY;
 		}
 	}
 	break;
@@ -594,14 +594,14 @@ LRESULT CALLBACK window_proc(
 		/*switch (wParam)
 		{
 		case SIZE_MAXIMIZED:
-			platform->state = WindowState_Maximized;
+			windows->state = WindowState_Maximized;
 			break;
 		case SIZE_MINIMIZED:
-			platform->state = WindowState_Minimized;
+			windows->state = WindowState_Minimized;
 			break;
 			}*/
 
-		platform->resize = TRUE;
+		windows->resize = TRUE;
 
 		break;
 	}
@@ -645,24 +645,24 @@ inline void configure_thread(HANDLE thread, const char *name, u64 affinity_mask,
 #endif
 }
 
-b8 _os_initialize(const OSInitializeDesc *desc)
+b8 os_initialize(const PlatformInitializeDesc *desc)
 {
-	platform = memory_allocate(sizeof(PlatformData));
+	windows = memory_allocate(sizeof(WindowsData));
 
-	if (!QueryPerformanceFrequency(&platform->clock_frequency))
+	if (!QueryPerformanceFrequency(&windows->clock_frequency))
 	{
 		SV_LOG_ERROR("Can't get the clock frequency\n");
 		return FALSE;
 	}
 
-	QueryPerformanceCounter(&platform->begin_time);
-	platform->add_time = 0.0;
-	platform->last_time = 0.0;
+	QueryPerformanceCounter(&windows->begin_time);
+	windows->add_time = 0.0;
+	windows->last_time = 0.0;
 
 	configure_thread(GetCurrentThread(), "main_thread", 1ULL, THREAD_PRIORITY_HIGHEST);
 
-	platform->hinstance = GetModuleHandle(NULL);
-	platform->console = GetStdHandle(STD_OUTPUT_HANDLE);
+	windows->hinstance = GetModuleHandle(NULL);
+	console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	{
 		WNDCLASSA c;
@@ -671,7 +671,7 @@ b8 _os_initialize(const OSInitializeDesc *desc)
 		c.hCursor = LoadCursorA(0, IDC_ARROW);
 		c.lpfnWndProc = window_proc;
 		c.lpszClassName = "SilverWindow";
-		c.hInstance = platform->hinstance;
+		c.hInstance = windows->hinstance;
 
 		if (!RegisterClassA(&c))
 		{
@@ -680,7 +680,7 @@ b8 _os_initialize(const OSInitializeDesc *desc)
 		}
 	}
 
-	platform->handle = 0;
+	windows->handle = 0;
 
 	const char *title = string_validate(desc->window.title);
 	v2_u32 size = desc->window.size;
@@ -697,19 +697,19 @@ b8 _os_initialize(const OSInitializeDesc *desc)
 		flags = WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_OVERLAPPED | WS_BORDER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
 	}
 
-	platform->handle = CreateWindowExA(0u,
+	windows->handle = CreateWindowExA(0u,
 									   "SilverWindow",
 									   title,
 									   flags,
 									   pos.x, pos.y, size.x, size.y,
 									   0, 0, 0, 0);
 
-	if (platform->handle == 0)
+	if (windows->handle == 0)
 	{
 		return FALSE;
 	}
 
-	platform->show_cursor = TRUE;
+	windows->show_cursor = TRUE;
 
 	SV_CHECK(_task_initialize());
 
@@ -734,64 +734,60 @@ b8 _os_initialize(const OSInitializeDesc *desc)
 
 b8 input_focus()
 {
-	return platform->has_focus;
+	return windows->has_focus;
 }
 
-b8 _os_recive_input()
+b8 platform_recive_input()
 {
-	/*if (platform->resize_request) {
+	/*if (windows->resize_request) {
 
-		platform->resize_request = FALSE;
-		SetWindowLongPtrW(platform->handle, GWL_STYLE, (LONG_PTR)platform->new_style);
-		SetWindowPos(platform->handle, 0, platform->new_position.x, platform->new_position.y, platform->new_size.x, platform->new_size.y, 0);
+		windows->resize_request = FALSE;
+		SetWindowLongPtrW(windows->handle, GWL_STYLE, (LONG_PTR)windows->new_style);
+		SetWindowPos(windows->handle, 0, windows->new_position.x, windows->new_position.y, windows->new_size.x, windows->new_size.y, 0);
 		}*/
 
-	platform->last_raw_mouse_dragging = platform->raw_mouse_dragging;
+	windows->last_raw_mouse_dragging = windows->raw_mouse_dragging;
 
-	if (platform->fullscreen_request)
+	if (windows->fullscreen_request)
 	{
-
-		if (platform->fullscreen_request == 1 && platform->in_fullscreen)
+		if (windows->fullscreen_request == 1 && windows->in_fullscreen)
 		{
+			LONG style = windows->style_before_fullscreen;
+			v4_i32 pos = windows->pos_before_fullscreen;
 
-			LONG style = platform->style_before_fullscreen;
-			v4_i32 pos = platform->pos_before_fullscreen;
-
-			SetWindowLongA(platform->handle, GWL_STYLE, style);
-			SetWindowPos(platform->handle, HWND_TOP, pos.x, pos.y, pos.z, pos.w, 0);
+			SetWindowLongA(windows->handle, GWL_STYLE, style);
+			SetWindowPos(windows->handle, HWND_TOP, pos.x, pos.y, pos.z, pos.w, 0);
 
 			SV_LOG_INFO("Fullscreen off\n");
-			platform->in_fullscreen = FALSE;
+			windows->in_fullscreen = FALSE;
 		}
-		else if (platform->fullscreen_request == 2 && !platform->in_fullscreen)
+		else if (windows->fullscreen_request == 2 && !windows->in_fullscreen)
 		{
-
 			// Save last state
 			{
-				platform->style_before_fullscreen = GetWindowLongA(platform->handle, GWL_STYLE);
+				windows->style_before_fullscreen = GetWindowLongA(windows->handle, GWL_STYLE);
 				RECT rect;
 
-				if (GetWindowRect(platform->handle, &rect))
+				if (GetWindowRect(windows->handle, &rect))
 				{
-
-					platform->pos_before_fullscreen.x = rect.left;
-					platform->pos_before_fullscreen.y = rect.top;
-					platform->pos_before_fullscreen.z = rect.right - rect.left;
-					platform->pos_before_fullscreen.w = rect.bottom - rect.top;
+					windows->pos_before_fullscreen.x = rect.left;
+					windows->pos_before_fullscreen.y = rect.top;
+					windows->pos_before_fullscreen.z = rect.right - rect.left;
+					windows->pos_before_fullscreen.w = rect.bottom - rect.top;
 				}
 			}
 
 			LONG style = WS_POPUP | WS_VISIBLE;
 			v2_u32 size = desktop_size();
 
-			SetWindowLongA(platform->handle, GWL_STYLE, style);
-			SetWindowPos(platform->handle, HWND_TOP, 0, 0, size.x, size.y, 0);
+			SetWindowLongA(windows->handle, GWL_STYLE, style);
+			SetWindowPos(windows->handle, HWND_TOP, 0, 0, size.x, size.y, 0);
 
 			SV_LOG_INFO("Fullscreen on\n");
-			platform->in_fullscreen = TRUE;
+			windows->in_fullscreen = TRUE;
 		}
 
-		platform->fullscreen_request = 0;
+		windows->fullscreen_request = 0;
 	}
 
 	MSG msg;
@@ -802,25 +798,90 @@ b8 _os_recive_input()
 		DispatchMessageW(&msg);
 	}
 
+	// Read xinput
+	{
+		foreach(i, XUSER_MAX_COUNT)
+		{
+			XINPUT_STATE state;
+			if (XInputGetState(i, &state) == ERROR_SUCCESS)
+			{
+				XINPUT_GAMEPAD* gamepad = &state.Gamepad;
+				
+				if (gamepad->wButtons & XINPUT_GAMEPAD_X)
+					_input_gamepad_press(GamepadButton_X);
+				if (gamepad->wButtons & XINPUT_GAMEPAD_B)
+					_input_gamepad_press(GamepadButton_B);
+				if (gamepad->wButtons & XINPUT_GAMEPAD_A)
+					_input_gamepad_press(GamepadButton_A);
+				if (gamepad->wButtons & XINPUT_GAMEPAD_Y)
+					_input_gamepad_press(GamepadButton_Y);
+				
+				if (gamepad->wButtons & XINPUT_GAMEPAD_DPAD_UP)
+					_input_gamepad_press(GamepadButton_Up);
+				if (gamepad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN)
+					_input_gamepad_press(GamepadButton_Down);
+				if (gamepad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT)
+					_input_gamepad_press(GamepadButton_Left);
+				if (gamepad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT)
+					_input_gamepad_press(GamepadButton_Right);
+
+				if (gamepad->wButtons & XINPUT_GAMEPAD_START)
+					_input_gamepad_press(GamepadButton_Start);
+				if (gamepad->wButtons & XINPUT_GAMEPAD_BACK)
+					_input_gamepad_press(GamepadButton_Back);
+
+				if (gamepad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER)
+				{
+					// TODO: SV_LOG_INFO("XINPUT_GAMEPAD_LEFT_SHOULDER\n");
+				}
+				if (gamepad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER)
+				{
+					// TODO: SV_LOG_INFO("XINPUT_GAMEPAD_RIGHT_SHOULDER\n");
+				}
+				
+				u32 left_stickX = (i32)gamepad->sThumbLX + 32768;
+				u32 left_stickY = (i32)gamepad->sThumbLY + 32768;
+
+				u32 right_stickX = (i32)gamepad->sThumbRX + 32768;
+				u32 right_stickY = (i32)gamepad->sThumbRY + 32768;
+
+				f32 div = (f32)(32768 + 32767);
+
+				v2 left;
+				left.x = (f32)left_stickX / div;
+				left.y = (f32)left_stickY / div;
+				left = v2_mul_scalar(v2_sub_scalar(left, 0.5f), 2.f);
+
+				v2 right;
+				right.x = (f32)right_stickX / div;
+				right.y = (f32)right_stickY / div;
+				right = v2_mul_scalar(v2_sub_scalar(right, 0.5f), 2.f);
+
+				_input_gamepad_set_joystick(TRUE, left);
+				_input_gamepad_set_joystick(FALSE, right);
+			}
+		}
+	}
+
 	// Send mouse info
 	{
 		RECT r;
-		GetClientRect(platform->handle, &r);
+		GetClientRect(windows->handle, &r);
 
 		f32 width = r.right - r.left;
 		f32 height = r.bottom - r.top;
 
 		v2 drag;
-		drag.x = (platform->raw_mouse_dragging.x - platform->last_raw_mouse_dragging.x) / width;
-		drag.y = (platform->raw_mouse_dragging.y - platform->last_raw_mouse_dragging.y) / height;
+		drag.x = (windows->raw_mouse_dragging.x - windows->last_raw_mouse_dragging.x) / width;
+		drag.y = (windows->raw_mouse_dragging.y - windows->last_raw_mouse_dragging.y) / height;
 
-		_input_mouse_position_set(platform->mouse_position);
+		_input_mouse_position_set(windows->mouse_position);
 		_input_mouse_dragging_set(drag);
 	}
 
-	if (platform->resize)
+	if (windows->resize)
 	{
-		platform->resize = FALSE;
+		windows->resize = FALSE;
 
 #if SV_GRAPHICS
 		graphics_swapchain_resize();
@@ -829,10 +890,10 @@ b8 _os_recive_input()
 
 	// Mouse clipping
 	{
-		if (!platform->show_cursor && platform->has_focus)
+		if (!windows->show_cursor && windows->has_focus)
 		{
 			RECT rect;
-			if (GetWindowRect(platform->handle, &rect))
+			if (GetWindowRect(windows->handle, &rect))
 			{
 
 				i32 width = rect.right - rect.left;
@@ -854,7 +915,7 @@ b8 _os_recive_input()
 
 	if (input_key(Key_Alt, InputState_Any) && input_key(Key_F4, InputState_Pressed))
 	{
-		platform->close_request = TRUE;
+		windows->close_request = TRUE;
 	}
 	if (input_key(Key_F11, InputState_Released))
 	{
@@ -877,26 +938,26 @@ b8 _os_recive_input()
 		set_window_fullscreen(state != WindowState_Fullscreen);
 	}
 
-	return !platform->close_request;
+	return !windows->close_request;
 }
 
-void _os_close()
+void os_close()
 {
-	if (platform)
+	if (windows)
 	{
 		_task_close();
 
-		if (platform->handle)
-			DestroyWindow(platform->handle);
+		if (windows->handle)
+			DestroyWindow(windows->handle);
 
-		if (platform->user_lib)
-			FreeLibrary(platform->user_lib);
+		if (windows->user_lib)
+			FreeLibrary(windows->user_lib);
 
-		memory_free(platform);
+		memory_free(windows);
 	}
 }
 
-void print(PrintStyle style, const char *str, ...)
+void windows_print(PrintStyle style, const char *str, ...)
 {
 	va_list args;
 	va_start(args, str);
@@ -905,7 +966,7 @@ void print(PrintStyle style, const char *str, ...)
 	WORD saved_attributes;
 
 	// Save current attributes
-	GetConsoleScreenBufferInfo(platform->console, &consoleInfo);
+	GetConsoleScreenBufferInfo(console_handle, &consoleInfo);
 	saved_attributes = consoleInfo.wAttributes;
 
 	i32 att;
@@ -925,11 +986,11 @@ void print(PrintStyle style, const char *str, ...)
 		att = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
 	}
 
-	SetConsoleTextAttribute(platform->console, att);
+	SetConsoleTextAttribute(console_handle, att);
 	vprintf(str, args);
 
 	// Restore attributes
-	SetConsoleTextAttribute(platform->console, saved_attributes);
+	SetConsoleTextAttribute(console_handle, saved_attributes);
 
 	va_end(args);
 }
@@ -950,7 +1011,7 @@ b8 show_dialog_yesno(const char *title, const char *content)
 
 u64 window_handle()
 {
-	return (u64)platform->handle;
+	return (u64)windows->handle;
 }
 
 v2_u32 window_size()
@@ -958,15 +1019,9 @@ v2_u32 window_size()
 	return get_window_size();
 }
 
-f32 window_aspect()
-{
-	v2_u32 size = get_window_size();
-	return (f32)size.x / (f32)size.y;
-}
-
 WindowState window_state()
 {
-	LONG style = GetWindowLongA(platform->handle, GWL_STYLE);
+	LONG style = GetWindowLongA(windows->handle, GWL_STYLE);
 
 	if (style & WS_POPUP)
 		return WindowState_Fullscreen;
@@ -980,7 +1035,7 @@ WindowState window_state()
 
 void set_window_fullscreen(b8 fullscreen)
 {
-	platform->fullscreen_request = fullscreen + 1;
+	windows->fullscreen_request = fullscreen + 1;
 }
 
 v2_u32 desktop_size()
@@ -995,28 +1050,27 @@ v2_u32 desktop_size()
 
 void cursor_hide()
 {
-	if (platform->show_cursor)
+	if (windows->show_cursor)
 	{
 		ShowCursor(FALSE);
-		platform->show_cursor = FALSE;
+		windows->show_cursor = FALSE;
 	}
 }
 
 void cursor_show()
 {
-	if (!platform->show_cursor)
+	if (!windows->show_cursor)
 	{
 		ShowCursor(TRUE);
-		platform->show_cursor = TRUE;
+		windows->show_cursor = TRUE;
 	}
 }
 
 // File Management
 
-b8 file_dialog(char *buff, u32 filterCount, const char **filters, const char *filepath_, b8 open, b8 is_file)
+b8 file_dialog(char *buff, u32 filterCount, const char **filters, const char *filepath, b8 open, b8 is_file)
 {
-	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	buff[0] = '\0';
 
 	char abs_filter[5000] = "";
 
@@ -1039,7 +1093,7 @@ b8 file_dialog(char *buff, u32 filterCount, const char **filters, const char *fi
 	SV_ZERO(file);
 
 	file.lStructSize = sizeof(OPENFILENAMEA);
-	file.hwndOwner = platform->handle;
+	file.hwndOwner = windows->handle;
 	file.lpstrFilter = abs_filter;
 	file.nFilterIndex = 1u;
 	file.lpstrFile = buff;
@@ -1060,7 +1114,10 @@ b8 file_dialog(char *buff, u32 filterCount, const char **filters, const char *fi
 		return TRUE;
 	}
 	else
+	{
+		DWORD err = CommDlgExtendedError();
 		return FALSE;
+	}
 }
 
 b8 file_dialog_open(char *buff, u32 filterCount, const char **filters, const char *startPath)
@@ -1071,15 +1128,6 @@ b8 file_dialog_open(char *buff, u32 filterCount, const char **filters, const cha
 b8 file_dialog_save(char *buff, u32 filterCount, const char **filters, const char *startPath)
 {
 	return file_dialog(buff, filterCount, filters, startPath, FALSE, TRUE);
-}
-
-b8 path_is_absolute(const char *path)
-{
-	assert(path);
-	size_t size = strlen(path);
-	if (size < 2u)
-		return FALSE;
-	return path[1] == ':';
 }
 
 void path_clear(char *path)
@@ -1096,10 +1144,10 @@ void path_clear(char *path)
 	}
 }
 
-b8 file_read_binary(const char *filepath_, u8 **data, u32 *psize)
+b8 file_read_binary(FilepathType type, const char *filepath_, u8 **data, u32 *psize)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	HANDLE file = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -1121,10 +1169,10 @@ b8 file_read_binary(const char *filepath_, u8 **data, u32 *psize)
 	return TRUE;
 }
 
-b8 file_read_text(const char *filepath_, u8 **data, u32 *psize)
+b8 file_read_text(FilepathType type, const char *filepath_, u8 **data, u32 *psize)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	HANDLE file = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -1184,10 +1232,10 @@ inline b8 create_path(const char *filepath)
 	return TRUE;
 }
 
-b8 file_write_binary(const char *filepath_, const u8 *data, size_t size, b8 append, b8 recursive)
+b8 file_write_binary(FilepathType type, const char *filepath_, const u8 *data, size_t size, b8 append, b8 recursive)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	HANDLE file = CreateFile(filepath, GENERIC_WRITE, FILE_SHARE_READ, NULL, append ? OPEN_ALWAYS : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -1217,10 +1265,10 @@ b8 file_write_binary(const char *filepath_, const u8 *data, size_t size, b8 appe
 	return TRUE;
 }
 
-b8 file_write_text(const char *filepath_, const char *str, size_t size, b8 append, b8 recursive)
+b8 file_write_text(FilepathType type, const char *filepath_, const char *str, size_t size, b8 append, b8 recursive)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	HANDLE file = CreateFile(filepath, GENERIC_WRITE, FILE_SHARE_READ, NULL, append ? OPEN_ALWAYS : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -1275,24 +1323,24 @@ f64 timer_now()
 	LARGE_INTEGER now, elapsed;
 	QueryPerformanceCounter(&now);
 
-	elapsed.QuadPart = now.QuadPart - platform->begin_time.QuadPart;
+	elapsed.QuadPart = now.QuadPart - windows->begin_time.QuadPart;
 	elapsed.QuadPart *= 1000000000;
-	elapsed.QuadPart /= platform->clock_frequency.QuadPart;
+	elapsed.QuadPart /= windows->clock_frequency.QuadPart;
 
 	f64 time = (f64)(elapsed.QuadPart) / 1000000000.0;
 
 	if (time < 0.0)
 	{
 		WRITE_BARRIER;
-		platform->add_time = platform->last_time;
-		QueryPerformanceCounter(&platform->begin_time);
+		windows->add_time = windows->last_time;
+		QueryPerformanceCounter(&windows->begin_time);
 		return timer_now();
 	}
 
-	time += platform->add_time;
+	time += windows->add_time;
 
 	WRITE_BARRIER;
-	platform->last_time = time;
+	windows->last_time = time;
 	return time;
 }
 
@@ -1301,9 +1349,9 @@ u64 timer_seed()
 	LARGE_INTEGER now, elapsed;
 	QueryPerformanceCounter(&now);
 
-	elapsed.QuadPart = now.QuadPart - platform->begin_time.QuadPart;
+	elapsed.QuadPart = now.QuadPart - windows->begin_time.QuadPart;
 	elapsed.QuadPart *= 1000000000;
-	elapsed.QuadPart /= platform->clock_frequency.QuadPart;
+	elapsed.QuadPart /= windows->clock_frequency.QuadPart;
 
 	return hash_combine(elapsed.QuadPart * 0x92847ULL + 0x82744ULL, 0x7677634345ULL);
 }
@@ -1315,41 +1363,10 @@ Date timer_date()
 	return systemtime_to_date(time);
 }
 
-b8 key_async(Key key)
-{
-	i32 k = key_to_winkey(key);
-
-	if (k == 0)
-		return FALSE;
-
-	SHORT res = GetAsyncKeyState(k);
-	return (res & 0x8000) != 0;
-}
-
-b8 mouse_button_async(MouseButton button)
-{
-	i32 k = mouse_button_to_winkey(button);
-
-	if (k == 0)
-		return FALSE;
-	
-	if (GetSystemMetrics(SM_SWAPBUTTON))
-	{
-		if (k == VK_LBUTTON)
-			k = VK_RBUTTON;
-
-		if (k == VK_RBUTTON)
-			k = VK_LBUTTON;
-	}
-
-	SHORT res = GetAsyncKeyState(k);
-	return (res & 0x8000) != 0;
-}
-
-b8 file_date(const char *filepath_, Date *create, Date *last_write, Date *last_access)
+b8 file_date(FilepathType type, const char *filepath_, Date *create, Date *last_write, Date *last_access)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	HANDLE file = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -1380,24 +1397,23 @@ b8 file_date(const char *filepath_, Date *create, Date *last_write, Date *last_a
 	return TRUE;
 }
 
-b8 file_remove(const char *filepath_)
+b8 file_remove(FilepathType type, const char *filepath_)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	return DeleteFile(filepath);
 }
 
-b8 file_copy(const char *srcpath_, const char *dstpath_)
+b8 file_copy(FilepathType type, const char *srcpath_, const char *dstpath_)
 {
 	char srcpath[MAX_PATH];
 	char dstpath[MAX_PATH];
-	filepath_resolve(srcpath, srcpath_);
-	filepath_resolve(dstpath, dstpath_);
+	filepath_resolve(srcpath, srcpath_, type);
+	filepath_resolve(dstpath, dstpath_, type);
 
 	if (!CopyFileA(srcpath, dstpath, FALSE))
 	{
-
 		create_path(dstpath);
 		return CopyFileA(srcpath, dstpath, FALSE);
 	}
@@ -1405,10 +1421,10 @@ b8 file_copy(const char *srcpath_, const char *dstpath_)
 	return TRUE;
 }
 
-b8 file_exists(const char *filepath_)
+b8 file_exists(FilepathType type, const char *filepath_)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	DWORD att = GetFileAttributes(filepath);
 	if (INVALID_FILE_ATTRIBUTES == att)
@@ -1418,20 +1434,20 @@ b8 file_exists(const char *filepath_)
 	return TRUE;
 }
 
-b8 folder_create(const char *filepath_, b8 recursive)
+b8 folder_create(FilepathType type, const char *filepath_, b8 recursive)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	if (recursive)
 		create_path(filepath);
 	return CreateDirectory(filepath, NULL);
 }
 
-b8 folder_remove(const char *filepath_)
+b8 folder_remove(FilepathType type, const char *filepath_)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 
 	return RemoveDirectoryA(filepath);
 }
@@ -1470,12 +1486,12 @@ inline FolderElement finddata_to_folderelement(WIN32_FIND_DATAA d)
 	return e;
 }
 
-FolderIterator folder_iterator_begin(const char *folderpath__)
+FolderIterator folder_iterator_begin(FilepathType type, const char *folderpath__)
 {
 	WIN32_FIND_DATAA data;
 
 	char folderpath_[MAX_PATH];
-	filepath_resolve(folderpath_, folderpath__);
+	filepath_resolve(folderpath_, folderpath__, type);
 
 	// Clear path
 	char folderpath[MAX_PATH];
@@ -1547,7 +1563,7 @@ void folder_iterator_close(FolderIterator *it)
 
 b8 clipboard_write_ansi(const char *text)
 {
-	SV_CHECK(OpenClipboard(platform->handle));
+	SV_CHECK(OpenClipboard(windows->handle));
 
 	EmptyClipboard();
 
@@ -1565,7 +1581,7 @@ b8 clipboard_write_ansi(const char *text)
 
 const char *clipboard_read_ansi()
 {
-	if (!OpenClipboard(platform->handle))
+	if (!OpenClipboard(windows->handle))
 		return NULL;
 
 	const char *txt = (const char *)GetClipboardData(CF_TEXT);
@@ -1700,7 +1716,7 @@ static DWORD WINAPI task_thread(void *arg);
 
 static b8 _task_initialize()
 {
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 	data->running = TRUE;
 
 	u32 thread_count;
@@ -1767,7 +1783,7 @@ static void _task_close()
 {
 	task_join();
 
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 	data->running = FALSE;
 
 	HANDLE threads[TASK_THREAD_MAX];
@@ -1786,7 +1802,7 @@ static void _task_close()
 
 inline b8 _task_thread_do_work()
 {
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 	b8 done = FALSE;
 
 	u32 task_next = data->task_next;
@@ -1837,7 +1853,7 @@ inline b8 _task_thread_do_work()
 static DWORD WINAPI task_thread(void *arg)
 {
 	TaskThreadData *thread = arg;
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 
 	while (data->running)
 	{
@@ -1855,7 +1871,7 @@ static void _task_add_queue(TaskDesc desc, TaskContext *ctx)
 	assert_title(desc.fn != NULL, "Null task function");
 	assert_title(desc.size <= TASK_DATA_SIZE, "The task data size is too large");
 
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 
 	TaskData *task = data->tasks + data->task_count % TASK_QUEUE_SIZE;
 	task->fn = desc.fn;
@@ -1872,7 +1888,7 @@ static void _task_add_queue(TaskDesc desc, TaskContext *ctx)
 
 void task_dispatch(TaskDesc *tasks, u32 task_count, TaskContext *context)
 {
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 
 	if (context)
 	{
@@ -1887,7 +1903,7 @@ void task_dispatch(TaskDesc *tasks, u32 task_count, TaskContext *context)
 
 void task_reserve_thread(ThreadMainFn main_fn, void *main_data, TaskContext *context)
 {
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 
 	if (context != NULL)
 		context->dispatched++;
@@ -1909,7 +1925,7 @@ void task_reserve_thread(ThreadMainFn main_fn, void *main_data, TaskContext *con
 
 void task_join()
 {
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 
 	task_wait(NULL);
 
@@ -1921,7 +1937,7 @@ void task_join()
 
 void task_wait(TaskContext *context)
 {
-	TaskSystemData *data = &platform->task_system;
+	TaskSystemData *data = &windows->task_system;
 
 	while (task_running(context))
 		_task_thread_do_work();
@@ -1935,7 +1951,7 @@ b8 task_running(TaskContext *context)
 	}
 	else
 	{
-		TaskSystemData *data = &platform->task_system;
+		TaskSystemData *data = &windows->task_system;
 		return data->task_completed < data->task_count;
 	}
 }
@@ -1952,10 +1968,10 @@ u32 interlock_decrement_u32(volatile u32 *n)
 
 // DYNAMIC LIBRARIES
 
-Library library_load(const char *filepath_)
+Library library_load(FilepathType type, const char *filepath_)
 {
 	char filepath[MAX_PATH];
-	filepath_resolve(filepath, filepath_);
+	filepath_resolve(filepath, filepath_, type);
 	return (Library)LoadLibrary(filepath);
 }
 
@@ -1967,6 +1983,28 @@ void library_free(Library library)
 void *library_address(Library library, const char *name)
 {
 	return GetProcAddress((HINSTANCE)library, name);
+}
+
+// MAIN
+
+#if SV_SLOW
+int main()
+#else
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
+#endif
+{
+	if (!initialize())
+		return 1;
+
+	while (hosebase_frame_begin())
+	{
+		update();
+		hosebase_frame_end();
+	}
+
+	close();
+
+	return 0;
 }
 
 #endif

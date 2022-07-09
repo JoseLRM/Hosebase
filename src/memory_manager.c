@@ -3,7 +3,7 @@
 #if SV_SLOW
 
 // TODO: Move on
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 void throw_assertion(const char* title, u32 line, const char* file)
 {
 	char line_str[20];

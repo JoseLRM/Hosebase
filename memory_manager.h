@@ -26,7 +26,7 @@ void memory_free(void* ptr);
 
 void memory_swap(void* p0, void* p1, size_t size);
 
-inline b8 array_prepare(void** data, u32* count, u32* capacity, u32 new_capacity, u32 add, u32 stride)
+SV_INLINE b8 array_prepare(void** data, u32* count, u32* capacity, u32 new_capacity, u32 add, u32 stride)
 {
 	if (*count + add > * capacity) {
 
@@ -50,7 +50,7 @@ typedef struct
 	void *next;
 } HashTableEntry;
 
-inline void* hashtable_get(u64 hash, void *_data, u32 stride, u32 table_size, b8 create, b8 *out_created)
+SV_INLINE void* hashtable_get(u64 hash, void *_data, u32 stride, u32 table_size, b8 create, b8 *out_created)
 {
 	assert(sizeof(HashTableEntry) <= stride);
 
@@ -111,7 +111,7 @@ inline void* hashtable_get(u64 hash, void *_data, u32 stride, u32 table_size, b8
 	return (entry == NULL || entry->hash == 0) ? NULL : ((u8 *)entry + sizeof(HashTableEntry) - stride);
 }
 
-inline b8 hashtable_erase(u64 hash, void *_data, u32 stride, u32 table_size)
+SV_INLINE b8 hashtable_erase(u64 hash, void *_data, u32 stride, u32 table_size)
 {
 	assert(sizeof(HashTableEntry) <= stride);
 
@@ -166,7 +166,7 @@ static void _hashtable_free_entry(u8* entry_data, u32 stride)
 	memory_free(entry->next);
 }
 
-inline void hashtable_free(void *_data, u32 stride, u32 table_size)
+SV_INLINE void hashtable_free(void *_data, u32 stride, u32 table_size)
 {
 	assert(sizeof(HashTableEntry) <= stride);
 
@@ -190,7 +190,7 @@ typedef struct {
 	void* value;
 } HashTableIterator;
 
-inline b8 hashtable_iterator_next(HashTableIterator* it, void* data, u32 stride, u32 table_size)
+SV_INLINE b8 hashtable_iterator_next(HashTableIterator* it, void* data, u32 stride, u32 table_size)
 {
 	if (it->entry == NULL) {
 
@@ -319,7 +319,7 @@ static void _quick_sort(struct _SortData* data, u32 left_limit, u32 right_limit)
 	}
 }
 
-inline void array_sort(void* data, u32 count, u32 stride, void* fn)
+SV_INLINE void array_sort(void* data, u32 count, u32 stride, void* fn)
 {
 	if (data == NULL || count == 0)
 		return;
@@ -339,12 +339,12 @@ inline void array_sort(void* data, u32 count, u32 stride, void* fn)
 	}
 }
 
-inline const char* string_validate(const char* str)
+SV_INLINE const char* string_validate(const char* str)
 {
 	return str ? str : "";
 }
 
-inline u32 string_split(const char* line, char* delimiters, u32 count)
+SV_INLINE u32 string_split(const char* line, char* delimiters, u32 count)
 {
 	const char* it = line;
 	
@@ -368,19 +368,19 @@ inline u32 string_split(const char* line, char* delimiters, u32 count)
 	return size;
 }
 
-inline u32 string_size(const char* str)
+SV_INLINE u32 string_size(const char* str)
 {
 	u32 size = 0u;
 	while (*str++) ++size;
 	return size;
 }
 
-inline b8 string_empty(const char* str)
+SV_INLINE b8 string_empty(const char* str)
 {
 	return str[0] == '\0';
 }
 
-inline b8 string_begins(const char* s0, const char* s1)
+SV_INLINE b8 string_begins(const char* s0, const char* s1)
 {
 	while (*s0 && *s1) {
 		if (*s0 != *s1)
@@ -393,7 +393,7 @@ inline b8 string_begins(const char* s0, const char* s1)
 	return *s0 == *s1 || *s1 == '\0';
 }
 
-inline b8 string_equals(const char* s0, const char* s1)
+SV_INLINE b8 string_equals(const char* s0, const char* s1)
 {
 	while (*s0 && *s1) {
 		if (*s0 != *s1)
@@ -406,7 +406,7 @@ inline b8 string_equals(const char* s0, const char* s1)
 	return *s0 == *s1;
 }
 
-inline u32 string_append(char* dst, const char* src, u32 buff_size)
+SV_INLINE u32 string_append(char* dst, const char* src, u32 buff_size)
 {
 	u32 src_size = string_size(src);
 	u32 dst_size = string_size(dst);
@@ -424,7 +424,7 @@ inline u32 string_append(char* dst, const char* src, u32 buff_size)
 	return overflows;
 }
 
-inline u32 string_append_char(char* dst, char c, u32 buff_size)
+SV_INLINE u32 string_append_char(char* dst, char c, u32 buff_size)
 {
 	// TODO: Optimize
 	char src[2];
@@ -433,7 +433,7 @@ inline u32 string_append_char(char* dst, char c, u32 buff_size)
 	return string_append(dst, src, buff_size);
 }
 
-inline void string_erase(char* str, u32 index)
+SV_INLINE void string_erase(char* str, u32 index)
 {
 	u32 size = string_size(str);
 	
@@ -448,7 +448,7 @@ inline void string_erase(char* str, u32 index)
 	*(end - 1u) = '\0';
 }
 
-inline u32 string_set(char* dst, const char* src, u32 src_size, u32 buff_size)
+SV_INLINE u32 string_set(char* dst, const char* src, u32 src_size, u32 buff_size)
 {
 	u32 size = SV_MIN(buff_size - 1u, src_size);
 	memory_copy(dst, src, size);
@@ -456,13 +456,13 @@ inline u32 string_set(char* dst, const char* src, u32 src_size, u32 buff_size)
 	return (src_size > buff_size - 1u) ? (src_size - buff_size - 1u) : 0u;
 }
 
-inline u32 string_copy(char* dst, const char* src, u32 buff_size)
+SV_INLINE u32 string_copy(char* dst, const char* src, u32 buff_size)
 {
 	u32 src_size = string_size(src);
 	return string_set(dst, src, src_size, buff_size);
 }
 
-inline u32 string_insert(char* dst, const char* src, u32 index, u32 buff_size)
+SV_INLINE u32 string_insert(char* dst, const char* src, u32 index, u32 buff_size)
 {
 	if (buff_size <= index)
 		return 0u;
@@ -501,7 +501,17 @@ inline u32 string_insert(char* dst, const char* src, u32 index, u32 buff_size)
 	return 0u;
 }
 
-inline void string_from_u32(char* dst, u32 value)
+SV_INLINE void string_replace_char(char* dst, char old_char, char new_char)
+{
+	while (*dst != '\0')
+	{
+		if (*dst == old_char)
+			*dst = new_char;
+		++dst;
+	}
+}
+
+SV_INLINE void string_from_u32(char* dst, u32 value)
 {
 	u32 digits = 0u;
 
@@ -572,7 +582,7 @@ inline void string_from_u32(char* dst, u32 value)
 	dst[end + 1] = '\0';
 }
 
-inline void string_from_f32(char* dst, f32 value, u32 decimals)
+SV_INLINE void string_from_f32(char* dst, f32 value, u32 decimals)
 {
 	i32 decimal_mult = 0;
 
@@ -623,7 +633,7 @@ inline void string_from_f32(char* dst, f32 value, u32 decimals)
 	string_append(dst, integer_string, 50);
 }
 
-inline void string_from_u64(char* dst, u64 value)
+SV_INLINE void string_from_u64(char* dst, u64 value)
 {
 	u32 digits = 0u;
 
@@ -694,7 +704,7 @@ inline void string_from_u64(char* dst, u64 value)
 	dst[end + 1] = '\0';
 }
 
-inline b8 string_to_u32(u32* dst, char* str)
+SV_INLINE b8 string_to_u32(u32* dst, char* str)
 {
 	u32 digits = string_size(str);
 	*dst = 0u;
@@ -757,7 +767,7 @@ inline b8 string_to_u32(u32* dst, char* str)
 	return TRUE;
 }
 
-inline b8 string_to_u32_hexadecimal(u32* dst, char* str)
+SV_INLINE b8 string_to_u32_hexadecimal(u32* dst, char* str)
 {
 	u32 digits = string_size(str);
 	*dst = 0u;
@@ -838,7 +848,7 @@ inline b8 string_to_u32_hexadecimal(u32* dst, char* str)
 	return TRUE;
 }
 
-inline const char* filepath_extension(const char* filepath)
+SV_INLINE const char* filepath_extension(const char* filepath)
 {
 	const char* last_dot = NULL;
 	
@@ -873,7 +883,7 @@ inline const char* filepath_extension(const char* filepath)
 	return last_dot;
 }
 
-inline const char* filepath_name(const char* filepath)
+SV_INLINE const char* filepath_name(const char* filepath)
 {
 	u32 s = string_size(filepath);
 	
@@ -890,36 +900,36 @@ inline const char* filepath_name(const char* filepath)
 	return filepath;
 }
 
-inline u32 filepath_folder(const char* filepath)
+SV_INLINE u32 filepath_folder(const char* filepath)
 {
 	u32 size = string_size(filepath);
 	while (size != 0 && filepath[size] != '/') --size;
 	return size;
 }
 
-inline b8 char_is_letter(u32 c)
+SV_INLINE b8 char_is_letter(u32 c)
 {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
-inline b8 char_is_number(u32 c)
+SV_INLINE b8 char_is_number(u32 c)
 {
 	return c >= '0' && c <= '9';
 }
 
-inline b8 char_is_lower_case(u32 c)
+SV_INLINE b8 char_is_lower_case(u32 c)
 {
 	return c >= 'a' && c <= 'z';
 }
 
-inline b8 char_is_capital(u32 c)
+SV_INLINE b8 char_is_capital(u32 c)
 {
 	return c >= 'A' && c <= 'Z';
 }
 
 // Line processing
 
-inline const char* line_next(const char* it)
+SV_INLINE const char* line_next(const char* it)
 {
 	while (*it != '\n' && *it != '\0')
 		++it;
@@ -930,14 +940,14 @@ inline const char* line_next(const char* it)
 	return it;
 }
 
-inline const char* line_jump_spaces(const char* it)
+SV_INLINE const char* line_jump_spaces(const char* it)
 {
 	while (*it == ' ')
 		++it;
 	return it;
 }
 
-inline const char* line_read_f32(const char* it, f32* value, b8* res)
+SV_INLINE const char* line_read_f32(const char* it, f32* value, b8* res)
 {
 	*value = 0.f;
 	it = line_jump_spaces(it);
@@ -974,7 +984,7 @@ inline const char* line_read_f32(const char* it, f32* value, b8* res)
 	return it;
 }
 
-inline const char* line_read_i32(const char* it, i32* value, const char* delimiters, u32 delimiter_count, b8* pres)
+SV_INLINE const char* line_read_i32(const char* it, i32* value, const char* delimiters, u32 delimiter_count, b8* pres)
 {
 	*value = 0;
 	it = line_jump_spaces(it);
@@ -1014,7 +1024,7 @@ inline const char* line_read_i32(const char* it, i32* value, const char* delimit
 	return it;
 }
 
-inline const char* line_read_u32(const char* it, u32* value, const char* delimiters, u32 delimiter_count, b8* pres)
+SV_INLINE const char* line_read_u32(const char* it, u32* value, const char* delimiters, u32 delimiter_count, b8* pres)
 {
 	*value = 0;
 	it = line_jump_spaces(it);
@@ -1052,7 +1062,7 @@ inline const char* line_read_u32(const char* it, u32* value, const char* delimit
 	return it;
 }
 
-inline const char* line_read_v3(const char* it, v3* value, b8* res)
+SV_INLINE const char* line_read_v3(const char* it, v3* value, b8* res)
 {
 	it = line_read_f32(it, &value->x, res);
 	if (*res) it = line_read_f32(it, &value->y, res);
@@ -1063,7 +1073,7 @@ inline const char* line_read_v3(const char* it, v3* value, b8* res)
 
 /*
 
-inline b8 string_modify(char* dst, size_t buff_size, u32& cursor, bool* _enter)
+SV_INLINE b8 string_modify(char* dst, size_t buff_size, u32& cursor, bool* _enter)
 {
 	b8 modified = FALSE;
 	b8 enter = FALSE;
@@ -1132,7 +1142,7 @@ inline b8 string_modify(char* dst, size_t buff_size, u32& cursor, bool* _enter)
 	return modified;
 }
 
-inline const char* filepath_name(const char* filepath)
+SV_INLINE const char* filepath_name(const char* filepath)
 {
 	size_t s = strlen(filepath);
 	
@@ -1149,7 +1159,7 @@ inline const char* filepath_name(const char* filepath)
 	return filepath;
 }
 
-inline char* filepath_name(char* filepath)
+SV_INLINE char* filepath_name(char* filepath)
 {
 	size_t s = strlen(filepath);
 
@@ -1166,7 +1176,7 @@ inline char* filepath_name(char* filepath)
 	return filepath;
 }
 
-inline char* filepath_extension(char* filepath)
+SV_INLINE char* filepath_extension(char* filepath)
 {
 	char* last_dot = nullptr;
 	

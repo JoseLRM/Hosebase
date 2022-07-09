@@ -5,6 +5,26 @@
 SV_BEGIN_C_HEADER
 
 typedef enum {
+	ControllerType_KeyboardAndMouse,
+	ControllerType_Gamepad,
+	ControllerType_TouchScreen,
+} ControllerType;
+
+typedef enum {
+	GamepadButton_X,
+	GamepadButton_Y,
+	GamepadButton_A,
+	GamepadButton_B,
+	GamepadButton_Up,
+	GamepadButton_Down,
+	GamepadButton_Left,
+	GamepadButton_Right,
+	GamepadButton_Start,
+	GamepadButton_Back,
+	GamepadButton_MaxEnum,
+} GamepadButton;
+
+typedef enum {
 	MouseButton_Left,
 	MouseButton_Right,
 	MouseButton_Center,
@@ -126,14 +146,22 @@ b8 input_focus();
 
 b8 input_key(Key key, InputState input_state);
 b8 input_mouse_button(MouseButton mouse_button, InputState input_state);
+b8 input_gamepad_button(GamepadButton gamepad_button, InputState input_state);
+v2 input_gamepad_joystick_left();
+v2 input_gamepad_joystick_right();
 
 f32 input_mouse_wheel();
 v2  input_mouse_position();
 v2  input_mouse_dragging();
 
+v2 input_touch_position();
+b8 input_touch_button(InputState input_state);
+
 const char* input_text();
 u32 input_text_command_count();
 TextCommand input_text_command(u32 index);
+
+ControllerType input_last_controller_used();
 
 b8   _input_initialize();
 void _input_close();
@@ -150,5 +178,10 @@ void _input_text_add(char c);
 void _input_mouse_wheel_set(f32 value);
 void _input_mouse_position_set(v2 value);
 void _input_mouse_dragging_set(v2 value);
+
+void _input_gamepad_press(GamepadButton button);
+void _input_gamepad_set_joystick(b8 left, v2 value);
+
+void _input_touch_set(InputState state, v2 position);
 
 SV_END_C_HEADER

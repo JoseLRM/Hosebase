@@ -115,7 +115,7 @@ void gui_draw(GPUImage* image, CommandList cmd);
 void gui_push_id(u64 id);
 void gui_pop_id(u32 count);
 
-inline void gui_push_string_id(const char* str)
+SV_INLINE void gui_push_string_id(const char* str)
 {
 	gui_push_id((u64)str);
 }

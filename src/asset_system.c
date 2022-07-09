@@ -1,5 +1,5 @@
 #include "Hosebase/asset_system.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 #define EXTENSION_MAX 10
 #define ASSET_TYPE_MAX 20
@@ -391,7 +391,7 @@ void _asset_update()
 
 				Date last_update;
 
-				if (file_date(filepath, NULL, &last_update, NULL)) {
+				if (file_date(FilepathType_Asset, filepath, NULL, &last_update, NULL)) {
 
 					if (!date_equals(last_update, asset->last_file_update)) {
 						
@@ -549,7 +549,7 @@ Asset asset_load_from_file(const char* filepath, AssetPriority priority)
 		string_copy(asset->text, filepath, FILE_PATH_SIZE);
 		asset_increment(asset_handle);
 
-		file_date(filepath, NULL, &asset->last_file_update, NULL);
+		file_date(FilepathType_Asset, filepath, NULL, &asset->last_file_update, NULL);
 
 		SV_LOG_INFO("Asset '%s' loaded from '%s'\n", type->name, filepath);
 

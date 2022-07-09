@@ -287,9 +287,6 @@ typedef enum {
 } SamplerAddressMode;
 	
 typedef enum {
-} SamplerBorderColor;
-	
-typedef enum {
 	BarrierType_Image
 } BarrierType;
 
@@ -315,7 +312,7 @@ typedef struct {
 	
 } GPUBarrier;
 
-inline GPUBarrier gpu_barrier_image(GPUImage* image, GPUImageLayout old_layout, GPUImageLayout new_layout)
+SV_INLINE GPUBarrier gpu_barrier_image(GPUImage* image, GPUImageLayout old_layout, GPUImageLayout new_layout)
 {
 	GPUBarrier barrier;
 	barrier.image.image = image;
@@ -334,26 +331,6 @@ typedef struct {
 	GPUImageRegion src_region;
 	GPUImageRegion dst_region;
 } GPUImageBlit;
-
-typedef struct {
-	const char* name;
-	const char* value;
-} ShaderMacro;
-
-typedef struct {
-
-	GraphicsAPI	      api;
-	u32	 	          major_version;
-	u32		          minor_version;
-	const char*	      entry_point;
-	ShaderMacro*      macros;
-	u32               macro_count;
-	
-} ShaderCompileDesc;
-
-typedef struct {
-	ShaderType shader_type;
-} ShaderPreprocessorData;
 
 // Primitive Descriptors
 
@@ -407,17 +384,40 @@ typedef struct {
 
 typedef SamplerDesc SamplerInfo;
 
+typedef enum {
+    ShaderResourceType_ConstantBuffer,
+    ShaderResourceType_Image,
+    ShaderResourceType_TexelBuffer,
+    ShaderResourceType_StorageBuffer,
+    ShaderResourceType_UAImage,
+    ShaderResourceType_UATexelBuffer,
+    ShaderResourceType_Sampler,
+} ShaderResourceType;
+
 typedef struct {
-	void*		bin_data;
-	size_t		bin_data_size;
-	ShaderType	shader_type;
+    char name[NAME_SIZE];
+    ShaderResourceType type;
+    u32 binding;
+} ShaderResource;
+
+typedef struct {
+    char name[NAME_SIZE];
+    u32 location;
+} ShaderSemanticName;
+
+typedef struct {
+	ShaderType type;
+    void* bin_data;
+    u32 bin_data_size;
+
+    ShaderSemanticName semantic_names[20];
+    u32 semantic_name_count;
+
+    u32 resource_count;
+    ShaderResource resources[GraphicsLimit_ConstantBuffer + GraphicsLimit_ShaderResource + GraphicsLimit_UnorderedAccessView + GraphicsLimit_Sampler];
 }  ShaderDesc;
 
-typedef struct {
-
-	ShaderType shader_type;
-	
-} ShaderInfo;
+typedef ShaderDesc ShaderInfo;
 
 typedef struct {
 	AttachmentOperation	load_op;
@@ -500,6 +500,16 @@ b8   _graphics_initialize(const GraphicsInitializeDesc* desc);
 void _graphics_close();
 b8 graphics_begin();
 void graphics_end();
+
+typedef enum {
+	SwapchainRotation_0,
+	SwapchainRotation_90,
+	SwapchainRotation_180,
+	SwapchainRotation_270,
+} SwapchainRotation;
+
+void graphics_swapchain_resize();
+SwapchainRotation graphics_swapchain_rotation();
 
 GraphicsAPI graphics_api();
 
@@ -635,18 +645,6 @@ void graphics_buffer_update(GPUBuffer* buffer, GPUBufferState buffer_state, cons
 void graphics_barrier(const GPUBarrier* barriers, u32 count, CommandList cmd);
 void graphics_image_blit(GPUImage* src, GPUImage* dst, GPUImageLayout srcLayout, GPUImageLayout dstLayout, u32 count, const GPUImageBlit* imageBlit, SamplerFilter filter, CommandList cmd);
 void graphics_image_clear(GPUImage* image, GPUImageLayout oldLayout, GPUImageLayout newLayout, Color clearColor, float depth, u32 stencil, CommandList cmd); // Not use if necessary, renderpasses have best performance!!
-
-// Shader utils
-
-b8 graphics_shader_compile_string(const ShaderCompileDesc* desc, const char* str, u32 size, Buffer* data, ShaderPreprocessorData* ppdata);
-	
-/*
-  Compiles the shader if doesn't exist in the bin file
-*/
-b8 graphics_shader_compile_fastbin_from_string(const char* name, Shader** pShader, const char* src, b8 alwaisCompile);
-b8 graphics_shader_compile_fastbin_from_file(Shader** shader, const char* filepath, b8 recompile);
-
-b8 graphics_shader_include_write(const char* name, const char* str);
 
 // Assets
 

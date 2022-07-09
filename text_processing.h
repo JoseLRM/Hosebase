@@ -3,7 +3,7 @@
 #include "Hosebase/graphics.h"
 #include "Hosebase/font.h"
 #include "Hosebase/math.h"
-#include "Hosebase/os.h"
+#include "Hosebase/platform.h"
 
 // --- TEXT BUFFER FORMAT ---
 // - char size (1 for now)
@@ -53,7 +53,7 @@ u32 text_move_end(void* buffer, u32 cursor);
 
 // Advance coords
 
-inline f32 char_width(u32 c, Font* font, f32 font_size)
+SV_INLINE f32 char_width(u32 c, Font* font, f32 font_size)
 {
 	Glyph* g = font_get(font, ' ');
 	assert(g);

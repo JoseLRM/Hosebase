@@ -4,10 +4,15 @@
 #define SV_GRAPHICS 0
 #endif
 
+#define SV_ARCH_32 (sizeof(void*) == 4)
+#define SV_ARCH_64 (sizeof(void*) == 8)
+
 #include "stdlib.h"
 #include "stdio.h"
 #include "string.h"
 #include "stdint.h"
+
+#define assert_static(x)
 
 // types
 typedef uint8_t  u8;
@@ -24,12 +29,28 @@ typedef u16     f16;
 typedef float	f32;
 typedef double	f64;
 
-typedef int8_t  b8;
-typedef int16_t b16;
-typedef int32_t b32;
-typedef int64_t b64;
+typedef u8  b8;
+typedef u16 b16;
+typedef u32 b32;
+typedef u64 b64;
 #define TRUE 1
 #define FALSE 0
+
+assert_static(sizeof(u8) == 1);
+assert_static(sizeof(u16) == 2);
+assert_static(sizeof(u32) == 4);
+assert_static(sizeof(u64) == 8);
+
+assert_static(sizeof(i8) == 1);
+assert_static(sizeof(i16) == 2);
+assert_static(sizeof(i32) == 4);
+assert_static(sizeof(i64) == 8);
+
+assert_static(sizeof(f16) == 2);
+assert_static(sizeof(f32) == 4);
+assert_static(sizeof(f64) == 8);
+
+assert_static(sizeof(size_t) == sizeof(void*));
 
 // limits
 
@@ -84,6 +105,14 @@ constexpr f64	f64_max = std::numeric_limits<f64>::max();*/
 #define SV_BUFFER_READ(it, dst) do { memory_copy(&(dst), (it), sizeof(dst)); it += sizeof(dst); } while(0)
 #define SV_DEREF(n, def) (((n) == NULL) ? (def) : (*(n)))
 
+#define SV_INLINE inline static
+
+#if SV_PLATFORM_WINDOWS
+#define SV_IN_PC 1
+#else
+#define SV_IN_PC 0
+#endif
+
 #ifdef __cplusplus
 
 #define SV_BEGIN_C_HEADER extern "C" {
@@ -107,22 +136,42 @@ void throw_assertion(const char* title, u32 line, const char* file);
 #define assert(x) do { if (!(x)) { throw_assertion(#x, __LINE__, __FILE__); } } while(0)
 #define assert_title(x, title) do { if (!(x)) { throw_assertion(title, __LINE__, __FILE__); } } while(0)
 
-inline b8 throw_assertion_and_return_false(const char* title, u32 line, const char* file) { throw_assertion(title, line, file); return FALSE; }
+SV_INLINE b8 throw_assertion_and_return_false(const char* title, u32 line, const char* file) { throw_assertion(title, line, file); return FALSE; }
 #define if_assert(x) if ((x) ? TRUE : (throw_assertion_and_return_false(#x, __LINE__, __FILE__)))
 
-#define assert_static(x) _STATIC_ASSERT(x)
+#if SV_PLATFORM_WINDOWS
 
-#define SV_LOG_INFO(x, ...) print(PrintStyle_Info, x, __VA_ARGS__)
-#define SV_LOG_WARNING(x, ...) print(PrintStyle_Warning, x, __VA_ARGS__)
-#define SV_LOG_ERROR(x, ...) print(PrintStyle_Error, x, __VA_ARGS__)
+typedef enum {
+	PrintStyle_Info,
+	PrintStyle_Warning,
+	PrintStyle_Error,
+} PrintStyle;
+
+void windows_print(PrintStyle style, const char* str, ...);
+
+#define SV_LOG_VERBOSE(x, ...) {;}
+#define SV_LOG_INFO(x, ...) windows_print(PrintStyle_Info, x, __VA_ARGS__)
+#define SV_LOG_WARNING(x, ...) windows_print(PrintStyle_Warning, x, __VA_ARGS__)
+#define SV_LOG_ERROR(x, ...) windows_print(PrintStyle_Error, x, __VA_ARGS__)
+
+#elif SV_PLATFORM_ANDROID
+
+#include <android/log.h>
+
+#define SV_LOG_VERBOSE(x, ...) __android_log_print(ANDROID_LOG_VERBOSE, "native-activity", x, ##__VA_ARGS__)
+#define SV_LOG_INFO(x, ...) __android_log_print(ANDROID_LOG_INFO, "native-activity", x, ##__VA_ARGS__)
+#define SV_LOG_WARNING(x, ...) __android_log_print(ANDROID_LOG_WARN, "native-activity", x, ##__VA_ARGS__)
+#define SV_LOG_ERROR(x, ...) __android_log_print(ANDROID_LOG_ERROR, "native-activity", x, ##__VA_ARGS__)
+
+#endif
 
 #else
 
 #define assert(x) {;}
 #define assert_title(x, title) {;}
 #define if_assert(x) if (x)
-#define assert_static(x) {;}
 
+#define SV_LOG_VERBOSE(x, ...) {;}
 #define SV_LOG_INFO(x, ...) {;}
 #define SV_LOG_WARNING(x, ...) {;}
 #define SV_LOG_ERROR(x, ...) {;}
@@ -421,5 +470,10 @@ typedef struct {
 	v3 origin;
 	v3 direction;
 } Ray;
+
+typedef struct {
+	v2 origin;
+	v2 direction;
+} Ray2D;
 	
 SV_END_C_HEADER

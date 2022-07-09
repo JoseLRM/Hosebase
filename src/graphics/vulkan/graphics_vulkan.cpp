@@ -4,7 +4,9 @@
 
 #define VMA_IMPLEMENTATION
 #define SV_VULKAN_IMPLEMENTATION
+// #define VOLK_IMPLEMENTATION
 #include "graphics_vulkan.h"
+#include "Hosebase/external/volk.c"
 
 namespace sv {
 
@@ -327,6 +329,11 @@ namespace sv {
 void graphics_vulkan_device_prepare(GraphicsDevice* device_)
 {
 	GraphicsDevice& device = *device_;
+
+	if (volkInitialize() != VK_SUCCESS)
+	{
+		SV_LOG_ERROR("Can't initialize volk\n");
+	}
 			
 	device.initialize			= sv::graphics_vulkan_initialize;
 	device.close				= sv::graphics_vulkan_close;
@@ -382,7 +389,12 @@ namespace sv {
 		}
 		
 		g_API->extensions.push_back("VK_KHR_surface");
+
+#if SV_PLATFORM_WINDOWS
 		g_API->extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif SV_PLATFORM_ANDROID
+		g_API->extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+#endif
 
 		// Device extensions and validation layers
 		if (validation) {
@@ -462,6 +474,8 @@ namespace sv {
 			create_info.flags = 0u;
 
 			vkCheck(vkCreateInstance(&create_info, nullptr, &g_API->instance));
+
+			volkLoadInstance(g_API->instance);
 		}
 
 		// Initialize validation layers
@@ -1480,10 +1494,6 @@ namespace sv {
 		SwapChain_vk& swapChain = g_API->swapchain;
 		auto& card = g_API->card;
 
-		u64 hWnd = window_handle();
-		u32 width = SV_MAX(window_size().x, 1);
-		u32 height = SV_MAX(window_size().y, 1);
-
 		bool recreating = swapChain.swapChain != VK_NULL_HANDLE;
 
 		// Create Surface
@@ -1494,9 +1504,17 @@ namespace sv {
 			create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 			create_info.hinstance = GetModuleHandle(nullptr);
 			create_info.flags = 0u;
-			create_info.hwnd = reinterpret_cast<HWND>(hWnd);
+			create_info.hwnd = reinterpret_cast<HWND>(window_handle());
 
 			vkCheck(vkCreateWin32SurfaceKHR(g_API->instance, &create_info, nullptr, &swapChain.surface));
+#elif SV_PLATFORM_ANDROID
+
+			VkAndroidSurfaceCreateInfoKHR create_info{};
+			create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+			create_info.flags = 0u;
+			create_info.window = (struct ANativeWindow*)window_handle();
+
+			vkCheck(vkCreateAndroidSurfaceKHR(g_API->instance, &create_info, nullptr, &swapChain.surface));
 #endif
 		}
 
@@ -1517,6 +1535,19 @@ namespace sv {
 			vkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(card.physicalDevice, swapChain.surface, &count, nullptr));
 			swapChain.presentModes.resize(count);
 			vkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(card.physicalDevice, swapChain.surface, &count, swapChain.presentModes.data()));
+
+			VkSurfaceTransformFlagBitsKHR transform = swapChain.capabilities.currentTransform;
+
+			SwapchainRotation rotation = SwapchainRotation_0;
+
+			if (transform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR)
+				rotation = SwapchainRotation_90;
+			else if (transform == VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR)
+				rotation = SwapchainRotation_180;
+			else if (transform == VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR)
+				rotation = SwapchainRotation_270;
+
+			_graphics_swapchain_rotation_set(rotation);
 		}
 		{
 			u32 count = 0;
@@ -1524,6 +1555,9 @@ namespace sv {
 			swapChain.formats.resize(count);
 			vkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(card.physicalDevice, swapChain.surface, &count, swapChain.formats.data()));
 		}
+
+		u32 width = SV_MAX(window_size().x, 1);
+		u32 height = SV_MAX(window_size().y, 1);
 
 		// Create SwapChain
 		{
@@ -1562,6 +1596,18 @@ namespace sv {
 
 			extent.width = SV_MAX(extent.width, 1);
 			extent.height = SV_MAX(extent.height, 1);
+
+			switch (graphics_swapchain_rotation())
+			{
+				case SwapchainRotation_90:
+				case SwapchainRotation_270:
+				{
+					u32 aux = extent.width;
+					extent.width = extent.height;
+					extent.height = aux;
+				}
+				break;
+			}
 
 			VkSwapchainCreateInfoKHR create_info{};
 
@@ -2812,164 +2858,61 @@ namespace sv {
 			vkCheck(vkCreateShaderModule(g_API->device, &create_info, nullptr, &shader.module));
 		}
 
-		// Get Layout from sprv code
-		spirv_cross::Compiler comp(reinterpret_cast<const u32*>(desc.bin_data), desc.bin_data_size / sizeof(u32));
-		spirv_cross::ShaderResources sr = comp.get_shader_resources();
-
 		// Semantic Names
-		if (desc.shader_type == ShaderType_Vertex) {
-			
-			for (u32 i = 0; i < sr.stage_inputs.size(); ++i) {
-				auto& input = sr.stage_inputs[i];
-				shader.semanticNames[input.name.c_str() + 7] = comp.get_decoration(input.id, spv::Decoration::DecorationLocation);
-			}
+		foreach(i, desc.semantic_name_count)
+		{
+			auto& sn = desc.semantic_names[i];
+			shader.semanticNames[sn.name] = sn.location;
 		}
 
-		// Get Spirv bindings
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
 
 		foreach(i, VulkanDescriptorType_MaxEnum) {
 			shader.layout.count[i] = 0u;
 		}
 
-		// Constant Buffers
+		foreach(i, desc.resource_count)
 		{
-			auto& uniforms = sr.uniform_buffers;
+			const ShaderResource* res = desc.resources + i;
 
-			u32 last_index = (u32)bindings.size();
-			
-			if (!uniforms.empty()) {
+			bindings.emplace_back();
+			VkDescriptorSetLayoutBinding& binding = bindings.back();
+			binding.binding = res->binding;
+			binding.descriptorCount = 1u;
+			binding.stageFlags = graphics_vulkan_parse_shadertype(desc.type);
+			binding.pImmutableSamplers = nullptr;
 
-				assert(uniforms.size() <= GraphicsLimit_ConstantBuffer);
-
-				for (u64 i = 0; i < uniforms.size(); ++i) {
-					auto& uniform = uniforms[i];
-					
-					if (strcmp(uniform.name.c_str(), "type__Globals") == 0) {
-						continue;
-					}
-
-					bindings.emplace_back();
-					VkDescriptorSetLayoutBinding& binding = bindings.back();
-					binding.binding = comp.get_decoration(uniform.id, spv::Decoration::DecorationBinding);
-					binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-					binding.descriptorCount = 1u;
-					binding.stageFlags = graphics_vulkan_parse_shadertype(desc.shader_type);
-					binding.pImmutableSamplers = nullptr;
-				}
+			switch (res->type)
+			{
+			case ShaderResourceType_ConstantBuffer:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				shader.layout.count[VulkanDescriptorType_UniformBuffer]++;
+				break;
+			case ShaderResourceType_Image:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+				shader.layout.count[VulkanDescriptorType_SampledImage]++;
+				break;
+			case ShaderResourceType_TexelBuffer:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				shader.layout.count[VulkanDescriptorType_UniformTexelBuffer]++;
+				break;
+			case ShaderResourceType_StorageBuffer:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				shader.layout.count[VulkanDescriptorType_StorageBuffer]++;
+				break;
+			case ShaderResourceType_UAImage:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				shader.layout.count[VulkanDescriptorType_StorageImage]++;
+				break;
+			case ShaderResourceType_UATexelBuffer:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+				shader.layout.count[VulkanDescriptorType_StorageTexelBuffer]++;
+				break;
+			case ShaderResourceType_Sampler:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+				shader.layout.count[VulkanDescriptorType_Sampler]++;
+				break;
 			}
-
-			shader.layout.count[VulkanDescriptorType_UniformBuffer] = u32(bindings.size()) - last_index;
-		}
-
-		// Shader Resources
-		{
-			auto& images = sr.separate_images;
-			auto& storages = sr.storage_buffers;
-
-			assert(images.size() + storages.size() <= GraphicsLimit_ShaderResource);
-			
-			if (!images.empty()) {
-
-				size_t initialIndex = bindings.size();
-				bindings.resize(initialIndex + images.size());
-
-				for (u64 i = 0; i < images.size(); ++i) {
-					auto& image = images[i];
-					VkDescriptorSetLayoutBinding& binding = bindings[i + initialIndex];
-					binding.binding = comp.get_decoration(image.id, spv::Decoration::DecorationBinding);
-					binding.descriptorCount = 1u;
-					binding.stageFlags = graphics_vulkan_parse_shadertype(desc.shader_type);
-					binding.pImmutableSamplers = nullptr;
-
-					spirv_cross::SPIRType type = comp.get_type(image.type_id);
-
-					if (type.image.dim == spv::Dim::Dim2D || type.image.dim == spv::Dim::DimCube) {
-						++shader.layout.count[VulkanDescriptorType_SampledImage];
-						binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-					}
-					else {
-						++shader.layout.count[VulkanDescriptorType_UniformTexelBuffer];
-						binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-					}
-				}
-			}
-
-			u32 last_index = (u32)bindings.size();
-			
-			if (!storages.empty()) {
-
-				for (u64 i = 0; i < storages.size(); ++i) {
-					auto& storage = storages[i];
-
-					bindings.emplace_back();
-					VkDescriptorSetLayoutBinding& binding = bindings.back();
-					binding.binding = comp.get_decoration(storage.id, spv::Decoration::DecorationBinding);
-					binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-					binding.descriptorCount = 1u;
-					binding.stageFlags = graphics_vulkan_parse_shadertype(desc.shader_type);
-					binding.pImmutableSamplers = nullptr;
-				}
-			}
-			shader.layout.count[VulkanDescriptorType_StorageBuffer] = u32(bindings.size()) - last_index;
-		}
-
-		// Unordered Access View
-		{
-			auto& storages = sr.storage_images;
-			
-			if (!storages.empty()) {
-
-				assert(storages.size() <= GraphicsLimit_UnorderedAccessView);
-
-				for (u64 i = 0; i < storages.size(); ++i) {
-					auto& storage = storages[i];
-
-					bindings.emplace_back();
-					VkDescriptorSetLayoutBinding& binding = bindings.back();
-					binding.binding = comp.get_decoration(storage.id, spv::Decoration::DecorationBinding);
-					binding.descriptorCount = 1u;
-					binding.stageFlags = graphics_vulkan_parse_shadertype(desc.shader_type);
-					binding.pImmutableSamplers = nullptr;
-
-					spirv_cross::SPIRType type = comp.get_type(storage.type_id);
-
-					if (type.basetype == spirv_cross::SPIRType::BaseType::Image) {
-						++shader.layout.count[VulkanDescriptorType_StorageImage];
-						binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-					}
-					else {
-						++shader.layout.count[VulkanDescriptorType_StorageTexelBuffer];
-						binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-					}
-				}
-			}
-		}
-
-		// Samplers
-		{
-			auto& samplers = sr.separate_samplers;
-
-			u32 last_index = (u32)bindings.size();
-			
-			if (!samplers.empty()) {
-
-				size_t initialIndex = bindings.size();
-				bindings.resize(initialIndex + samplers.size());
-
-				assert(samplers.size() <= GraphicsLimit_Sampler);
-
-				for (u64 i = 0; i < samplers.size(); ++i) {
-					auto& sampler = samplers[i];
-					VkDescriptorSetLayoutBinding& binding = bindings[i + initialIndex];
-					binding.binding = comp.get_decoration(sampler.id, spv::Decoration::DecorationBinding);
-					binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-					binding.descriptorCount = 1u;
-					binding.stageFlags = graphics_vulkan_parse_shadertype(desc.shader_type);
-					binding.pImmutableSamplers = nullptr;
-				}
-			}
-			shader.layout.count[VulkanDescriptorType_Sampler] = u32(bindings.size()) - last_index;
 		}
 
 		// Calculate user bindings values
@@ -3024,7 +2967,7 @@ namespace sv {
 		shader.ID = g_API->GetID();
 
 		// Compute pipeline inside compute shader
-		if (desc.shader_type == ShaderType_Compute) {
+		if (desc.type == ShaderType_Compute) {
 			VkComputePipelineCreateInfo info = {};
 			info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 			info.pNext = NULL;

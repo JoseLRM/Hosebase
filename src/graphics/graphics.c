@@ -7,6 +7,8 @@
 #include "graphics_internal.h"
 #include "vulkan/graphics_vulkan.h"
 
+#include "Hosebase/shader_compiler.h"
+
 typedef struct
 {
 	PipelineState pipeline_state;
@@ -20,6 +22,8 @@ typedef struct
 
 	DynamicArray(GraphicsPrimitive *) primitives_to_destroy;
 	Mutex primitives_to_destroy_mutex;
+
+	SwapchainRotation swapchain_rotation;
 
 	GPUBuffer *immediate_cbuffers_graphics_pipeline[GraphicsLimit_CommandList][ShaderType_GraphicsCount];
 	GPUBuffer *immediate_cbuffers_compute_pipeline[GraphicsLimit_CommandList];
@@ -37,7 +41,7 @@ static b8 asset_texture_load_file(void *asset, const char *filepath)
 	void *data;
 	u32 width;
 	u32 height;
-	if (load_image(filepath, &data, &width, &height))
+	if (load_image(FilepathType_Asset, filepath, &data, &width, &height))
 	{
 
 		GPUImageDesc desc;
@@ -87,7 +91,35 @@ static b8 asset_texture_reload_file(void *asset, const char *filepath)
 static b8 asset_shader_load_file(void *asset, const char *filepath)
 {
 	Shader **pshader = asset;
-	return graphics_shader_compile_fastbin_from_file(pshader, filepath, FALSE);
+
+	ShaderDesc result;
+	SV_ZERO(result);
+
+	b8 res = FALSE;
+
+	res = shader_read_binary(&result, graphics_api(), filepath);
+
+#if SV_SHADER_COMPILER
+	if (!res)
+	{
+		ShaderCompileDesc desc;
+		SV_ZERO(desc);
+		desc.api = graphics_api();
+		desc.entry_point = "main";
+		desc.major_version = 6u;
+		desc.minor_version = 0u;
+		desc.macro_count = 0u;
+
+		res = shader_compile(&result, &desc, filepath, TRUE);
+	}
+#endif
+
+	if (res)
+	{
+		res = graphics_shader_create(pshader, &result);
+	}
+
+	return res;
 }
 
 static void asset_shader_free(void *asset)
@@ -99,13 +131,12 @@ static void asset_shader_free(void *asset)
 
 static b8 asset_shader_reload_file(void *asset, const char *filepath)
 {
-	Shader **pshader = asset;
-
-	Shader *new_shader = NULL;
-	b8 res = graphics_shader_compile_fastbin_from_file(&new_shader, filepath, TRUE);
+	Shader* new_shader = NULL;
+	b8 res = asset_shader_load_file(&new_shader, filepath);
 
 	if (res)
 	{
+		Shader **pshader = asset;
 		asset_shader_free(asset);
 		*pshader = new_shader;
 	}
@@ -122,6 +153,7 @@ b8 _graphics_initialize(const GraphicsInitializeDesc *desc)
 	// Initialize API
 	SV_LOG_INFO("Trying to initialize vulkan device\n");
 	graphics_vulkan_device_prepare(&gfx->device);
+	
 	res = gfx->device.initialize(desc->validation);
 
 	if (!res)
@@ -224,7 +256,9 @@ b8 _graphics_initialize(const GraphicsInitializeDesc *desc)
 		GraphicsPipelineState_LineWidth |
 		GraphicsPipelineState_RenderPass;
 
-	SV_CHECK(graphics_shader_initialize());
+#if SV_SHADER_COMPILER
+	SV_CHECK(shader_compiler_initialize());
+#endif
 
 	memory_zero(&gfx->def_compute_state, sizeof(ComputeState));
 
@@ -254,8 +288,8 @@ b8 _graphics_initialize(const GraphicsInitializeDesc *desc)
 		{
 			desc.name = "shader";
 			desc.asset_size = sizeof(Shader *);
-			desc.extensions[0] = "hlsl";
-			desc.extension_count = 1;
+			desc.extension_count = 0;
+			desc.extensions[desc.extension_count++] = "hlsl";
 			desc.load_file_fn = asset_shader_load_file;
 			desc.reload_file_fn = asset_shader_reload_file;
 			desc.free_fn = asset_shader_free;
@@ -268,7 +302,7 @@ b8 _graphics_initialize(const GraphicsInitializeDesc *desc)
 	return TRUE;
 }
 
-inline void destroy_unused_primitive(GraphicsPrimitive *primitive)
+SV_INLINE void destroy_unused_primitive(GraphicsPrimitive *primitive)
 {
 	// TODO
 #if SV_GFX
@@ -406,7 +440,9 @@ void _graphics_close()
 
 	gfx->device.close();
 
-	graphics_shader_close();
+#if SV_SHADER_COMPILER
+	shader_compiler_close();
+#endif SV_SHADER_COMPILER
 
 	mutex_destroy(gfx->device.buffer_mutex);
 	mutex_destroy(gfx->device.image_mutex);
@@ -423,7 +459,7 @@ void _graphics_close()
 	memory_free(gfx);
 }
 
-inline void destroy_graphics_primitive(GraphicsPrimitive *p)
+SV_INLINE void destroy_graphics_primitive(GraphicsPrimitive *p)
 {
 	if (gfx == NULL)
 	{
@@ -540,6 +576,16 @@ void graphics_swapchain_resize()
 {
 	gfx->device.swapchain_resize();
 	SV_LOG_INFO("Swapchain resized\n");
+}
+
+SwapchainRotation graphics_swapchain_rotation()
+{
+	return gfx->swapchain_rotation;
+}
+
+void _graphics_swapchain_rotation_set(SwapchainRotation rotation)
+{
+	gfx->swapchain_rotation = rotation;
 }
 
 PipelineState *graphics_state_get()
@@ -757,7 +803,7 @@ b8 graphics_shader_create(Shader **shader, const ShaderDesc *desc)
 	// Set parameters
 	Shader *p = *shader;
 	p->primitive.type = GraphicsPrimitiveType_Shader;
-	p->info.shader_type = desc->shader_type;
+	p->info = *desc;
 
 	return TRUE;
 }
@@ -967,7 +1013,7 @@ void graphics_gpu_wait()
 
 /////////////////////////////////////// RESOURCES ////////////////////////////////////////////////////////////
 
-inline u64 get_resource_shader_flag(ShaderType shader_type)
+SV_INLINE u64 get_resource_shader_flag(ShaderType shader_type)
 {
 	switch (shader_type)
 	{
@@ -1419,9 +1465,8 @@ void graphics_resource_bind(ResourceType type, void *primitive, u32 slot, Shader
 
 void graphics_shader_bind(Shader *shader, CommandList cmd)
 {
-	if (shader->info.shader_type == ShaderType_Compute)
+	if (shader->info.type == ShaderType_Compute)
 	{
-
 		ComputeState *state = &gfx->pipeline_state.compute[cmd];
 
 		state->compute_shader = shader;
@@ -1432,7 +1477,7 @@ void graphics_shader_bind(Shader *shader, CommandList cmd)
 
 		GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
 
-		switch (shader->info.shader_type)
+		switch (shader->info.type)
 		{
 		case ShaderType_Vertex:
 			state->vertex_shader = shader;
@@ -1456,7 +1501,8 @@ void graphics_shader_bind_asset(Asset asset, CommandList cmd)
 {
 	// TODO: Check asset type in slow mode
 	Shader *shader = asset_get_ptr(asset);
-	if (shader)
+	if (shader != NULL)
+
 		graphics_shader_bind(shader, cmd);
 }
 
@@ -1484,12 +1530,12 @@ void graphics_inputlayout_reset(u32 slots, CommandList cmd)
 		slots = GraphicsLimit_InputSlot;
 	}
 
-	foreach(i, slots)
+	foreach (i, slots)
 	{
 		SV_ZERO(state->input_layout.slots[i]);
 	}
 	state->input_layout.slot_count = slots;
-	
+
 	state->flags |= GraphicsPipelineState_InputLayoutState;
 }
 
@@ -1508,7 +1554,7 @@ void graphics_inputlayout_set_slot(u32 slot, u32 stride, b8 instanced, CommandLi
 	state->input_layout.slots[slot].element_count = 0;
 }
 
-void graphics_inputlayout_add_element(u32 slot, const char* name, Format format, u32 index, CommandList cmd)
+void graphics_inputlayout_add_element(u32 slot, const char *name, Format format, u32 index, CommandList cmd)
 {
 	GraphicsState *state = &gfx->pipeline_state.graphics[cmd];
 
@@ -1820,19 +1866,6 @@ void graphics_image_blit(GPUImage *src, GPUImage *dst, GPUImageLayout srcLayout,
 void graphics_image_clear(GPUImage *image, GPUImageLayout oldLayout, GPUImageLayout newLayout, Color clearColor, float depth, u32 stencil, CommandList cmd)
 {
 	gfx->device.image_clear(image, oldLayout, newLayout, clearColor, depth, stencil, cmd);
-}
-
-b8 graphics_shader_include_write(const char *name, const char *str)
-{
-	char filepath[FILE_PATH_SIZE] = "library/shader_utils/";
-	string_append(filepath, name, FILE_PATH_SIZE);
-	string_append(filepath, ".hlsl", FILE_PATH_SIZE);
-
-#if SV_GFX
-	// TODO: if (std::filesystem::exists(filePath)) return TRUE;
-#endif
-
-	return file_write_text(filepath, str, string_size(str), FALSE, TRUE);
 }
 
 Viewport graphics_image_viewport(const GPUImage *i)

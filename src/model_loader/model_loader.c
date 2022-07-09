@@ -1,3 +1,7 @@
+#include "Hosebase/model_loader.h"
+
+#if SV_MODEL_LOADER
+
 #include "Hosebase/serialize.h"
 
 #include "assimp/cimport.h"     // Plain-C interface
@@ -769,3 +773,24 @@ error_exit:
     aiReleaseImport(scene);
     return FALSE;
 }
+
+void free_model_info(ModelInfo* model_info)
+{
+	foreach(i, model_info->mesh_count) {
+		MeshInfo* mesh = model_info->meshes + i;
+
+		if (mesh->_memory)
+			memory_free(mesh->_memory);
+	}
+
+	foreach(i, model_info->animation_count) {
+		AnimationInfo* anim = model_info->animations + i;
+
+		if (anim->_keyframe_memory != NULL)
+			memory_free(anim->_keyframe_memory);
+	}
+
+	memory_zero(model_info, sizeof(ModelInfo));
+}
+
+#endif

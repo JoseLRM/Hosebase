@@ -62,7 +62,7 @@ void music_stop(u64 id);
 
 // Internal
 
-b8 _sound_initialize(u32 samples_per_second);
-void _sound_close();
+b8 sound_initialize(u32 samples_per_second);
+void sound_close();
 
 SV_END_C_HEADER
