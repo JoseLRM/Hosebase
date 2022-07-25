@@ -649,6 +649,8 @@ b8 os_initialize(const PlatformInitializeDesc *desc)
 {
 	windows = memory_allocate(sizeof(WindowsData));
 
+	SetConsoleOutputCP(CP_UTF8);
+
 	if (!QueryPerformanceFrequency(&windows->clock_frequency))
 	{
 		SV_LOG_ERROR("Can't get the clock frequency\n");
@@ -1982,7 +1984,12 @@ void library_free(Library library)
 
 void *library_address(Library library, const char *name)
 {
-	return GetProcAddress((HINSTANCE)library, name);
+	HINSTANCE instance = (HINSTANCE)library;
+
+	if (instance == 0)
+		instance = GetModuleHandle(NULL);
+
+	return GetProcAddress(instance, name);
 }
 
 // MAIN

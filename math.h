@@ -10,6 +10,7 @@
 #define SV_DEGREES(x) x / 0.0174533f
 #define PI 3.14159f
 #define TAU (2.f*PI)
+#define EPSILON 0.000000001f
 
 SV_INLINE f32 math_sqrt(f32 n)
 {
@@ -121,6 +122,30 @@ SV_INLINE f32 math_exp(f32 n)
 {
 	// TODO: 32 bits
 	return exp(n);
+}
+
+SV_INLINE f32 math_rotate_value(f32 n, f32 rotation)
+{
+	b8 negative = n < 0.f;
+	n = n / rotation;
+	
+	if (negative)
+		n = -n;
+	
+	n -= (f32)(i32)n;
+	
+	if (negative)
+		n = 1.f - n;
+	
+	return n * rotation;
+}
+
+SV_INLINE f32 math_radian_distance(f32 a0, f32 a1)
+{
+	f32 dist = fabs(a0 - a1);
+	dist = SV_MIN(fabs((a0 + TAU) - a1), dist);
+	dist = SV_MIN(fabs(a0 - (a1 + TAU)), dist);
+	return dist;
 }
 
 SV_INLINE f32 math_smooth(f32 n, f32 falloff)
@@ -1222,7 +1247,6 @@ SV_INLINE Ray ray_transform(Ray ray, m4 matrix)
 
 SV_INLINE b8 ray_intersect_triangle(Ray ray, const v3 p0, const v3 p1, const v3 p2, v3* out)
 {
-	const f32 EPSILON = 0.0000001f;
 	v3 edge1, edge2, h, s, q;
 	f32 a, f, u, v;
 	edge1 = v3_sub(p1, p0);

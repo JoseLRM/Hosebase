@@ -3,6 +3,7 @@
 #include "Hosebase/graphics.h"
 #include "Hosebase/math.h"
 #include "Hosebase/font.h"
+#include "Hosebase/input.h"
 
 SV_BEGIN_C_HEADER
 
@@ -172,6 +173,7 @@ const void* gui_read_buffer_(u8** it_, u32 size);
 v2 gui_resolution();
 v2 gui_pixel_size();
 v2 gui_mouse_position();
+b8 gui_mouse_button(InputState input_state);
 
 b8 gui_input_used();
 void gui_use_input();
@@ -195,8 +197,9 @@ GuiWidget* gui_last_widget();
 GuiParent* gui_find_parent(u64 parent_id);
 GuiParent* gui_current_parent();
 
-f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dimension);
-f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimension);
+f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, v2 parent_dimensions);
+f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, v2 parent_dimensions, f32 aspect_dimension);
+v2 gui_compute_both_dimensions(GuiDimension width, GuiDimension height, v2 parent_dimensions);
 f32 gui_recompute_dimension(GuiDimension dimension, b8 vertical);
 
 // Layout property stack

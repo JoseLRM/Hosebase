@@ -36,6 +36,9 @@ typedef u64 b64;
 #define TRUE 1
 #define FALSE 0
 
+typedef u32 wchar;
+typedef u8 utf8;
+
 assert_static(sizeof(u8) == 1);
 assert_static(sizeof(u16) == 2);
 assert_static(sizeof(u32) == 4);
@@ -141,6 +144,8 @@ SV_INLINE b8 throw_assertion_and_return_false(const char* title, u32 line, const
 
 #if SV_PLATFORM_WINDOWS
 
+#define SV_EXPORT __declspec(dllexport)
+
 typedef enum {
 	PrintStyle_Info,
 	PrintStyle_Warning,
@@ -155,6 +160,8 @@ void windows_print(PrintStyle style, const char* str, ...);
 #define SV_LOG_ERROR(x, ...) windows_print(PrintStyle_Error, x, __VA_ARGS__)
 
 #elif SV_PLATFORM_ANDROID
+
+#define SV_EXPORT __attribute__((visibility("default")))
 
 #include <android/log.h>
 

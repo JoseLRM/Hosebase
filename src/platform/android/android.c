@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <stdatomic.h>
+#include <dlfcn.h>
 
 typedef struct
 {
@@ -42,7 +43,6 @@ b8 os_initialize(const PlatformInitializeDesc *desc)
 
 void os_close()
 {
-    // TODO:
 }
 
 static void receive_messages()
@@ -418,6 +418,32 @@ b8 file_date(FilepathType type, const char *filepath, Date *create, Date *last_w
     return FALSE;
 }
 
+////////////////////////// LIBRARIES ////////////////
+
+Library library_load(FilepathType type, const char *filepath)
+{
+    return 0;
+}
+
+void library_free(Library library)
+{
+}
+
+void *library_address(Library library, const char *name)
+{
+    void *module = NULL;
+    // TODO: Use "library"
+
+    void *fn = dlsym(module, name);
+
+    if (fn == NULL)
+    {
+        SV_LOG_ERROR("%s\n", dlerror());
+    }
+
+    return fn;
+}
+
 /////////////////////////////// MULTITHREADING ///////////////////////
 
 u32 interlock_increment_u32(volatile u32 *n)
@@ -463,6 +489,77 @@ void mutex_unlock(Mutex mutex_)
 {
     pthread_mutex_t *mutex = (pthread_mutex_t *)mutex_;
     pthread_mutex_unlock(mutex);
+}
+
+Thread thread_create(ThreadMainFn main, void *data)
+{
+    assert_static(sizeof(pthread_t) <= sizeof(Thread));
+
+    pthread_t thread;
+    void *ret;
+
+    if (pthread_create(&thread, NULL, main, "") != 0)
+    {
+        SV_LOG_ERROR("Can't create a thread\n");
+        return 0;
+    }
+
+    return (Thread)thread;
+}
+
+void thread_destroy(Thread thread_)
+{
+    if (thread_ == 0)
+        return;
+
+    pthread_t thread = (pthread_t)thread_;
+    // TODO: pthread_cancel(thread);
+}
+
+void thread_wait(Thread thread_)
+{
+    if (thread_ == 0)
+        return;
+
+    pthread_t thread = (pthread_t)thread_;
+
+    if (pthread_join(thread, NULL) != 0)
+    {
+        SV_LOG_ERROR("Can't wait a thread\n");
+    }
+}
+
+void thread_sleep(u64 millis)
+{
+    struct timespec ts;
+
+    if (millis == 0)
+    {
+        return;
+    }
+
+    ts.tv_sec = millis / 1000;
+    ts.tv_nsec = (millis % 1000) * 1000000;
+
+    int res;
+    do {
+        res = nanosleep(&ts, &ts);
+    } while (res);
+}
+
+void thread_yield()
+{
+    // TODO: pthread_yield();
+}
+
+u64 thread_id()
+{
+    // TODO:
+    return 0;
+}
+
+void thread_configure(Thread thread, const char *name, u64 affinity_mask, ThreadPrority priority)
+{
 }
 
 //////////////////////////////// CLIPBOARD ////////////////////////////

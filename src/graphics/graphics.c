@@ -131,7 +131,7 @@ static void asset_shader_free(void *asset)
 
 static b8 asset_shader_reload_file(void *asset, const char *filepath)
 {
-	Shader* new_shader = NULL;
+	Shader *new_shader = NULL;
 	b8 res = asset_shader_load_file(&new_shader, filepath);
 
 	if (res)
@@ -153,7 +153,7 @@ b8 _graphics_initialize(const GraphicsInitializeDesc *desc)
 	// Initialize API
 	SV_LOG_INFO("Trying to initialize vulkan device\n");
 	graphics_vulkan_device_prepare(&gfx->device);
-	
+
 	res = gfx->device.initialize(desc->validation);
 
 	if (!res)
@@ -581,6 +581,27 @@ void graphics_swapchain_resize()
 SwapchainRotation graphics_swapchain_rotation()
 {
 	return gfx->swapchain_rotation;
+}
+
+m4 graphics_swapchain_rotation_matrix()
+{
+	m4 screen_matrix = m4_identity();
+
+	SwapchainRotation rotation = graphics_swapchain_rotation();
+
+	if (rotation == SwapchainRotation_90)
+	{
+		screen_matrix = m4_rotate_z(-PI * 0.5f);
+	}
+	else if (rotation == SwapchainRotation_180)
+	{
+		screen_matrix = m4_rotate_z(PI);
+	}
+	else if (rotation == SwapchainRotation_270)
+	{
+		screen_matrix = m4_rotate_z(PI * 0.5f);
+	}
+	return screen_matrix;
 }
 
 void _graphics_swapchain_rotation_set(SwapchainRotation rotation)

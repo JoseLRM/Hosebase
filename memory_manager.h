@@ -848,6 +848,111 @@ SV_INLINE b8 string_to_u32_hexadecimal(u32* dst, char* str)
 	return TRUE;
 }
 
+SV_INLINE void wstring_from_utf8(wchar *dst, const utf8 *str, u32 buffer_size)
+{
+	if (buffer_size == 0)
+		return;
+
+	buffer_size--;
+
+	while (*str != '\0')
+	{
+		wchar c = 0;
+		u32 byte_count = 0;
+
+		while (*str & 0x80 && byte_count < sizeof(wchar))
+		{
+			c |= (wchar)(*str) << (wchar)(8 * byte_count);
+			byte_count++;
+			++str;
+		}
+
+		if (byte_count == 0)
+		{
+			byte_count = 1;
+			c = (wchar)*str;
+			++str;
+		}
+
+		if (buffer_size)
+		{
+			*dst = c;
+			dst++;
+			buffer_size--;
+		}
+	}
+
+	*dst = '\0';
+}
+
+SV_INLINE void wstring_to_utf8(utf8 *dst, const wchar *str, u32 buffer_size)
+{
+	if (buffer_size == 0)
+		return;
+
+	buffer_size--;
+
+	while (*str != '\0')
+	{
+		wchar c = *str;
+		++str;
+
+		u32 byte_size = 1;
+
+		if (c & 0x80000000000000)
+		{
+			byte_size = 8;
+		}
+		else if (c & 0x800000000000)
+		{
+			byte_size = 7;
+		}
+		else if (c & 0x8000000000)
+		{
+			byte_size = 6;
+		}
+		else if (c & 0x8000000000)
+		{
+			byte_size = 5;
+		}
+		else if (c & 0x80000000)
+		{
+			byte_size = 4;
+		}
+		else if (c & 0x800000)
+		{
+			byte_size = 3;
+		}
+		else if (c & 0x8000)
+		{
+			byte_size = 2;
+		}
+
+		if (byte_size <= buffer_size)
+		{
+			foreach(i, SV_MIN(byte_size, sizeof(wchar)))
+			{
+				dst[i] = c >> ((wchar)8 * i);
+			}
+
+			buffer_size -= byte_size;
+			dst += byte_size;
+		}
+	}
+
+	*dst = '\0';
+}
+
+SV_INLINE u32 wstring_size(const wchar* str)
+{
+	u32 count = 0;
+	while(str[count] != '\0')
+	{
+		++count;
+	}
+	return count;
+}
+
 SV_INLINE const char* filepath_extension(const char* filepath)
 {
 	const char* last_dot = NULL;

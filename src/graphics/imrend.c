@@ -313,17 +313,14 @@ SV_INLINE void update_current_matrix(ImRendState* state)
 			vpm = m4_mul(m4_scale(2.f, 2.f, 1.f), m4_translate(-1.f, -1.f, 0.f));
 			break;
 
-#if SV_EDITOR
-		case ImRendCamera_Editor:
-			vpm = dev.camera.view_projection_matrix;
-			break;
-#endif
-
 		case ImRendCamera_Clip:
 		default:
 			vpm = m4_identity();
 	    
 		}
+
+		m4 screen_matrix = graphics_swapchain_rotation_matrix();
+		vpm = m4_mul(vpm, screen_matrix);
 	}
 
 	state->current_matrix = m4_mul(matrix, vpm);

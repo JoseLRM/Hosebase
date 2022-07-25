@@ -510,6 +510,7 @@ typedef enum {
 
 void graphics_swapchain_resize();
 SwapchainRotation graphics_swapchain_rotation();
+m4 graphics_swapchain_rotation_matrix();
 
 GraphicsAPI graphics_api();
 

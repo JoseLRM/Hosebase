@@ -392,7 +392,7 @@ static void sort_parents(GuiParent *parent)
 
 static GuiParent *find_parent_in_mouse(GuiParent *parent)
 {
-	GuiParent* in_mouse = parent;
+	GuiParent *in_mouse = parent;
 
 	foreach (i, parent->child_count)
 	{
@@ -400,8 +400,8 @@ static GuiParent *find_parent_in_mouse(GuiParent *parent)
 
 		if (gui_mouse_in_bounds(child->widget_bounds))
 		{
-			GuiParent* child_in_mouse = find_parent_in_mouse(child);
-			
+			GuiParent *child_in_mouse = find_parent_in_mouse(child);
+
 			if (child_in_mouse->depth > in_mouse->depth)
 				in_mouse = child_in_mouse;
 		}
@@ -670,7 +670,13 @@ void gui_begin(const char *layout, Font *default_font)
 	gui->resolution = v2_set(size.x, size.y);
 	gui->aspect = gui->resolution.x / gui->resolution.y;
 	gui->pixel = v2_set(1.f / gui->resolution.x, 1.f / gui->resolution.y);
-	gui->mouse_position = v2_add_scalar(input_mouse_position(), 0.5f);
+
+	if (input_last_controller_used() == ControllerType_TouchScreen)
+		gui->mouse_position = input_touch_position();
+	else
+		gui->mouse_position = input_mouse_position();
+
+	gui->mouse_position = v2_add_scalar(gui->mouse_position, 0.5f);
 
 	gui->scrolling = FALSE;
 
@@ -1361,6 +1367,14 @@ v2 gui_mouse_position()
 	return gui->mouse_position;
 }
 
+b8 gui_mouse_button(InputState input_state)
+{
+	if (input_last_controller_used() == ControllerType_TouchScreen)
+		return input_touch_button(input_state);
+	else
+		return input_mouse_button(MouseButton_Left, input_state);
+}
+
 b8 gui_input_used()
 {
 	return gui->input_used;
@@ -1508,11 +1522,12 @@ GuiParent *gui_current_parent()
 	return gui->parent_stack[gui->parent_stack_count - 1];
 }
 
-f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dimension)
+f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, v2 parent_dimensions)
 {
 	f32 value = 0.f;
 
 	f32 pixel = vertical ? gui->pixel.y : gui->pixel.x;
+	f32 parent_dimension = vertical ? parent_dimensions.y : parent_dimensions.x;
 
 	switch (coord.unit)
 	{
@@ -1557,11 +1572,13 @@ f32 gui_compute_coord(GuiCoord coord, b8 vertical, f32 dimension, f32 parent_dim
 	return value;
 }
 
-f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimension)
+f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, v2 parent_dimensions, f32 aspect_dimension)
 {
 	f32 value = 0.f;
 
 	f32 pixel = vertical ? gui->pixel.y : gui->pixel.x;
+
+	f32 parent_dimension = vertical ? parent_dimensions.y : parent_dimensions.x;
 
 	switch (dimension.unit)
 	{
@@ -1577,9 +1594,45 @@ f32 gui_compute_dimension(GuiDimension dimension, b8 vertical, f32 parent_dimens
 	case GuiUnit_Pixel:
 		value = dimension.value / parent_dimension * pixel;
 		break;
+
+	case GuiUnit_Aspect:
+	{
+		value = aspect_dimension * dimension.value;
+
+		f32 parent_aspect = parent_dimensions.x / parent_dimensions.y;
+
+		if (vertical)
+		{
+			value *= parent_aspect;
+			value *= gui->aspect;
+		}
+		else
+		{
+			value /= parent_aspect;
+			value /= gui->aspect;
+		}
+	}
+	break;
 	}
 
 	return value;
+}
+
+v2 gui_compute_both_dimensions(GuiDimension width, GuiDimension height, v2 parent_dimensions)
+{
+	v2 dim;
+
+	if (width.unit == GuiUnit_Aspect)
+	{
+		dim.y = gui_compute_dimension(height, TRUE, parent_dimensions, 0.f);
+		dim.x = gui_compute_dimension(width, FALSE, parent_dimensions, dim.y);
+	}
+	else
+	{
+		dim.x = gui_compute_dimension(width, FALSE, parent_dimensions, 0.f);
+		dim.y = gui_compute_dimension(height, TRUE, parent_dimensions, dim.x);
+	}
+	return dim;
 }
 
 f32 gui_recompute_dimension(GuiDimension dimension, b8 vertical)
@@ -1699,12 +1752,13 @@ static v4 free_layout_compute_bounds(GuiParent *parent)
 	GuiLayout *layout = &parent->layout;
 	GuiFreeLayoutInternal *d = (GuiFreeLayoutInternal *)layout->data;
 
-	f32 width = gui_compute_dimension(d->width, FALSE, parent->widget_bounds.z);
-	f32 height = gui_compute_dimension(d->height, TRUE, parent->widget_bounds.w);
-	f32 x = gui_compute_coord(d->x, FALSE, width, parent->widget_bounds.z);
-	f32 y = gui_compute_coord(d->y, TRUE, height, parent->widget_bounds.w);
+	v2 parent_dimension = v2_set(parent->widget_bounds.z, parent->widget_bounds.w);
 
-	return v4_set(x, y, width, height);
+	v2 dim = gui_compute_both_dimensions(d->width, d->height, parent_dimension);
+	f32 x = gui_compute_coord(d->x, FALSE, dim.x, parent_dimension);
+	f32 y = gui_compute_coord(d->y, TRUE, dim.y, parent_dimension);
+
+	return v4_set(x, y, dim.x, dim.y);
 }
 
 static b8 free_layout_property_read(GuiParent *parent, u32 property, u8 *it, u32 size, u8 *pop_data)

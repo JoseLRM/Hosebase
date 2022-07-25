@@ -58,7 +58,12 @@ void music_play(u64 id, Asset audio_asset, const AudioProperties* props);
 void music_desc(u64 id, const AudioProperties* props);
 void music_continue(u64 id);
 void music_pause(u64 id);
-void music_stop(u64 id);
+void music_stop(u64 id, f32 fade_out);
+
+b8 music_is_playing(u64 id);
+
+void music_lock();
+void music_unlock();
 
 // Internal
 
