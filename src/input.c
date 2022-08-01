@@ -3,7 +3,8 @@
 
 #define INPUT_TEXT_SIZE 20
 
-typedef struct {
+typedef struct
+{
 
 	b8 any;
 
@@ -14,10 +15,10 @@ typedef struct {
 	TextCommand text_commands[INPUT_TEXT_SIZE];
 	u32 text_command_count;
 
-	v2	mouse_position;
-	v2	mouse_last_position;
-	v2	mouse_dragging;
-	f32	mouse_wheel;
+	v2 mouse_position;
+	v2 mouse_last_position;
+	v2 mouse_dragging;
+	f32 mouse_wheel;
 
 	Key release_keys[Key_MaxEnum];
 	u32 release_key_count;
@@ -28,22 +29,25 @@ typedef struct {
 	v2 joystick_left;
 	v2 joystick_right;
 
-	InputState touch_state;
-	v2 touch_position;
+	InputState touch_state[5];
+	v2 touch_position[5];
+	i32 touch_id[5];
 
 	ControllerType last_controller_used;
 
 } InputData;
 
-static InputData* input = NULL;
+static InputData *input = NULL;
 
 static b8 validate_input_state(InputState actual, InputState input_state)
 {
-	if (input_state == InputState_Any) {
+	if (input_state == InputState_Any)
+	{
 
 		return actual == InputState_Pressed || actual == InputState_Hold || actual == InputState_Released;
 	}
-	else return actual == input_state;
+	else
+		return actual == input_state;
 }
 
 b8 input_any()
@@ -94,17 +98,22 @@ v2 input_mouse_dragging()
 	return input->mouse_dragging;
 }
 
-v2 input_touch_position()
+v2 input_touch_position(u32 index)
 {
-	return input->touch_position;
+	if (index >= SV_ARRAY_SIZE(input->touch_position))
+		return v2_zero();
+	return input->touch_position[index];
 }
 
-b8 input_touch_button(InputState input_state)
+b8 input_touch_button(InputState input_state, u32 index)
 {
-	return validate_input_state(input->touch_state, input_state);
+	if (index >= SV_ARRAY_SIZE(input->touch_state))
+		return FALSE;
+
+	return validate_input_state(input->touch_state[index], input_state);
 }
 
-const char* input_text()
+const char *input_text()
 {
 	return input->text;
 }
@@ -126,6 +135,26 @@ ControllerType input_last_controller_used()
 	return input->last_controller_used;
 }
 
+InputState input_state_update(InputState input_state, b8 press)
+{
+	if (press)
+	{
+		if (input_state == InputState_Pressed)
+			input_state = InputState_Hold;
+		else if (input_state == InputState_Released || input_state == InputState_None)
+			input_state = InputState_Pressed;
+	}
+	else
+	{
+		if (input_state == InputState_Pressed || input_state == InputState_Hold)
+			input_state = InputState_Released;
+		else if (input_state == InputState_Released)
+			input_state = InputState_None;
+	}
+
+	return input_state;
+}
+
 b8 _input_initialize()
 {
 	input = memory_allocate(sizeof(InputData));
@@ -134,12 +163,16 @@ b8 _input_initialize()
 	input->last_controller_used = ControllerType_TouchScreen;
 #endif
 
+	foreach (i, SV_ARRAY_SIZE(input->touch_id))
+		input->touch_id[i] = -1;
+
 	return TRUE;
 }
 
 void _input_close()
 {
-	if (input) {		
+	if (input)
+	{
 		memory_free(input);
 	}
 }
@@ -148,46 +181,56 @@ void _input_update()
 {
 	input->any = FALSE;
 
-	foreach(i, Key_MaxEnum) {
+	foreach (i, Key_MaxEnum)
+	{
 
-		InputState* state = input->keys + i;
-		
-		if (*state == InputState_Pressed) {
+		InputState *state = input->keys + i;
+
+		if (*state == InputState_Pressed)
+		{
 			*state = InputState_Hold;
 			input->any = TRUE;
 		}
-		else if (*state == InputState_Hold) {
+		else if (*state == InputState_Hold)
+		{
 			input->any = TRUE;
 		}
-		else if (*state == InputState_Released) {
+		else if (*state == InputState_Released)
+		{
 			*state = InputState_None;
 		}
 	}
 
-	foreach(i, input->release_key_count) {
+	foreach (i, input->release_key_count)
+	{
 
 		Key key = input->release_keys[i];
 		input->keys[key] = InputState_Released;
 	}
 	input->release_key_count = 0;
 
-	foreach(i, MouseButton_MaxEnum) {
+	foreach (i, MouseButton_MaxEnum)
+	{
 
-		InputState* state = input->mouse_buttons + i;
-		
-		if (*state == InputState_Pressed) {
+		InputState *state = input->mouse_buttons + i;
+
+		if (*state == InputState_Pressed)
+		{
 			*state = InputState_Hold;
 			input->any = TRUE;
 		}
-		else if (*state == InputState_Hold) {
+		else if (*state == InputState_Hold)
+		{
 			input->any = TRUE;
 		}
-		else if (*state == InputState_Released) {
+		else if (*state == InputState_Released)
+		{
 			*state = InputState_None;
 		}
 	}
 
-	foreach(i, input->release_mouse_button_count) {
+	foreach (i, input->release_mouse_button_count)
+	{
 
 		MouseButton button = input->release_mouse_buttons[i];
 		input->mouse_buttons[button] = InputState_Released;
@@ -201,9 +244,9 @@ void _input_update()
 
 	// Gamepad
 	{
-		foreach(i, GamepadButton_MaxEnum)
+		foreach (i, GamepadButton_MaxEnum)
 		{
-			InputState* state = input->gamepad_button_state + i;
+			InputState *state = input->gamepad_button_state + i;
 
 			if (*state == InputState_Released)
 			{
@@ -219,18 +262,43 @@ void _input_update()
 		input->joystick_right = v2_zero();
 	}
 
-	// Touch screen
+	// DEBUG: Print touch data
 	{
-		if (input->touch_state == InputState_Released)
+		foreach (i, SV_ARRAY_SIZE(input->touch_state))
 		{
-			input->touch_state = InputState_None;
+			if (input->touch_id[i] == -1)
+				continue;
+
+			InputState state = input->touch_state[i];
+			v2 pos = input->touch_position[i];
+
+			const char *str = "None";
+			if (state == InputState_Hold)
+				str = "Hold";
+			else if (state == InputState_Pressed)
+				str = "Pressed";
+			else if (state == InputState_Released)
+				str = "Released";
+
+			if (state != InputState_Hold)
+				SV_LOG_INFO("%u: %s\n", i, str);
 		}
-		else if (input->touch_state == InputState_Pressed)
+	}
+
+	// Touch screen
+	foreach (i, SV_ARRAY_SIZE(input->touch_state))
+	{
+		if (input->touch_state[i] == InputState_Released)
+		{
+			input->touch_state[i] = InputState_None;
+			input->touch_id[i] = -1;
+		}
+		else if (input->touch_state[i] == InputState_Pressed)
 		{
 			input->any = TRUE;
-			input->touch_state = InputState_Hold;
+			input->touch_state[i] = InputState_Hold;
 		}
-		else if (input->touch_state == InputState_Hold)
+		else if (input->touch_state[i] == InputState_Hold)
 		{
 			input->any = TRUE;
 		}
@@ -246,11 +314,13 @@ void _input_key_set_pressed(Key key)
 
 void _input_key_set_released(Key key)
 {
-	if (input->keys[key] == InputState_Pressed && input->release_key_count < Key_MaxEnum) {
+	if (input->keys[key] == InputState_Pressed && input->release_key_count < Key_MaxEnum)
+	{
 
 		input->release_keys[input->release_key_count++] = key;
 	}
-	else input->keys[key] = InputState_Released;
+	else
+		input->keys[key] = InputState_Released;
 
 	input->any = TRUE;
 	input->last_controller_used = ControllerType_KeyboardAndMouse;
@@ -265,11 +335,13 @@ void _input_mouse_button_set_pressed(MouseButton mouse_button)
 
 void _input_mouse_button_set_released(MouseButton mouse_button)
 {
-	if (input->mouse_buttons[mouse_button] == InputState_Pressed && input->release_mouse_button_count < MouseButton_MaxEnum) {
+	if (input->mouse_buttons[mouse_button] == InputState_Pressed && input->release_mouse_button_count < MouseButton_MaxEnum)
+	{
 
 		input->release_mouse_buttons[input->release_mouse_button_count++] = mouse_button;
 	}
-	else input->mouse_buttons[mouse_button] = InputState_Released;
+	else
+		input->mouse_buttons[mouse_button] = InputState_Released;
 
 	input->any = TRUE;
 	input->last_controller_used = ControllerType_KeyboardAndMouse;
@@ -282,7 +354,7 @@ void _input_text_command_add(TextCommand text_command)
 		assert_title(FALSE, "Input text command buffer overflow");
 		return;
 	}
-	
+
 	input->text_commands[input->text_command_count++] = text_command;
 	input->any = TRUE;
 }
@@ -317,7 +389,7 @@ void _input_mouse_dragging_set(v2 value)
 	input->mouse_dragging = value;
 
 	if (fabs(value.x) > 0.0001f || fabs(value.y) > 0.0001f)
-	input->any = TRUE;
+		input->any = TRUE;
 }
 
 void _input_gamepad_press(GamepadButton button)
@@ -340,7 +412,7 @@ void _input_gamepad_set_joystick(b8 left, v2 value)
 {
 	if (fabs(value.x) < 0.0001f)
 		value.x = 0.f;
-	
+
 	if (fabs(value.y) < 0.0001f)
 		value.y = 0.f;
 
@@ -350,9 +422,29 @@ void _input_gamepad_set_joystick(b8 left, v2 value)
 		input->joystick_right = value;
 }
 
-void _input_touch_set(InputState state, v2 position)
+static u32 get_touch_index(u32 id)
 {
-	input->touch_state = state;
-	input->touch_position = position;
+	u32 free_index = u32_max;
+	foreach (i, SV_ARRAY_SIZE(input->touch_id))
+	{
+		if (input->touch_id[i] == id)
+			return i;
+		else if (free_index == u32_max && input->touch_id[i] == -1)
+			free_index = i;
+	}
+
+	return free_index;
+}
+
+void _input_touch_set(InputState state, v2 position, u32 id)
+{
+	u32 index = get_touch_index(id);
+
+	if (index == u32_max)
+		return;
+
+	input->touch_state[index] = (state == InputState_None) ? input->touch_state[index] : state;
+	input->touch_position[index] = position;
+	input->touch_id[index] = id;
 	input->last_controller_used = ControllerType_TouchScreen;
 }

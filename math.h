@@ -1564,6 +1564,31 @@ SV_INLINE Color color_black()       { return color_rgb(0u, 0u, 0u); }
 SV_INLINE Color color_gray(u8 i)    { return color_rgb(i, i, i); }
 SV_INLINE Color color_white()       { return color_rgb(255u, 255u, 255u); }
 
+// Bounds (2D AABB used in GUI):
+// x: Centred Horizontal Position
+// y: Centred Vertical Position
+// z: Width
+// w: height
+
+SV_INLINE v2 bounds_coord(v4 bounds)
+{
+	return v2_set(bounds.x, bounds.y);
+}
+
+SV_INLINE v4 bounds_coord_add(v4 bounds, v2 n)
+{
+	bounds.x += n.x;
+	bounds.y += n.y;
+	return bounds;
+}
+
+SV_INLINE v4 bounds_size_mul_scalar(v4 bounds, f32 mult)
+{
+	bounds.z *= mult;
+	bounds.w *= mult;
+	return bounds;
+}
+
 // 16 bit floating point
 
 // From https://stackoverflow.com/a/60047308

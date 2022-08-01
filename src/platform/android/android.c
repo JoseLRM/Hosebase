@@ -542,7 +542,8 @@ void thread_sleep(u64 millis)
     ts.tv_nsec = (millis % 1000) * 1000000;
 
     int res;
-    do {
+    do
+    {
         res = nanosleep(&ts, &ts);
     } while (res);
 }
@@ -576,9 +577,22 @@ const char *clipboard_read_ansi()
 
 /////////////////////////// ENTRY POINT ////////////////////////////
 
-/**
- * Process the next input event.
- */
+SV_INLINE v2 compute_touch_position(AInputEvent *event, u64 index)
+{
+    struct ANativeWindow *window = android->app->window;
+    u32 width = ANativeWindow_getWidth(window);
+    u32 height = ANativeWindow_getHeight(window);
+
+    f32 x = AMotionEvent_getX(event, index);
+    f32 y = AMotionEvent_getY(event, index);
+
+    x = (x / (f32)width) - 0.5f;
+    y = (y / (f32)height) - 0.5f;
+    y = -y;
+
+    return v2_set(x, y);
+}
+
 static int32_t engine_handle_input(struct android_app *app, AInputEvent *event)
 {
     if (!android->initialized)
@@ -586,37 +600,37 @@ static int32_t engine_handle_input(struct android_app *app, AInputEvent *event)
 
     if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION)
     {
-        f32 x = AMotionEvent_getX(event, 0);
-        f32 y = AMotionEvent_getY(event, 0);
         i32 action = AMotionEvent_getAction(event);
         i32 mouseAction = action & AMOTION_EVENT_ACTION_MASK;
 
-        InputState state = InputState_Hold;
+        u64 current_index = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+
+        InputState state = InputState_None;
 
         switch (mouseAction)
         {
         case AMOTION_EVENT_ACTION_UP:
+        case AMOTION_EVENT_ACTION_POINTER_UP:
         {
             state = InputState_Released;
         }
         break;
 
         case AMOTION_EVENT_ACTION_DOWN:
+        case AMOTION_EVENT_ACTION_POINTER_DOWN:
         {
             state = InputState_Pressed;
         }
         break;
         }
 
-        struct ANativeWindow *window = android->app->window;
-        u32 width = ANativeWindow_getWidth(window);
-        u32 height = ANativeWindow_getHeight(window);
+        foreach (index, AMotionEvent_getPointerCount(event))
+        {
+            u32 id = AMotionEvent_getPointerId(event, index);
+            v2 pos = compute_touch_position(event, index);
 
-        x = (x / (f32)width) - 0.5f;
-        y = (y / (f32)height) - 0.5f;
-        y = -y;
-
-        _input_touch_set(state, v2_set(x, y));
+            _input_touch_set((index == current_index) ? state : InputState_None, pos, id);
+        }
 
         return 1;
     }

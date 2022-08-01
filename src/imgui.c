@@ -85,7 +85,6 @@ typedef struct
 	f32 aspect;
 	v2 resolution;
 	v2 pixel;
-	v2 mouse_position;
 	b8 scrolling;
 
 	GuiWidgetRegister widget_registers[100];
@@ -398,7 +397,7 @@ static GuiParent *find_parent_in_mouse(GuiParent *parent)
 	{
 		GuiParent *child = parent->childs[i];
 
-		if (gui_mouse_in_bounds(child->widget_bounds))
+		if (gui_cursor_in_bounds(child->widget_bounds, 0))
 		{
 			GuiParent *child_in_mouse = find_parent_in_mouse(child);
 
@@ -425,7 +424,7 @@ static void update_parent(GuiParent *parent)
 
 	if (is_popup && state != NULL)
 	{
-		b8 inside = gui_mouse_in_bounds(parent->bounds);
+		b8 inside = gui_cursor_in_bounds(parent->bounds, 0);
 
 		if (state->popup_entered)
 		{
@@ -670,13 +669,6 @@ void gui_begin(const char *layout, Font *default_font)
 	gui->resolution = v2_set(size.x, size.y);
 	gui->aspect = gui->resolution.x / gui->resolution.y;
 	gui->pixel = v2_set(1.f / gui->resolution.x, 1.f / gui->resolution.y);
-
-	if (input_last_controller_used() == ControllerType_TouchScreen)
-		gui->mouse_position = input_touch_position();
-	else
-		gui->mouse_position = input_mouse_position();
-
-	gui->mouse_position = v2_add_scalar(gui->mouse_position, 0.5f);
 
 	gui->scrolling = FALSE;
 
@@ -1362,17 +1354,34 @@ v2 gui_pixel_size()
 	return gui->pixel;
 }
 
-v2 gui_mouse_position()
+v2 gui_cursor_position(u32 index)
 {
-	return gui->mouse_position;
+	v2 cursor;
+
+	if (input_last_controller_used() == ControllerType_TouchScreen)
+		cursor = input_touch_position(index);
+	else
+		cursor = input_mouse_position();
+
+	cursor = v2_add_scalar(cursor, 0.5f);
+	return cursor;
 }
 
-b8 gui_mouse_button(InputState input_state)
+b8 gui_cursor_button(InputState input_state, u32 index)
 {
 	if (input_last_controller_used() == ControllerType_TouchScreen)
-		return input_touch_button(input_state);
+		return input_touch_button(input_state, index);
 	else
-		return input_mouse_button(MouseButton_Left, input_state);
+	{
+		if (index == 0)
+			return input_mouse_button(MouseButton_Left, input_state);
+		else if (index == 1)
+			return input_mouse_button(MouseButton_Right, input_state);
+		else if (index == 3)
+			return input_mouse_button(MouseButton_Center, input_state);
+	}
+
+	return FALSE;
 }
 
 b8 gui_input_used()
@@ -1400,9 +1409,10 @@ void gui_draw_bounds(v4 bounds, Color color)
 	imrend_draw_quad(v3_set(bounds.x, bounds.y, 0.f), v2_set(bounds.z, bounds.w), color, gui->cmd);
 }
 
-b8 gui_mouse_in_bounds(v4 bounds)
+b8 gui_cursor_in_bounds(v4 bounds, u32 index)
 {
-	return (fabs(gui->mouse_position.x - bounds.x) <= bounds.z * 0.5f && fabs(gui->mouse_position.y - bounds.y) <= bounds.w * 0.5f);
+	v2 cursor = gui_cursor_position(index);
+	return (fabs(cursor.x - bounds.x) <= bounds.z * 0.5f && fabs(cursor.y - bounds.y) <= bounds.w * 0.5f);
 }
 
 b8 gui_bounds_inside(v4 bounds)

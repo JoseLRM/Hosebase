@@ -172,8 +172,8 @@ const void* gui_read_buffer_(u8** it_, u32 size);
 
 v2 gui_resolution();
 v2 gui_pixel_size();
-v2 gui_mouse_position();
-b8 gui_mouse_button(InputState input_state);
+v2 gui_cursor_position(u32 index);
+b8 gui_cursor_button(InputState input_state, u32 index);
 
 b8 gui_input_used();
 void gui_use_input();
@@ -188,7 +188,7 @@ void gui_draw_bounds(v4 bounds, Color color);
 void gui_draw_sprite(v4 bounds, Color color, GPUImage* image, v4 tc);
 void gui_draw_text(const char* text, v4 bounds, TextAlignment alignment);
 
-b8 gui_mouse_in_bounds(v4 bounds);
+b8 gui_cursor_in_bounds(v4 bounds, u32 index);
 b8 gui_bounds_inside(v4 bounds);
 b8 gui_bounds_inside_bounds(v4 child, v4 parent);
 

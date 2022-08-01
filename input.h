@@ -154,14 +154,20 @@ f32 input_mouse_wheel();
 v2  input_mouse_position();
 v2  input_mouse_dragging();
 
-v2 input_touch_position();
-b8 input_touch_button(InputState input_state);
+v2 input_touch_position(u32 index);
+b8 input_touch_button(InputState input_state, u32 index);
 
 const char* input_text();
 u32 input_text_command_count();
 TextCommand input_text_command(u32 index);
 
 ControllerType input_last_controller_used();
+
+// Utils
+
+InputState input_state_update(InputState input_state, b8 press);
+
+// Internal
 
 b8   _input_initialize();
 void _input_close();
@@ -182,6 +188,6 @@ void _input_mouse_dragging_set(v2 value);
 void _input_gamepad_press(GamepadButton button);
 void _input_gamepad_set_joystick(b8 left, v2 value);
 
-void _input_touch_set(InputState state, v2 position);
+void _input_touch_set(InputState state, v2 position, u32 id);
 
 SV_END_C_HEADER
